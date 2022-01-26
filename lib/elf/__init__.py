@@ -185,12 +185,20 @@ class File(pstruct.type, base.ElfXX_File):
             Fsize = operator.methodcaller('getloadsize')
             fields, Floadable = ['p_vaddr', 'sh_addr'], functools.partial(functools.reduce, operator.getitem, ['p_type', 'LOAD'])
 
+            Fsegment_summary = lambda item: "{:s} ({:s}) {:#0{:d}x}<>{:#0{:d}x} flags:{:s}".format(item.__class__.__name__, item['p_type'].str(), item['p_vaddr'].int(), 2+6, item['p_vaddr'].int() + item.getloadsize(), 2+6, ''.join(name for name in item['p_flags'] if item['p_flags'][name]))
+            Fsection_summary = lambda item: "{:s} ({:s}) {:#0{:d}x}<>{:#0{:d}x} name:{!r} flags:{:s}".format(item.__class__.__name__, item['sh_type'].str(), item['sh_offset'].int(), 2+6, item['sh_offset'].int() + item.getloadsize(), 2+6, ' '.join(name for name in item['sh_flags'] if item['sh_flags'][name] and not isinstance(item['sh_flags'][name], pstruct.pbinary.flags)))
+
         # Anything else is using a file-based backing which
         # we'll sort by the LOAD type so we don't include
         # any of the other types that users won't care about.
         else:
             Fsize = operator.methodcaller('getreadsize')
             fields, Floadable = ['p_offset', 'sh_offset'], functools.partial(functools.reduce, operator.getitem, ['p_type', 'LOAD'])
+            Fsegment_summary = lambda item: "{:s} ({:s}) {:#0{:d}x}<>{:#0{:d}x} flags:{:s}".format(item.__class__.__name__, item['p_type'].str(), item['p_offset'].int(), 2+6, item['p_offset'].int() + item.getreadsize(), 2+6, ''.join(name for name in item['p_flags'] if item['p_flags'][name]))
+            Fsection_summary = lambda item: "{:s} ({:s}) {:#0{:d}x}<>{:#0{:d}x} name:{!r} flags:{:s}".format(item.__class__.__name__, item['sh_type'].str(), item['sh_offset'].int(), 2+6, item['sh_offset'].int() + item.getreadsize(), 2+6, item['sh_name'].str(), ' '.join(name for name in item['sh_flags'] if item['sh_flags'][name] and not isinstance(item['sh_flags'][name], pstruct.pbinary.flags)))
+
+        # Assign an anonymous function for summarizing our segments/sections
+        Fsummary = lambda section_or_segment: Fsection_summary(section_or_segment) if isinstance(section_or_segment, section.ElfXX_Shdr) else Fsegment_summary(section_or_segment)
 
         # Now we can assign our attribute getters, as we're going
         # to preapare to gather our list of items to sort. The only
@@ -259,7 +267,7 @@ class File(pstruct.type, base.ElfXX_File):
                 items.insert(index, (bounds, headers_index[phdr]))
 
                 # Log which side of the tree we're overlapping.
-                logging.debug("(overlap) {:s} ({:d}/{:d}) {:#010x}<>{:#010x} {:s}".format('<' if start_index % 2 else '>', index, len(items), start, stop, phdr.summary()))
+                logging.debug("(overlap) {:s} ({:d}/{:d}) {:#010x}<>{:#010x} {:s}".format('<' if start_index % 2 else '>', index, len(items), start, stop, Fsegment_summary(phdr)))
 
             # Otherwise we figure out what slice of the tree to modify when
             # we're inserting the segment's boundaries into it.
@@ -267,17 +275,17 @@ class File(pstruct.type, base.ElfXX_File):
                 tree[start_index : stop_index] = [start, stop]
                 tree_index[start].append((bounds, headers_index[phdr]))
                 tree_index[stop].append((bounds, headers_index[phdr]))
-                logging.debug("(insert) {:s} ({:d}/{:d}) {:#010x}<>{:#010x} {:s}".format('><', 0, 1, start, stop, phdr.summary()))
+                logging.debug("(insert) {:s} ({:d}/{:d}) {:#010x}<>{:#010x} {:s}".format('><', 0, 1, start, stop, Fsegment_summary(phdr)))
             elif start_index % 2:
                 tree[start_index : stop_index] = [stop]
                 tree_index[start].append((bounds, headers_index[phdr]))
                 tree_index[stop].append((bounds, headers_index[phdr]))
-                logging.debug("(insert) {:s} ({:d}/{:d}) {:#010x}<>{:#010x} {:s}".format('<', 0, 1, start, stop, phdr.summary()))
+                logging.debug("(insert) {:s} ({:d}/{:d}) {:#010x}<>{:#010x} {:s}".format('<', 0, 1, start, stop, Fsegment_summary(phdr)))
             elif stop_index % 2:
                 tree[start_index : stop_index] = [start]
                 tree_index[start].append((bounds, headers_index[phdr]))
                 tree_index[stop].append((bounds, headers_index[phdr]))
-                logging.debug("(insert) {:s} ({:d}/{:d}) {:#010x}<>{:#010x} {:s}".format('>', 0, 1, start, stop, phdr.summary()))
+                logging.debug("(insert) {:s} ({:d}/{:d}) {:#010x}<>{:#010x} {:s}".format('>', 0, 1, start, stop, Fsegment_summary(phdr)))
             continue
 
         # Define a closure that will walk the tree returning the segment
@@ -299,7 +307,7 @@ class File(pstruct.type, base.ElfXX_File):
                 for bounds, key in items + items:
                     _, header = headers[key]
                     if header not in used:
-                        logging.debug("(flatten) segm {:s} {:s}".format(header.typename(), header.summary()))
+                        logging.debug("(flatten) segm {:s} {:s}".format(header.typename(), Fsegment_summary(header)))
 
                     # If the header has been used once before, then compare
                     # the offset we get against the end of the segment.
@@ -341,11 +349,11 @@ class File(pstruct.type, base.ElfXX_File):
             # We need to double check that the segment is not the header
             # we're processing. because it always prefixes our results.
             if segment == item:
-                logging.debug("(flatten)     skip {:s} {:s}".format(item.typename(), item.summary()))
+                logging.debug("(flatten)     skip {:s} {:s}".format(item.typename(), Fsegment_summary(item)))
                 continue
 
             # We got an entry that we're keeping. So, add it to our results.
-            logging.debug("(flatten)     keep {:s} {:s}".format(item.typename(), item.summary()))
+            logging.debug("(flatten)     keep {:s} {:s}".format(item.typename(), Fsummary(item)))
             items.append(item)
         return results
 
@@ -394,10 +402,19 @@ class File(pstruct.type, base.ElfXX_File):
         if isinstance(self.source, ptypes.provider.memorybase):
             section_t, segment_t, block_t, fields = section.SectionData, segment.MixedSegmentData, ptype.block, ['sh_addr', 'p_vaddr']
             Fsize = operator.methodcaller('getloadsize')
+
+            Fsegment_summary = lambda item: "{:s} ({:s}) {:#0{:d}x}<>{:#0{:d}x} flags:{:s}".format(item.__class__.__name__, item['p_type'].str(), item['p_vaddr'].int(), 2+6, item['p_vaddr'].int() + item.getloadsize(), 2+6, ''.join(name for name in item['p_flags'] if item['p_flags'][name]))
+            Fsection_summary = lambda item: "{:s} ({:s}) {:#0{:d}x}<>{:#0{:d}x} name:{!r} flags:{:s}".format(item.__class__.__name__, item['sh_type'].str(), item['sh_offset'].int(), 2+6, item['sh_offset'].int() + item.getloadsize(), 2+6, ' '.join(name for name in item['sh_flags'] if item['sh_flags'][name] and not isinstance(item['sh_flags'][name], pstruct.pbinary.flags)))
         else:
             section_t, segment_t, block_t, fields = section.MixedSectionData, segment.MixedSegmentData, ptype.block, ['sh_offset', 'p_offset']
             Fsize = operator.methodcaller('getreadsize')
+
+            Fsegment_summary = lambda item: "{:s} ({:s}) {:#0{:d}x}<>{:#0{:d}x} flags:{:s}".format(item.__class__.__name__, item['p_type'].str(), item['p_offset'].int(), 2+6, item['p_offset'].int() + item.getreadsize(), 2+6, ''.join(name for name in item['p_flags'] if item['p_flags'][name]))
+            Fsection_summary = lambda item: "{:s} ({:s}) {:#0{:d}x}<>{:#0{:d}x} name:{!r} flags:{:s}".format(item.__class__.__name__, item['sh_type'].str(), item['sh_offset'].int(), 2+6, item['sh_offset'].int() + item.getreadsize(), 2+6, item['sh_name'].str(), ' '.join(name for name in item['sh_flags'] if item['sh_flags'][name] and not isinstance(item['sh_flags'][name], pstruct.pbinary.flags)))
+
+        # Assign our fields and an anonymous function to summarize items for debugging
         Fsection_offset, Fsegment_offset = map(operator.itemgetter, fields)
+        Fsummary = lambda section_or_segment: Fsection_summary(section_or_segment) if isinstance(section_or_segment, section.ElfXX_Shdr) else Fsegment_summary(section_or_segment)
 
         # Build a index of segments that we can sort by their offset using
         # our segment list. We only care about the ones that're in our table
@@ -437,7 +454,7 @@ class File(pstruct.type, base.ElfXX_File):
         result, position, base = [], minimum, self.getparent(None).getoffset()
         for boundary, header in index:
             entries, size, items = table[header], Fsize(header), []
-            logging.debug("(decode) {:s}".format(header.summary()))
+            logging.debug("(decode) Processing segment: {:s}".format(Fsegment_summary(header)))
 
             # If we're memory-backed, then we need to align our segment. This is
             # unmapped, so we'll need to make sure we don't decode from its address.
@@ -447,7 +464,7 @@ class File(pstruct.type, base.ElfXX_File):
                 # We got the size of our alignment so pad our results with a block.
                 res = boundary - position + delta, ptype.undefined
                 result.append(res)
-                logging.debug("(align)  {:#010x}<>{:#010x} goal:{:#010x} {:#x}{:+#x}{:+#x} : {:s}".format(base + position, base + boundary, base + header.align(boundary), base + position, boundary - position, delta, ptype.undefined.typename()))
+                logging.debug("(align)  {:#010x}<>{:#010x} goal:{:#010x} {:#04x}{:+#04x}{:+#x} : {:s}".format(base + position, base + boundary, base + header.align(boundary), base + position, boundary - position, delta, ptype.undefined.typename()))
                 position = header.align(boundary)
 
             # Very first thing we need to do is to pad things up to the current
@@ -455,7 +472,7 @@ class File(pstruct.type, base.ElfXX_File):
             if position < boundary:
                 res = boundary - position, block_t
                 result.append(res)
-                logging.debug("(pad)    {:#010x} goal:{:#010x} {:#x}{:+#x} : {:s}".format(base + position, base + boundary, base + position, boundary - position, block_t.typename()))
+                logging.debug("(pad)    {:#010x} goal:{:#010x} {:#04x}{:+#04x} : {:s}".format(base + position, base + boundary, base + position, boundary - position, block_t.typename()))
                 position = boundary
 
             # Iterate through all of our entries while keeping track of the
@@ -470,7 +487,7 @@ class File(pstruct.type, base.ElfXX_File):
                 if not items:
                     res = entrysize, item
                     items.append(res), result.append(res)
-                    logging.debug("(header) {:#010x}<>{:#010x} {:#x}{:+#x} : {:s}".format(base + offset, base + offset + entrysize, base + offset, entrysize, item.summary()))
+                    logging.debug("(header) {:#010x}<>{:#010x} {:#04x}{:+#04x} : {:s}".format(base + offset, base + offset + entrysize, base + offset, entrysize, Fsummary(item)))
                     position = offset + entrysize
                     continue
 
@@ -481,14 +498,14 @@ class File(pstruct.type, base.ElfXX_File):
                     delta = minimum - offset
                     previous, t = result[-1]
                     result[-1] = previous - delta, t
-                    logging.debug("(-min)   {:#010x} goal:{:#010x} {:#x}{:+#x} ({:#x}) : {:s}".format(base + offset, base + minimum, base + previous, -delta, base + boundary + previous - delta, item.summary()))
+                    logging.debug("(-min)   {:#010x} goal:{:#010x} {:#04x}{:+#04x} ({:#x}) : {:s}".format(base + offset, base + minimum, base + previous, -delta, base + boundary + previous - delta, Fsummary(item)))
 
                 # If our position does not point at our entry's offset,
                 # then we need to add a block to pad us all the way there.
                 elif position < offset:
                     delta = offset - position
                     res = delta, block_t
-                    logging.debug("(+pad)   {:#010x} goal:{:#010x} {:#x}{:+#x} : {:s}".format(base + position, base + offset, base + position, -position, item.summary()))
+                    logging.debug("(+pad)   {:#010x} goal:{:#010x} {:#04x}{:+#04x} : {:s}".format(base + position, base + offset, base + position, -position, Fsummary(item)))
                     items.append(res), result.append(res)
                     position = offset
 
@@ -499,7 +516,7 @@ class File(pstruct.type, base.ElfXX_File):
                     delta = position - offset
                     previous, t = result[-1]
                     result[-1] = max(0, delta - previous), t
-                    logging.debug("(-pad)   {:#010x} goal:{:#010x} {:#x}{:+#x} : {:s}".format(base + position, base + offset, base + position, -offset, item.summary()))
+                    logging.debug("(-pad)   {:#010x} goal:{:#010x} {:#04x}{:+#04x} : {:s}".format(base + position, base + offset, base + position, -offset, Fsummary(item)))
                     position = offset
 
                 # If the next item has its address aligned, then we need
@@ -513,7 +530,7 @@ class File(pstruct.type, base.ElfXX_File):
                 # early, subtract one from the counter since we're not
                 # going to be processing the next element.
                 if position >= boundary + size and size > 0:
-                    logging.debug("(break)  {:#010x} >= {:#010x} {:+#x} : {:s}".format(base + position, base + boundary + size, size, item.summary()))
+                    logging.debug("(break)  {:#010x} >= {:#010x} {:+#04x} : {:s}".format(base + position, base + boundary + size, size, Fsummary(item)))
                     break
 
                 # If we're where we expect, but it pushes us outside the
@@ -522,7 +539,7 @@ class File(pstruct.type, base.ElfXX_File):
                 elif position == offset and offset + entrysize > boundary + size:
                     res = (boundary + size) - offset, item
                     items.append(res), result.append(res)
-                    logging.debug("(clamp)  {:#010x} goal:{:#010x} {:+#x} : {:s}".format(base + offset, base + boundary + size, size, item.summary()))
+                    logging.debug("(clamp)  {:#010x} goal:{:#010x} {:+#04x} : {:s}".format(base + offset, base + boundary + size, size, Fsummary(item)))
                     position = boundary + size
 
                 # If our position is where we expect it, then we can simply
@@ -530,7 +547,7 @@ class File(pstruct.type, base.ElfXX_File):
                 elif position == offset and offset + entrysize <= boundary + size:
                     res = entrysize, item
                     items.append(res), result.append(res)
-                    logging.debug("(append) {:#010x} goal:{:#010x} {:+#x} : {:s}".format(base + offset, base + offset + entrysize, entrysize, item.summary()))
+                    logging.debug("(append) {:#010x} goal:{:#010x} {:+#04x} : {:s}".format(base + offset, base + offset + entrysize, entrysize, Fsummary(item)))
                     position = offset + entrysize
 
                 # Raise an exception because this shouldn't happen at all.
@@ -562,7 +579,7 @@ class File(pstruct.type, base.ElfXX_File):
                 if position < offset:
                     res = offset - position, block_t
                     result.append(res)
-                    logging.debug("(pad)   {:#010x} goal:{:#010x} {:#x}{:+#x} : {:s}".format(base + position, base + offset, base + position, offset - position, block_t.typename()))
+                    logging.debug("(pad)   {:#010x} goal:{:#010x} {:#04x}{:+#04x} : {:s}".format(base + position, base + offset, base + position, offset - position, block_t.typename()))
                     position = offset
 
                 # If we're not at the correct position, then we need to
@@ -570,14 +587,14 @@ class File(pstruct.type, base.ElfXX_File):
                 elif position > offset:
                     delta = position - offset
                     #result[-1] = max(0, delta - previous), t
-                    logging.debug("(clamp) {:#010x} goal:{:#010x} {:#x}{:+#x} : {:s}".format(base + offset, base + position, base + position, delta, block_t.typename()))
+                    logging.debug("(clamp) {:#010x} goal:{:#010x} {:#04x}{:+#04x} : {:s}".format(base + offset, base + position, base + position, delta, block_t.typename()))
                     result.append((entrysize - delta, item))
                     position += entrysize - delta
 
                 # We should be good, so we just need to add it.
                 else:
                     result.append((entrysize, item))
-                    logging.debug("(append) {:d}/{:d} {:#010x} goal:{:#010x} {:+#x} : {:s}".format(1 + count + index, len(entries), base + offset, base + offset + entrysize, entrysize, item.summary()))
+                    logging.debug("(append) {:d}/{:d} {:#010x} goal:{:#010x} {:+#04x} : {:s}".format(1 + count + index, len(entries), base + offset, base + offset + entrysize, entrysize, Fsummary(item)))
                     position += entrysize
                 continue
             continue
