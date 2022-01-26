@@ -257,6 +257,13 @@ class SHN_(pint.enum):
 
 class ElfXX_Shdr(ElfXX_Header):
     def getreadsize(self):
+
+        # If our type is SHT_NOBITS, then there's actually no read size so we return 0.
+        type = self['sh_type']
+        if type['NOBITS']:
+            return 0
+
+        # Otherwise we can just return the size from the section header.
         res = self['sh_size'].li
         return res.int()
 
