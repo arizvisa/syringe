@@ -230,6 +230,26 @@ class ElfXX_Shdr(ElfXX_Header):
         res = self['sh_offset']
         return res.int() <= ofs < res.int() + self.getreadsize()
 
+    def summary(self):
+        name, type, flags = (self[fld] for fld in ['sh_name', 'sh_type', 'sh_flags'])
+        addr, offset, size, addralign = (self[fld].int() for fld in ['sh_addr', 'sh_offset', 'sh_size', 'sh_addralign'])
+
+        # Organize the flags so they're more descriptive.
+        items = ["{:s}={:d}".format(name, flags[name]) if flags[name] > 1 else name for name in flags if not isinstance(flags[name], pbinary.struct) and flags[name]]
+        items+= ["{:s}={:s}".format(name, flags[name].summary()) for name in flags if isinstance(flags[name], pbinary.struct) and flags[name].int()]
+        flags_summary = ','.join(items)
+
+        # Build the string components for each set of fields.
+        description = "{:>13s} {:<20s}".format("({:s})".format(type.str()), name.str())
+        location = "offset:{:#0{:d}x}<>{:#0{:d}x} ({:+#0{:d}x})".format(offset, 2+6, offset + size, 2+6, size, 1+2+4)
+        address_location = "addr:{:#0{:d}x}({:d})".format(addr, 2+4, addralign)
+        extra = ["{:s}={:#x}".format(field, self[field].int()) for field in ['sh_link', 'sh_info'] if self[field].int()]
+
+        # Render them while including the unknown header if it has a size.
+        if self['sh_unknown'].size():
+            return ' '.join([description, location, address_location] + extra + [flags_summary, "unknown:{:s}".format(self['sh_unknown'].summary())])
+        return ' '.join([description, location, address_location] + extra + [flags_summary])
+
 class ELFCOMPRESS_(pint.enum):
     _values_ = [
         ('ZLIB', 1),
