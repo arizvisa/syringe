@@ -688,7 +688,6 @@ class HTables(pstruct.type):
         def iterate(self, crit):
             return (index for index, value in enumerate(reversed(self)) if crit(value))
 
-    @pbinary.littleendian
     class _Valid(BitVector):
         length = 64
         def iterate(self):
@@ -696,7 +695,6 @@ class HTables(pstruct.type):
         def summary(self):
             return ', '.join(map('{:d}'.format, self.iterate()))
 
-    @pbinary.littleendian
     class _Sorted(BitVector):
         length = 64
         def iterate(self):
@@ -716,13 +714,13 @@ class HTables(pstruct.type):
         return dyn.block(max(0, cb - total))
 
     _fields_ = [
-        (pint.uint32_t, 'Reserved'),
+        (pint.uint32_t, 'Reserved_0'),
         (pint.uint8_t, 'MajorVersion'),
         (pint.uint8_t, 'MinorVersion'),
         (HeapSizes, 'HeapSizes'),
-        (pint.uint8_t, 'Reserved'),
-        (_Valid, 'Valid'),
-        (_Sorted, 'Sorted'),
+        (pint.uint8_t, 'Reserved_7'),
+        (pbinary.littleendian(_Valid), 'Valid'),
+        (pbinary.littleendian(_Sorted), 'Sorted'),
         (_RowLengths, 'Rows'),
         (Tables, 'Tables'),
         (__padding_Tables, 'padding(Tables)'),
