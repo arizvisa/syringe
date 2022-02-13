@@ -686,10 +686,26 @@ class TableRow(ptype.encoded_t):
         return dereferenced.__getitem__(name)
     def repr(self):
         dereferenced = self.d.li
-        return dereferenced.repr()
+        return dereferenced.copy(offset=self.getoffset()).repr()
     def summary(self):
         dereferenced = self.d.li
-        return dereferenced.summary()
+        return dereferenced.copy(offset=self.getoffset()).summary()
+
+class TableRows(parray.type):
+    def Get(self, index):
+        if index > 0:
+            return self[index - 1]
+        raise IndexError(index)
+
+    def enumerate(self):
+        for index, item in enumerate(self):
+            yield index, item
+        return
+
+    def iterate(self):
+        for _, item in enumerate(self):
+            yield item
+        return
 
 class Tables(parray.type):
     length = 64
@@ -707,22 +723,22 @@ class Tables(parray.type):
 
         tr, tn = TableRow.__name__, TableType.byvalue(index, None)
         t = dyn.clone(TableRow, _object_=rowtype, _value_=dyn.block(rowsize), typename=classmethod(lambda cls: "{:s}({:s})".format(tr, tn) if tn else tr))
-
-        def Get(self, index):
-            if index > 0:
-                return self[index - 1]
-            raise IndexError(index)
-        return dyn.array(t, count, Get=Get, blocksize=(lambda s, cb=rowsize*count: cb))
+        return dyn.clone(TableRows, _object_=t, length=count, blocksize=(lambda s, cb=rowsize*count: cb))
 
     def __getindex__(self, index):
         string_types = (str, unicode) if sys.version_info.major < 3 else (str,)
         return TableType.byname(index) if isinstance(index, string_types) else index
 
-    def iterate(self):
-        for res in self:
-            if len(res) > 0:
-                yield res
+    def enumerate(self):
+        for index, table in enumerate(self):
+            if len(table) > 0:
+                yield index, table
             continue
+        return
+
+    def iterate(self):
+        for _, item in self.enumerate():
+            yield res
         return
 
 @Stream.define
@@ -840,16 +856,23 @@ class TableIndex(Index, pint.uint_t):
         return p[self.type]
 
     def dereference(self):
-        table = self.__table__()
-        row = table[self.int()]     # XXX: is this supposed to be an index - 1?
-        return row.li
+        table, index = self.__table__(), self.int()
+        if 0 <= index < len(table):
+            row = table[index]     # XXX: is this supposed to be an index - 1?
+            return row.li
+        raise IndexError(index)
+        
     d = property(fget=dereference)
 
     def summary(self):
-        description = self.dereference()
-        return "{:#0{:d}x} ({:d}) :> {:s}".format(self.int(), 2 + 2 * self.size(), self.int(), description.summary())
+        try:
+            description = self.dereference()
+        except IndexError:
+            description = None
+        return "{:#0{:d}x} ({:d}) :{:s}".format(self.int(), 2 + 2 * self.size(), self.int(), "> {:s}".format(description.summary()) if description else "invalid index {:d} for table {:d}".format(self.int(), self.type))
 
-class CodedIndex(Index): pass
+class CodedIndex(Index):
+    pass
 
 class NameIndex(StreamIndex):
     type = 'HStrings'
@@ -939,7 +962,7 @@ class BlobIndex(StreamIndex):
     def summary(self):
         if hasattr(self, '_object_'):
             result = self.data()
-            return "{:#0{:d}x} ({:d}) :> {:s}".format(self.int(), 2 + 2 * self.size(), self.int(), blob.summary())
+            return "{:#0{:d}x} ({:d}) :> {:s}".format(self.int(), 2 + 2 * self.size(), self.int(), result.summary())
         blob = self.dereference()
         return "{:#0{:d}x} ({:d}) :> {:s}".format(self.int(), 2 + 2 * self.size(), self.int(), blob.summary())
 
@@ -999,9 +1022,11 @@ class TaggedIndex(CodedIndex, pstruct.type):
         return p[self.type]
 
     def dereference(self):
-        table = self.__table__()
-        row = table[self.int()]     # XXX: is this supposed to be an index - 1?
-        return row.li
+        table, index = self.__table__(), self.int()
+        if 0 <= index < len(table):
+            row = table[index]     # XXX: is this supposed to be an index - 1?
+            return row.li
+        raise IndexError
     d = property(fget=dereference)
 
     # FIXME: we should dereference this index if TaggedIndex ever gets implemented
@@ -1609,6 +1634,12 @@ class TStandAloneSig(PreCalculatableTable, pstruct.type):
     _fields_ = [
         (BlobIndex, 'Signature'),
     ]
+    def Signature(self):
+        dereferenced = self['Signature'].d
+        return dereferenced.Data()
+    def summary(self):
+        dereferenced = self['Signature'].d
+        return "Signature={:#0{:d}x}".format(dereferenced.int(), 2 + 2 * dereferenced.Length())
 
 @Table.define
 class TEventMap(PreCalculatableTable, pstruct.type):
