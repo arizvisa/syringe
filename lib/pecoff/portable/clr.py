@@ -51,19 +51,41 @@ class MetaDataRoot(pstruct.type):
     class _Signature(pint.uint32_t):
         def properties(self):
             res = super(MetaDataRoot._Signature, self).properties()
-            res['valid'] = self.valid()
+            if self.initializedQ():
+                res['valid'] = self.valid()
             return res
 
         def valid(self):
-            return self.int() == 0x424a5342
+            return self.int() == self.default().int()
+
+        @classmethod
+        def default(cls):
+            return cls().set(0x424a5342)
+
+        def summary(self):
+            return "{:#0{:d}x} ({:d}) : {!s}".format(self.int(), 2 + 2 * self.size(), self.int(), self.serialize())
 
     class _StreamHeaders(parray.type):
         _object_ = StreamHdr
+
+        def enumerate(self):
+            for index, item in enumerate(self):
+                yield index, item
+            return
+
+        def iterate(self):
+            for _, item in self.enumerate():
+                yield item
+            return
+
         def Get(self, name):
-            res = next((stream for stream in self if stream.Name() == name), None)
-            if res is None:
+            iterable = (stream for stream in self if stream.Name() == name)
+            try:
+                result = next(iterable)
+            except StopIteration:
                 raise NameError(name)
-            return res
+            return result
+
     def __StreamHeaders(self):
         res = self['Streams'].li.int()
         return dyn.clone(self._StreamHeaders, length=res)
@@ -94,6 +116,14 @@ class MetaDataRoot(pstruct.type):
         (__StreamHeaders, 'StreamHeaders'),
         (__StreamData, 'StreamData'),
     ]
+
+    def byname(self, name):
+        iterable = (item for item in self['StreamHeaders'].iterate() if item['Name'].str() == name)
+        try:
+            result = next(iterable)
+        except StopIteration:
+            raise NameError(name)
+        return result
 
 ## Resource directory structures
 class EncodedInteger(parray.terminated):
@@ -470,6 +500,7 @@ class CInt(pbinary.struct):
 
     def Get(self):
         return self['length'].Get() if self['ext'] else self['length']
+    int = Get
 
     def summary(self):
         res = self.Get()
@@ -519,8 +550,13 @@ class SerString(pstruct.type):
         (CInt, 'length'),
         (lambda self: dyn.clone(pstr.string, length=self['length'].li.Get()), 'string'),
     ]
+    def Length(self):
+        return self['length'].int()
+    def String(self):
+        return self['string']
     def str(self):
-        return self['string'].str()
+        res = self.String()
+        return res.str()
 
     def summary(self):
         return '{:d} : {!r}'.format(self['length'].Get(), self['string'].str())
@@ -530,6 +566,10 @@ class SerBlock(pstruct.type):
         (CInt, 'length'),
         (lambda self: dyn.block(self['length'].li.Get()), 'data'),
     ]
+    def Length(self):
+        return self['length'].int()
+    def Data(self):
+        return self['data']
 
     def summary(self):
         return '{:d} : {:s}'.format(self['length'].Get(), self['data'].summary())
@@ -570,6 +610,10 @@ class HUserStrings(parray.block):
             (__data, 'data'),
             (lambda self: dyn.block(self['length'].li.Get() & 1), r'\0'),
         ]
+        def Length(self):
+            return self['length'].int()
+        def Data(self):
+            return self['data']
 
     def Get(self, offset):
         return self.field(offset)
@@ -592,6 +636,15 @@ class HBlob(parray.block):
             (CInt, 'length'),
             (lambda self: dyn.block(self['length'].li.Get()), 'data'),
         ]
+        def Length(self):
+            return self['length'].int()
+        def Data(self):
+            return self['data']
+        def int(self):
+            data = self['data'].serialize()
+            return functools.reduce(lambda agg, item: item | agg * 0x100, bytearray(data))
+        def summary(self):
+            return "({:d}) {:s}".format(self['length'].int(), self['data'].summary())
 
     def Get(self, offset):
         return self.field(offset)
@@ -629,9 +682,14 @@ class STRING(SerString): type=14
 
 class TableRow(ptype.encoded_t):
     def __getitem__(self, name):
-        return self.d.li.__getitem__(name)
+        dereferenced = self.d.li
+        return dereferenced.__getitem__(name)
     def repr(self):
-        return self.d.li.repr()
+        dereferenced = self.d.li
+        return dereferenced.repr()
+    def summary(self):
+        dereferenced = self.d.li
+        return dereferenced.summary()
 
 class Tables(parray.type):
     length = 64
@@ -744,7 +802,53 @@ class Table(ptype.definition): cache = {}
 ## index types
 class Index(ptype.generic): pass
 class StreamIndex(Index, pint.uint_t): pass
-class TableIndex(Index): pass
+class TableIndex(Index, pint.uint_t):
+    type = None
+
+    @classmethod
+    def Tables(cls, index=0):
+        raise NotImplementedError
+
+    @classmethod
+    def Of(cls, table):
+        class IndexOf(cls):
+            pass
+
+        index = TableType.byname(table)
+        def Tables(cls, index=index):
+            return {index}
+
+        IndexOf.type = index
+        IndexOf.Tables = classmethod(Tables)
+        return IndexOf
+
+    def classname(self):
+        try:
+            name = TableType.byvalue(self.type)
+        except KeyError:
+            return self.typename() if self.type is None else "{:s}<{:s}>".format(self.typename(), self.type)
+        return "{:s}<{:s}>".format(self.typename(), name)
+
+    def blocksize(self):
+        p = self.__HTables = self.__HTables if hasattr(self, '__HTables') else self.getparent(HTables)
+        index, rows = self.type, p['Rows'].li
+        count = rows[index].int()
+        return 2 if count < 0x10000 else 4
+
+    def __table__(self):
+        p = self.getparent(Tables)
+        return p[self.type]
+
+    def dereference(self):
+        table = self.__table__()
+        row = table[self.int()]     # XXX: is this supposed to be an index - 1?
+        return row.li
+    d = property(fget=dereference)
+
+    def summary(self):
+        description = self.dereference()
+        return "{:#0{:d}x} ({:d}) :> {:s}".format(self.int(), 2 + 2 * self.size(), self.int(), description.summary())
+
 class CodedIndex(Index): pass
 
 class NameIndex(StreamIndex):
@@ -755,6 +859,24 @@ class NameIndex(StreamIndex):
         heapsizes = res['HeapSizes'].li
         return 4 if heapsizes['HStrings'] else 2
 
+    def __table__(self):
+        p = self.getparent(MetaDataRoot)
+        stream = p.byname('#Strings')
+        return stream['Offset'].d
+
+    def dereference(self):
+        strings = self.__table__().li
+        return strings.Get(self.int())
+    d = property(fget=dereference)
+
+    def str(self):
+        result = self.dereference()
+        return result.str()
+
+    def summary(self):
+        string = self.dereference()
+        return "{:#0{:d}x} ({:d}) :> {:s}".format(self.int(), 2 + 2 * self.size(), self.int(), string.summary())
+
 class GuidIndex(StreamIndex):
     type = 'HGUID'
 
@@ -763,31 +885,63 @@ class GuidIndex(StreamIndex):
         heapsizes = res['HeapSizes'].li
         return 4 if heapsizes['HGUID'] else 2
 
+    def __table__(self):
+        p = self.getparent(MetaDataRoot)
+        stream = p.byname('#GUID')
+        return stream['Offset'].d
+
+    def dereference(self):
+        guids = self.__table__().li
+        return guids.Get(self.int())
+    d = property(fget=dereference)
+
+    def str(self):
+        try:
+            result = self.dereference()
+            string = result.str()
+        except IndexError:
+            raise ptypes.error.ItemNotFoundError(object, 'str', self.int())
+        return string.upper()
+
+    def summary(self):
+        try:
+            guid = self.dereference()
+            string = guid.str()
+        except IndexError:
+            string = '...'
+        return "{:#0{:d}x} ({:d}) :> {:s}".format(self.int(), 2 + 2 * self.size(), self.int(), string.upper())
+
 class BlobIndex(StreamIndex):
     type = 'HBlob'
+
     def blocksize(self):
         res = self.getparent(HTables)
         heapsizes = res['HeapSizes'].li
         return 4 if heapsizes['HBlob'] else 2
 
-def IndexOf(table):
-    index = TableType.byname(table)
+    def __table__(self):
+        p = self.getparent(MetaDataRoot)
+        stream = p.byname('#Blob')
+        return stream['Offset'].d
 
-    class IndexOf(TableIndex, pint.uint_t): pass
+    def dereference(self):
+        blobs = self.__table__().li
+        return blobs.Get(self.int())
+    d = property(fget=dereference)
 
-    def blocksize(self, table=table, index=index):
-        res = self.getparent(HTables)
-        count = res['Rows'].li[index].int()
-        return 2 if count < 0x10000 else 4
-    IndexOf.blocksize = blocksize
+    def data(self):
+        dereferenced = self.dereference()
+        length, data = dereferenced.Length(), dereferenced.Data()
+        if hasattr(self, '_object_'):
+            return data.cast(self._object_, blocksize=lambda cb=length: cb)
+        return data
 
-    def Tables(cls, index=index):
-        return {index}
-    IndexOf.Tables = classmethod(Tables)
-
-    IndexOf.type = index
-
-    return IndexOf
+    def summary(self):
+        if hasattr(self, '_object_'):
+            result = self.data()
+            return "{:#0{:d}x} ({:d}) :> {:s}".format(self.int(), 2 + 2 * self.size(), self.int(), blob.summary())
+        blob = self.dereference()
+        return "{:#0{:d}x} ({:d}) :> {:s}".format(self.int(), 2 + 2 * self.size(), self.int(), blob.summary())
 
 ## Encoded tags
 class TaggedIndex(CodedIndex, pstruct.type):
@@ -838,6 +992,19 @@ class TaggedIndex(CodedIndex, pstruct.type):
         (__Index, 'Index'),
     ]
 
+    def __table__(self):
+        raise NotImplementedError
+
+        p = self.getparent(Tables)
+        return p[self.type]
+
+    def dereference(self):
+        table = self.__table__()
+        row = table[self.int()]     # XXX: is this supposed to be an index - 1?
+        return row.li
+    d = property(fget=dereference)
+
+    # FIXME: we should dereference this index if TaggedIndex ever gets implemented
     def summary(self):
         res = self.Index()
         return "Tag({:s}) : Index={:#x} ({:d})".format(self['Tag'].Get(), res, res)
@@ -951,11 +1118,11 @@ class Implementation_AssemblyRef(TaggedIndex):
 class CustomAttributeType(TaggedIndex):
     class Tag(pbinary.enum):
         length, _values_ = 3, [
-            ('Not used', 0),
-            ('Not used', 1),
+            #('Not used', 0),
+            #('Not used', 1),
             ('MethodDef', 2),
             ('MemberRef', 3),
-            ('Not used', 4),
+            #('Not used', 4),
         ]
 
 class ResolutionScope(TaggedIndex):
@@ -1056,6 +1223,7 @@ class FieldAttributes(pbinary.flags):
         (FieldAccessMask, 'FieldAccess'),
     ]
 
+@pbinary.littleendian
 class MethodImplAttributes(pbinary.flags):
     class CodeTypeMask(pbinary.enum):
         length, _values_ = 2, [
@@ -1082,6 +1250,7 @@ class MethodImplAttributes(pbinary.flags):
         (CodeTypeMask, 'CodeType'),
     ]
 
+@pbinary.littleendian
 class MethodAttributes(pbinary.flags):
     class MemberAccessMask(pbinary.enum):
         length, _values_ = 3, [
@@ -1115,6 +1284,7 @@ class MethodAttributes(pbinary.flags):
         (MemberAccessMask, 'MemberAccess'),
     ]
 
+@pbinary.littleendian
 class ParamAttributes(pbinary.flags):
     _fields_ = [
         (2, 'Unused'),
@@ -1127,6 +1297,7 @@ class ParamAttributes(pbinary.flags):
         (1, 'In'),
     ]
 
+@pbinary.littleendian
 class EventAttributes(pbinary.flags):
     _fields_ = [
         (5, 'Unused'),
@@ -1135,6 +1306,7 @@ class EventAttributes(pbinary.flags):
         (9, 'Unused'),
     ]
 
+@pbinary.littleendian
 class PropertyAttributes(pbinary.flags):
     _fields_ = [
         (3, 'Unused'),
@@ -1145,6 +1317,7 @@ class PropertyAttributes(pbinary.flags):
         (9, 'Unused'),
     ]
 
+@pbinary.littleendian
 class MethodSemanticsAttributes(pbinary.flags):
     _fields_ = [
         (10, 'Unused'),
@@ -1156,6 +1329,7 @@ class MethodSemanticsAttributes(pbinary.flags):
         (1, 'Setter'),
     ]
 
+@pbinary.littleendian
 class PInvokeAttributes(pbinary.flags):
     class CharSetMask(pbinary.enum):
         length, _values_ = 2, [
@@ -1182,6 +1356,7 @@ class PInvokeAttributes(pbinary.flags):
         (1, 'NoMangle'),
     ]
 
+@pbinary.littleendian
 class AssemblyFlags(pbinary.flags):
     class Reserved(pbinary.enum):
         length, _values_ = 2, []
@@ -1204,6 +1379,7 @@ class AssemblyFlags(pbinary.flags):
         (HasPublicKey, 'Compatibility'),
     ]
 
+@pbinary.littleendian
 class FileAttributes(pbinary.flags):
     class ContainsNoMetaData(pbinary.enum):
         length, _values_ = 1, [
@@ -1215,6 +1391,7 @@ class FileAttributes(pbinary.flags):
         (ContainsNoMetaData, 'ContainsNoMetaData'),
     ]
 
+@pbinary.littleendian
 class ManifestResourceAttributes(pbinary.flags):
     class VisibilityMask(pbinary.enum):
         length, _values_ = 3, [
@@ -1226,6 +1403,7 @@ class ManifestResourceAttributes(pbinary.flags):
         (VisibilityMask, 'Visibility'),
     ]
 
+@pbinary.littleendian
 class GenericParamAttributes(pbinary.flags):
     class VarianceMask(pbinary.enum):
         length, _values_ = 2, [
@@ -1255,18 +1433,19 @@ class PreCalculatableTable(ptype.generic):
 
         res = []
         for t, name in cls._fields_:
-            if issubclass(t, Index):
-                if issubclass(t, StreamIndex):
-                    res.append(4 if heapsizes[t.type] else 2)
-                elif issubclass(t, TableIndex):
-                    res.append(2 if rows[t.type].int() < 0x10000 else 4)
-                elif issubclass(t, CodedIndex):
-                    count = max(rows[index].int() for index in t.Tables())
-                    res.append(2 if count < pow(2, 16 - t.Tag.length) else 4)
+            instance = htables.new(t)
+            if isinstance(instance, Index):
+                if isinstance(instance, StreamIndex):
+                    res.append(4 if heapsizes[instance.type] else 2)
+                elif isinstance(instance, TableIndex):
+                    res.append(2 if rows[instance.type].int() < 0x10000 else 4)
+                elif isinstance(instance, CodedIndex):
+                    count = max(rows[index].int() for index in instance.Tables())
+                    res.append(2 if count < pow(2, 16 - instance.Tag.length) else 4)
                 else:
-                    raise TypeError((cls, t, name))
+                    raise TypeError((cls, instance, name))
                 continue
-            res.append(t().a.blocksize())
+            res.append(instance.a.blocksize())
         return sum(res)
 
 @Table.define
@@ -1288,6 +1467,8 @@ class TTypeRef(PreCalculatableTable, pstruct.type):
         (NameIndex, 'TypeName'),
         (NameIndex, 'TypeNamespace'),
     ]
+    def summary(self):
+        return "Namespace={!r} Name={!r} : ResolutionScope={:s}".format(self['TypeNamespace'].str(), self['TypeName'].str(), self['ResolutionScope'].summary())
 
 @Table.define
 class TTypeDef(PreCalculatableTable, pstruct.type):
@@ -1297,8 +1478,8 @@ class TTypeDef(PreCalculatableTable, pstruct.type):
         (NameIndex, 'TypeName'),
         (NameIndex, 'TypeNamespace'),
         (TypeDefOrRef, 'Extends'),
-        (IndexOf('Field'), 'FieldList'),
-        (IndexOf('MethodDef'), 'MethodList'),
+        (TableIndex.Of('Field'), 'FieldList'),
+        (TableIndex.Of('MethodDef'), 'MethodList'),
     ]
 
 @Table.define
@@ -1309,6 +1490,11 @@ class TField(PreCalculatableTable, pstruct.type):
         (NameIndex, 'Name'),
         (BlobIndex, 'Signature'),
     ]
+    def summary(self):
+        signature = self['Signature'].d
+        if self['Flags'].int():
+            return "Name={!r} Signature={:#0{:d}x} Flags={:s}".format(self['Name'].str(), signature.int(), 2 + 2 * signature.Length(), self['Flags'].summary())
+        return "Name={!r} Signature={:#0{:d}x}".format(self['Name'].str(), signature.int(), 2 + 2 * signature.Length())
 
 @Table.define
 class TMethodDef(PreCalculatableTable, pstruct.type):
@@ -1319,7 +1505,7 @@ class TMethodDef(PreCalculatableTable, pstruct.type):
         (MethodAttributes, 'Flags'),
         (NameIndex, 'Name'),
         (BlobIndex, 'Signature'),
-        (IndexOf('Param'), 'ParamList'),
+        (TableIndex.Of('Param'), 'ParamList'),
     ]
 
 @Table.define
@@ -1330,12 +1516,16 @@ class TParam(PreCalculatableTable, pstruct.type):
         (pint.uint16_t, 'Sequence'),
         (NameIndex, 'Name'),
     ]
+    def summary(self):
+        if self['Flags'].int():
+            return "Sequence={:d} Name={!r} Flags={:s}".format(self['Sequence'].int(), self['Name'].str(), self['Flags'].summary())
+        return "Sequence={:d} Name={!r}".format(self['Sequence'].int(), self['Name'].str())
 
 @Table.define
 class TInterfaceImpl(PreCalculatableTable, pstruct.type):
     type = 9
     _fields_ = [
-        (IndexOf('TypeDef'), 'Class'),
+        (TableIndex.Of('TypeDef'), 'Class'),
         (TypeDefOrRef, 'Interface'),
     ]
 
@@ -1351,20 +1541,32 @@ class TMemberRef(PreCalculatableTable, pstruct.type):
 @Table.define
 class TConstant(PreCalculatableTable, pstruct.type):
     type = 11
+    def __Value(self):
+        try:
+            type = self['Type'].li
+            if type['ELEMENT_TYPE_STRING']:
+                return dyn.clone(BlobIndex, _object_=pstr.wstring)
+        except KeyError:
+            pass
+        return BlobIndex
+
     _fields_ = [
         (ELEMENT_TYPE, 'Type'),
         (pint.uint8_t, 'PaddingZero'),
         (HasConstant, 'Parent'),
-        (BlobIndex, 'Value'),
+        (__Value, 'Value'),
     ]
 
 @Table.define
 class TCustomAttribute(PreCalculatableTable, pstruct.type):
     type = 12
+    def __Value(self):
+        return BlobIndex
+
     _fields_ = [
         (HasCustomAttribute, 'Parent'),
         (CustomAttributeType, 'Type'),
-        (BlobIndex, 'Value'),
+        (__Value, 'Value'),
     ]
 
 @Table.define
@@ -1390,7 +1592,7 @@ class TClassLayout(PreCalculatableTable, pstruct.type):
     _fields_ = [
         (pint.uint16_t, 'PackingSize'),
         (pint.uint32_t, 'ClassSize'),
-        (IndexOf('TypeDef'), 'Parent'),
+        (TableIndex.Of('TypeDef'), 'Parent'),
     ]
 
 @Table.define
@@ -1398,7 +1600,7 @@ class TFieldLayout(PreCalculatableTable, pstruct.type):
     type = 16
     _fields_ = [
         (pint.uint32_t, 'Offset'),
-        (IndexOf('Field'), 'Field'),
+        (TableIndex.Of('Field'), 'Field'),
     ]
 
 @Table.define
@@ -1412,8 +1614,8 @@ class TStandAloneSig(PreCalculatableTable, pstruct.type):
 class TEventMap(PreCalculatableTable, pstruct.type):
     type = 18
     _fields_ = [
-        (IndexOf('TypeDef'), 'Parent'),
-        (IndexOf('Event'), 'EventList'),
+        (TableIndex.Of('TypeDef'), 'Parent'),
+        (TableIndex.Of('Event'), 'EventList'),
     ]
 
 @Table.define
@@ -1429,8 +1631,8 @@ class TEvent(PreCalculatableTable, pstruct.type):
 class TPropertyMap(PreCalculatableTable, pstruct.type):
     type = 21
     _fields_ = [
-        (IndexOf('TypeDef'), 'Parent'),
-        (IndexOf('Property'), 'PropertyList'),
+        (TableIndex.Of('TypeDef'), 'Parent'),
+        (TableIndex.Of('Property'), 'PropertyList'),
     ]
 
 @Table.define
@@ -1447,7 +1649,7 @@ class TMethodSemantics(PreCalculatableTable, pstruct.type):
     type = 24
     _fields_ = [
         (MethodSemanticsAttributes, 'Flags'),
-        (IndexOf('MethodDef'), 'Method'),
+        (TableIndex.Of('MethodDef'), 'Method'),
         (HasSemantics, 'Association'),
     ]
 
@@ -1455,7 +1657,7 @@ class TMethodSemantics(PreCalculatableTable, pstruct.type):
 class TMethodImpl(PreCalculatableTable, pstruct.type):
     type = 25
     _fields_ = [
-        (IndexOf('TypeDef'), 'Class'),
+        (TableIndex.Of('TypeDef'), 'Class'),
         (MethodDefOrRef, 'MethodBody'),
         (MethodDefOrRef, 'MethodDeclaration'),
     ]
@@ -1466,6 +1668,10 @@ class TModuleRef(PreCalculatableTable, pstruct.type):
     _fields_ = [
         (NameIndex, 'Name'),
     ]
+    def Name(self):
+        return self['Name'].str()
+    def summary(self):
+        return "Name={!r}".format(self['Name'].str())
 
 @Table.define
 class TTypeSpec(PreCalculatableTable, pstruct.type):
@@ -1473,6 +1679,12 @@ class TTypeSpec(PreCalculatableTable, pstruct.type):
     _fields_ = [
         (BlobIndex, 'Signature'),
     ]
+    def Signature(self):
+        dereferenced = self['Signature'].d
+        return dereferenced.Data()
+    def summary(self):
+        dereferenced = self['Signature'].d
+        return "Signature={:#0{:d}x}".format(dereferenced.int(), 2 + 2 * dereferenced.Length())
 
 @Table.define
 class TImplMap(PreCalculatableTable, pstruct.type):
@@ -1481,15 +1693,20 @@ class TImplMap(PreCalculatableTable, pstruct.type):
         (PInvokeAttributes, 'MappingFlags'),
         (MemberForwarded, 'MemberForwarded'),
         (NameIndex, 'ImportName'),
-        (IndexOf('ModuleRef'), 'ImportScope'),
+        (TableIndex.Of('ModuleRef'), 'ImportScope'),
     ]
+    def summary(self):
+        scope = self['ImportScope'].d.d
+        if self['MappingFlags'].int():
+            return "ImportScope={!r} ImportName={!r} : MappingFlags={:s} : MemberForwarded={:s}".format(scope.Name(), self['ImportName'].str(), self['MappingFlags'].summary(), self['MemberForwarded'].summary())
+        return "ImportScope={!r} ImportName={!r} : MemberForwarded={:s}".format(scope.Name(), self['ImportName'].str(), self['MemberForwarded'].summary())
 
 @Table.define
 class TFieldRVA(PreCalculatableTable, pstruct.type):
     type = 29
     _fields_ = [
         (pint.uint32_t, 'RVA'),
-        (IndexOf('Field'), 'Field'),
+        (TableIndex.Of('Field'), 'Field'),
     ]
 
 @Table.define
@@ -1537,13 +1754,23 @@ class TAssemblyRef(PreCalculatableTable, pstruct.type):
         (NameIndex, 'Culture'),
         (BlobIndex, 'HashValue'),
     ]
+    def summary(self):
+        version = (self[fld].int() for fld in ['MajorVersion', 'MinorVersion', 'BuildNumber', 'RevisionNumber'])
+        name, culture, pk, hash = (self[fld].d for fld in ['Name', 'Culture', 'PublicKeyOrToken', 'HashValue'])
+        items = []
+        items.append(name.str())
+        items.append("Version={:s}".format('.'.join(map("{:d}".format, version))))
+        items.append("Culture={:s}".format(culture.str() or 'neutral'))
+        items.append("PublicKeyToken={:s}".format(''.join(map("{:02x}".format, bytearray(pk.serialize())))))
+        items.append("HashValue={:s}".format(''.join(map("{:02x}".format, bytearray(hash.serialize())))))
+        return ', '.join(items)
 
 @Table.define
 class TAssemblyRefProcessor(PreCalculatableTable, pstruct.type):
     type = 36
     _fields_ = [
         (pint.uint32_t, 'Processor'),
-        (IndexOf('AssemblyRef'), 'AssemblyRef'),
+        (TableIndex.Of('AssemblyRef'), 'AssemblyRef'),
     ]
 
 @Table.define
@@ -1553,7 +1780,7 @@ class TAssemblyRefOS(PreCalculatableTable, pstruct.type):
         (pint.uint32_t, 'OSPlatformID'),
         (pint.uint32_t, 'OSMajorVersion'),
         (pint.uint32_t, 'OSMinorVersion'),
-        (IndexOf('AssemblyRef'), 'AssemblyRef'),
+        (TableIndex.Of('AssemblyRef'), 'AssemblyRef'),
     ]
 
 @Table.define
@@ -1590,8 +1817,8 @@ class TManifestResource(PreCalculatableTable, pstruct.type):
 class TNestedClass(PreCalculatableTable, pstruct.type):
     type = 41
     _fields_ = [
-        (IndexOf('TypeDef'), 'NestedClass'),
-        (IndexOf('TypeDef'), 'EnclosingClass'),
+        (TableIndex.Of('TypeDef'), 'NestedClass'),
+        (TableIndex.Of('TypeDef'), 'EnclosingClass'),
     ]
 
 @Table.define
@@ -1616,7 +1843,7 @@ class TMethodSpec(PreCalculatableTable, pstruct.type):
 class TGenericParamConstraint(PreCalculatableTable, pstruct.type):
     type = 44
     _fields_ = [
-        (IndexOf('GenericParam'), 'Owner'),
+        (TableIndex.Of('GenericParam'), 'Owner'),
         (TypeDefOrRef, 'Constraint'),
     ]
 
