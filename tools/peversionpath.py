@@ -226,5 +226,8 @@ if __name__ == '__main__':
     encoded = { attribute : property for attribute, property in properties.items() }
 
     path = opts.format.format(**encoded)
+    if path.endswith(os.path.sep):
+        six.print_("The generated path ({!s}) ends with the path separator {!r} and is thus considered an invalid path".format(path, os.path.sep), file=sys.stderr)
+        sys.exit(1)
     six.print_(path, file=sys.stdout)
     sys.exit(0)
