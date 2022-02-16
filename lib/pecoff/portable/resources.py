@@ -294,17 +294,33 @@ class VFT2_FONT_(pint.enum, dword):
         ('TRUETYPE', 3),
     ]
 
+class VFT2(pstruct.type):
+    _fields_ = [
+        (word, 'langID'),
+        (word, 'charsetID')
+    ]
+    def int(self):
+        lg, cp = (self[fld].int() for fld in ['langID', 'charsetID'])
+        return lg * 0x10000 + cp
+    def str(self):
+        return "{:04x}{:04x}".format(*(self[fld].int() for fld in ['langID', 'charsetID']))
+    def summary(self):
+        return "langID={:#x} charsetID={:d}".format(self['langID'].int(), self['charsetID'].int())
+
 @RT_VERSION_ValueType.define
 class VS_FIXEDFILEINFO(pstruct.type):
     type = 'VS_VERSION_INFO'
+
     class _dwSignature(pint.enum, dword):
         _values_ = [
             ('VS_FFI_SIGNATURE', 0xfeef04bd),
         ]
+
     class _dwStrucVersion(pint.enum, dword):
         _values_ = [
             ('VS_FFI_STRUCVERSION', 0x10000),
         ]
+
     class _dwFileVersion(pstruct.type):
         _fields_ = [
             (dword, 'dwFileVersionMS'),
@@ -323,32 +339,35 @@ class VS_FIXEDFILEINFO(pstruct.type):
         def summary(self):
             description = ["{:s}={:#0{:d}x}".format(fld, self[fld].int(), 2 + 8) for fld in self.keys()]
             return "{:s} ({:s})".format(self.str(), ', '.join(description))
+
     class _dwProductVersion(_dwFileVersion):
         _fields_ = [
             (dword, 'dwProductVersionMS'),
             (dword, 'dwProductVersionLS'),
         ]
+
     @pbinary.littleendian
     class _dwFileOS(pbinary.struct):
         _fields_ = [
             (VOS__, 'Platform'),
             (VOS_, 'OS'),
         ]
+
     def __dwFileSubtype(self):
         res = self['dwFileType'].li
         if res['DRV']:
             return VFT2_DRV_
         elif res['FONT']:
             return VFT2_FONT_
-        return dword
+
+        # The following type is used for VFT_VXD, but we fall back
+        # to using it as the subtype for all of the unknown filetypes.
+        return VFT2
+
     _fields_ = [
         (_dwSignature, 'dwSignature'),
         (_dwStrucVersion, 'dwStrucVersion'),
-        #(dword, 'dwFileVersionMS'),
-        #(dword, 'dwFileVersionLS'),
         (_dwFileVersion, 'dwFileVersion'),
-        #(dword, 'dwProductVersionMS'),
-        #(dword, 'dwProductVersionLS'),
         (_dwProductVersion, 'dwProductVersion'),
         (dword, 'dwFileFlagsMask'),
         (VS_FF_, 'dwFileFlags'),
@@ -373,7 +392,3 @@ if __name__ == '__main__':
     b = a['Ids'][0]
     print(b['Name'])
     print(b['Entry'])
-
-#    from pecoff.resources import DataDirectory
-
-#    print(DataDirectory(b['RVA']['address']))
