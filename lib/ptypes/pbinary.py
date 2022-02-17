@@ -421,7 +421,8 @@ class type(base):
         raise error.UserError(self, 'type.commit', "Unable to commit from a binary-type when writing to a byte-stream. User must promote to a `{!s}` and then `{:s}`.commit().".format(partial, '.'.join([self.typename(), 'commit'])))
 
     def serialize(self):
-        Log.warning("container.serialize : {:s} : Padding `{:s}` due to user explicitly requesting serialization of misaligned binary instance.".format(self.classname(), self.instance()))
+        if self.bits() % 8:
+            Log.warning("container.serialize : {:s} : Padding `{:s}` due to user explicitly requesting serialization of misaligned binary instance.".format(self.classname(), self.instance()))
         return bitmap.data(self.__getvalue__())
 
 class integer(type):
