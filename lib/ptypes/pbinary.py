@@ -1656,12 +1656,13 @@ class blockarray(terminatedarray):
         return self
 
 class partial(ptype.container):
-    value = None
-    _object_ = None
+    value = _object_ = None
     length = 1
-    initializedQ = lambda self: isinstance(self.value, list) and len(self.value) > 0 and self.value[0].initializedQ()
 
-    def __pb_object(self, **attrs):
+    def initializedQ(self):
+        return isinstance(self.value, list) and len(self.value) > 0 and self.value[0].initializedQ()
+
+    def __object__(self, **attrs):
         offset, object = self.getoffset(), force(self._object_ or 0, self)
         res = {}
 
@@ -1743,77 +1744,87 @@ class partial(ptype.container):
         if not self.initializedQ():
             raise error.InitializationError(self, 'partial.serialize')
         result = self.object.bitmap()
+        return self.__transform__(bitmap.data(result))
+
+    def __consumer__(self, iterator, size=None):
+        length = getattr(self, 'length', Config.integer.size)
+
+        # Figure out what kind of iterator we're being given,
+        # because we can only process things that yield bytes.
+        if isinstance(iterator, (bytes, bytearray)):
+            iterable, size = (iterator[index : index + 1] for index in range(len(iterator))), len(iterator) if size is None else size
+        else:
+            iterable, size = iterator, size
+
+        # If the word length is larger than 1, then we need to
+        # change the way that we consume from our iterable. If
+        # no size was given, then make sure it's never updated,
+        # and set it to the maximum so it never gets clamped.
+        if length > 1:
+            Faggregate = (lambda value, change: value) if size is None else (lambda value, change: value - change)
+            size = length if size is None else size
+
+            # We've been asked to flip the byte order to little-endian,
+            # so we just need to consume length bytes each iteration.
+            def transform(iterable, size=size):
+                while size > 0:
+                    left = min(length, size)
+                    result = bytearray(bytes().join(map(lambda items: next(*items), zip(left * [iter(iterable)], left * [b'\0']))))
+                    for index in reversed(range(0, len(result))):
+                        yield result[index : index + 1]
+                    size = Faggregate(size, len(result))
+                return
+            return bitmap.consumer(transform(iterable))
+
+        # Otherwise we can just process it as it is.
+        return bitmap.consumer(iterable)
+
+    def __transform__(self, data):
 
         # If the word length is larger than a byte, then we're being
         # asked to flip the byte order making us little-endian.
         if self.length > 1:
-            return self.__transform_littleendian(bitmap.data(result))
-        return bitmap.data(result)
+            Ftake = lambda length: lambda iterable: bytearray(map(lambda items: next(*items), zip(length * [iter(iterable)], length * [0])))
 
-    def __transform_littleendian(self, data):
-        Ftake = lambda length: lambda iterable: bytearray(map(lambda items: next(*items), zip(length * [iter(iterable)], length * [0])))
+            # Grab from our data a block at a time using Config.integer.size for our block size
+            iterable = iter(data)
+            F = Ftake(getattr(self, 'length', Config.integer.size))
 
-        # Grab from our data a block at a time using Config.integer.size for our block size
-        iterable = iter(data)
-        F = Ftake(getattr(self, 'length', Config.integer.size))
-
-        result, iterable = bytearray(), iter(data)
-        while len(result) < len(data):
-            item = F(iterable)[:len(data) - len(result)]
-            result += bytearray(reversed(item))
-        return bytes(result[:len(data)])
+            result, iterable = bytearray(), iter(data)
+            while len(result) < len(data):
+                item = F(iterable)[:len(data) - len(result)]
+                result += bytearray(reversed(item))
+            return bytes(result[:len(data)])
+        return data
 
     def __deserialize_block__(self, block):
-        self.value = res = [self.__pb_object()]
-        data = self.__transform_littleendian(block) if self.length > 1 else block
-        res = res[0].__deserialize_consumer__(bitmap.consumer(data))
+        self.value = res = [self.__object__()]
+        bc = self.__consumer__(block, len(block))
+        res = res[0].__deserialize_consumer__(bc)
         if res.parent is not self:
             raise error.AssertionError(self, 'partial.__deserialize_block__', message="parent for binary type {:s} is not {:s}".format(res[0].instance(), self.instance()))
         return res.parent
 
+    def __load_byteorder(self, offset, iterable):
+        # first we'll try and grab the blocksize if it's possible.
+        try: bs = self.blocksize()
+        except Exception: bs = None
+
+        # then we'll seek to the right position and generate a consumer
+        self.source.seek(offset)
+        bc = self.__consumer__(iterable) if bs is None else self.__consumer__(iterable, bs)
+        return self.object.__deserialize_consumer__(bc)
+
     def load(self, **attrs):
         '''Load a pbinary.partial using the current source'''
-        try:
-            self.value = [self.__pb_object()]
-            result = self.__load_littleendian(**attrs) if self.length > 1 else self.__load_bigendian(**attrs)
-            result.setoffset(result.getoffset())
-            return result
-
-        except (StopIteration, error.ProviderError) as E:
-            raise error.LoadError(self, exception=E)
-
-    def __load_bigendian(self, **attrs):
-        # big-endian. stream-based
-        if self.length > 1:
-            raise error.AssertionError(self, 'partial.load', message="The specified byteorder ({!s}) is invalid".format(self.byteorder))
-
         with utils.assign(self, **attrs):
-            offset = self.getoffset()
-            self.source.seek(offset)
-            bc = bitmap.consumer(self.source.consume(1) for index in itertools.count())
-            self.object.__deserialize_consumer__(bc)
-        return self
-
-    def __load_littleendian(self, **attrs):
-        # little-endian. block-based
-        if self.length <= 1:
-            raise error.AssertionError(self, 'partial.load', message="The specified byteorder ({!s}) is invalid".format(self.byteorder, self.length))
-
-        # XXX: self.new(t) can potentially get called due to this call to self.blocksize().
-        #      This can cause a field's closure to get called and raise an InitializationError().
-
-        # FIXME: check to see if there's a dynamic type that needs to be resolved
-        #        and if so, throw up an error that explains why you can't use dynamic
-        #        types with a non-constant in a little-endian binary type.
-        with utils.assign(self, **attrs):
-            offset, size = self.getoffset(), self.blocksize()
-            self.source.seek(offset)
-            data = self.__transform_littleendian(self.source.consume(size))
-
-            # If we were able to read some data, then use it to deserialize our object
-            if len(data):
-                bc = bitmap.consumer(data)
-                self.object.__deserialize_consumer__(bc)
+            offset, self.value = self.getoffset(), [self.__object__()]
+            try:
+                object = self.__load_byteorder(offset, (self.source.consume(1) for index in itertools.count()))
+            except (StopIteration, error.ProviderError) as E:
+                raise error.LoadError(self, exception=E)
+            finally:
+                self.setoffset(offset)
             return self
         return self
 
@@ -1831,7 +1842,7 @@ class partial(ptype.container):
     def alloc(self, *args, **attrs):
         '''Load a pbinary.partial using the provider.empty source'''
         try:
-            self.value = [self.__pb_object()]
+            self.value = [self.__object__()]
             self.object.alloc(*args, **attrs)
             return self
 
@@ -1844,7 +1855,7 @@ class partial(ptype.container):
         return 8 * self.blocksize()
 
     def size(self):
-        value = self.value[0] if self.initializedQ() else self.__pb_object()
+        value = self.value[0] if self.initializedQ() else self.__object__()
         size = value.bits()
         res = (size) if (size & 7) == 0x0 else ((size + 8) & ~7)
         return res // 8
@@ -1854,7 +1865,7 @@ class partial(ptype.container):
         cls = self.__class__
         return utils.callable_eq(self.blocksize, cls.blocksize) and utils.callable_eq(cls.blocksize, partial.blocksize)
     def blocksize(self):
-        value = self.value[0] if self.initializedQ() else self.__pb_object()
+        value = self.value[0] if self.initializedQ() else self.__object__()
         size = value.blockbits()
         res = (size) if (size & 7) == 0x0 else ((size + 8) & ~7)
         return res // 8
@@ -3745,6 +3756,121 @@ if __name__ == '__main__':
         x.set(a=4, b=1, c=4, d=2, e=4, f=3, g=4, h=4)
         if x.serialize() == b'\x41\x42\x43\x44':
             raise Success
+
+    @TestCase
+    def test_partial_stream_0():
+        class streamsource(ptypes.provider.base):
+            def __init__(self, offset, data):
+                self.offset, self.data = offset, iter(bytearray(data))
+            def seek(self, offset):
+                if offset != self.offset:
+                    raise Failure
+                self.offset = offset
+            def consume(self, amount):
+                Ftake = lambda length: lambda iterable: bytearray(map(lambda items: next(*items), zip(length * [iter(iterable)], length * [0])))
+                F, self.offset = Ftake(amount), self.offset + amount
+                return bytes(F(self.data))
+
+        class t(pbinary.struct):
+            _fields_ = [
+                (8, 'a'),
+                (8, 'b'),
+                (8, 'c'),
+                (8, 'd'),
+            ]
+
+        source = streamsource(4, b'\x41\x42\x43\x44\x45\x46\x47\x48')
+        x = pbinary.partial(offset=4, _object_=t, length=0, source=source).l
+        if x['a'] == 0x41 and x['b'] == 0x42 and x['c'] == 0x43 and x['d'] == 0x44:
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_partial_stream_1():
+        class streamsource(ptypes.provider.base):
+            def __init__(self, offset, data):
+                self.offset, self.data = offset, iter(bytearray(data))
+            def seek(self, offset):
+                if offset != self.offset:
+                    raise Failure
+                self.offset = offset
+            def consume(self, amount):
+                Ftake = lambda length: lambda iterable: bytearray(map(lambda items: next(*items), zip(length * [iter(iterable)], length * [0])))
+                F, self.offset = Ftake(amount), self.offset + amount
+                return bytes(F(self.data))
+
+        class t(pbinary.struct):
+            _fields_ = [
+                (8, 'a'),
+                (8, 'b'),
+                (8, 'c'),
+                (8, 'd'),
+            ]
+
+        source = streamsource(4, b'\x41\x42\x43\x44\x45\x46\x47\x48')
+        x = pbinary.partial(offset=4, _object_=t, length=4, source=source).l
+        if x['a'] == 0x44 and x['b'] == 0x43 and x['c'] == 0x42 and x['d'] == 0x41:
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_partial_stream_2():
+        class streamsource(ptypes.provider.base):
+            def __init__(self, offset, data):
+                self.offset, self.data = offset, iter(bytearray(data))
+            def seek(self, offset):
+                if offset != self.offset:
+                    raise Failure
+                self.offset = offset
+            def consume(self, amount):
+                Ftake = lambda length: lambda iterable: bytearray(map(lambda items: next(*items), zip(length * [iter(iterable)], length * [0])))
+                F, self.offset = Ftake(amount), self.offset + amount
+                return bytes(F(self.data))
+
+        class t(pbinary.struct):
+            def __b(self):
+                if self['a'] == 0x41:
+                    return 4
+                return 8
+            _fields_ = [
+                (8, 'a'),
+                (lambda self: 8 if self['a'] == 0x44 else 4, 'b'),
+                (lambda self: 8 if self['b'] == 0x43 else 4, 'c'),
+                (8, 'd'),
+            ]
+
+        source = streamsource(4, b'\x41\x42\x43\x44\x45\x46\x47\x48')
+        x = pbinary.partial(offset=4, _object_=t, length=4, source=source).l
+        if x['a'] == 0x44 and x['b'] == 0x43 and x['c'] == 0x42 and x['d'] == 0x41:
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_partial_stream_3():
+        class streamsource(ptypes.provider.base):
+            def __init__(self, offset, data):
+                self.offset, self.data = offset, iter(bytearray(data))
+            def seek(self, offset):
+                if offset != self.offset:
+                    raise Failure
+                self.offset = offset
+            def consume(self, amount):
+                Ftake = lambda length: lambda iterable: bytearray(map(lambda items: next(*items), zip(length * [iter(iterable)], length * [0])))
+                F, self.offset = Ftake(amount), self.offset + amount
+                return bytes(F(self.data))
+
+        class t(pbinary.struct):
+            _fields_ = [
+                (8, 'a'),
+                (lambda self: ptype.clone(pbinary.array, _object_=4, length=self['a']), 'b'),
+                (8, 'c'),
+            ]
+
+        source = streamsource(4, b'\x41\x42\x43\x04\x45\x46\x47\x48')
+        x = pbinary.partial(offset=4, _object_=t, length=4, source=source).l
+        if x['a'] == 4 and x['b'].serialize() == b'\x43\x42' and x['c'] == 0x41:
+            raise Success
+        raise Failure
 
 if __name__ == '__main__':
     import logging
