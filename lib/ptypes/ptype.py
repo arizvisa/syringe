@@ -687,7 +687,7 @@ class __interface__(object):
         return u'"{:s}"'.format(res)
 
     #@utils.memoize('self', self='parent', args=lambda item: (item[0],) if len(item) > 0 else (), kwds=lambda item: item.get('type', ()))
-    @utils.memoize_method(self='parent', args=lambda item: (item[0],) if len(item) > 0 else (), kwds=lambda item: item.get('type', ()))
+    @utils.memoize_method(self='parent', args=lambda item: (item[0],) if len(item) > 0 else (), kwds=lambda item: (item.get('type', ()), item.get('default', ())))
     def getparent(self, *args, **kwds):
         """Returns the creator of the current type.
 
@@ -700,7 +700,7 @@ class __interface__(object):
         from a type provided, or whose .parent matches the requested instance.
         """
         if not len(args) and 'type' not in kwds:
-            return self.parent
+            return kwds.get('default', self.parent) if self.parent is None else self.parent
 
         query = args if len(args) else (kwds['type'],)
         match = lambda self: lambda query: any(((builtins.isinstance(q, builtins.type) and builtins.isinstance(self, q)) or self.parent is q) for q in query)
@@ -717,6 +717,10 @@ class __interface__(object):
             if match(node)(query):
                 return node
             continue
+
+        # if default was specified in our keywords, then just return that.
+        if 'default' in kwds:
+            return kwds['default']
 
         # otherwise, we can bail since it wasn't found.
         chain = str().join("<{:s}>".format(node.instance()) for node in self.traverse(edges=parents))
