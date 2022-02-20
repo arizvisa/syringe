@@ -26,18 +26,16 @@ class Tag(pstruct.type):
             return Empty
         return dyn.block(total - used)
 
-    def blocksize(self):
-        res = self['Header']['Length'] if self['Header'].li['Length'] < 0x3f else self['HeaderLongLength'].li.int()
-        return res + self['Header'].size() + self['HeaderLongLength'].size()
-
     def __HeaderLongLength(self):
-        return UI32 if self['Header'].li['Length'] == 0x3f else pint.uint_t
+        header = self['Header'].li
+        return UI32 if header['Length'] == 0x3f else pint.uint_t
 
     def __data(self):
-        res = self['Header'].li['Type']
-        cb = self['Header'].size() + self['HeaderLongLength'].size()
-        length = self.blocksize() - cb
-        return TagDef.withdefault(res, type=res, length=length)
+        header = self['Header'].li
+        res = header['Type']
+        length = header['length'] if header['length'] < 0x3f else self['HeaderLongLength'].li.int()
+        size = header['length'] - sum(self[fld].li.size() for fld in ['Header', 'HeaderLongLength'])
+        return TagDef.withdefault(res, type=res, length=max(0, size))
 
     _fields_ = [
         (RECORDHEADER, 'Header'),
