@@ -7,6 +7,21 @@ string_types = (str, unicode) if sys.version_info.major < 3 else (str,)
 text_types = (unicode,) if sys.version_info.major < 3 else (str,)
 iterbytes = functools.partial(itertools.imap, ord) if sys.version_info.major < 3 else iter
 
+## byteorder calculations.
+def byteorder_calculator(length):
+    mask, offset, suboffset = length - 1, 0, 0
+
+    # FIXME: this only works with lengths that are powers of 2, since we're using bitmasks.
+
+    # I was raised with slow divisions, so I'm pretty sure this can be made faster.
+    while True:
+        shift = mask - offset & mask
+        translated = offset & ~mask | shift, suboffset
+        bits = (yield translated)
+        suboffset += bits
+        offset, suboffset = offset + suboffset // 8, suboffset & 7
+    return
+
 ## string formatting
 def strdup(string, terminator='\0'):
     """Will return a copy of ``string`` with the provided ``terminated`` characters trimmed"""
@@ -1041,6 +1056,60 @@ if __name__ == '__main__':
         if not (result == expected and self.count == 2):
             raise Failure
         raise Success
+
+    @TestCase
+    def test_byteorder_0():
+        F = utils.byteorder_calculator(8)
+        if next(F) == (7, 0):
+            raise Success
+
+    @TestCase
+    def test_byteorder_1():
+        F = utils.byteorder_calculator(8)
+        if next(F) == (7, 0) and F.send(8 * 7) == (0, 0):
+            raise Success
+
+    @TestCase
+    def test_byteorder_2():
+        F = utils.byteorder_calculator(8)
+        if next(F) == (7, 0) and F.send(8 * 8) == (15, 0):
+            raise Success
+
+    @TestCase
+    def test_byteorder_3():
+        F = utils.byteorder_calculator(4)
+        if next(F) == (3, 0):
+            raise Success
+
+    @TestCase
+    def test_byteorder_4():
+        F = utils.byteorder_calculator(4)
+        if next(F) == (3, 0) and F.send(8 * 3) == (0, 0):
+            raise Success
+
+    @TestCase
+    def test_byteorder_5():
+        F = utils.byteorder_calculator(4)
+        if next(F) == (3, 0) and F.send(8 * 4) == (7, 0):
+            raise Success
+
+    @TestCase
+    def test_byteorder_6():
+        F = utils.byteorder_calculator(16)
+        if next(F) == (15, 0):
+            raise Success
+
+    @TestCase
+    def test_byteorder_7():
+        F = utils.byteorder_calculator(16)
+        if next(F) == (15, 0) and F.send(8 * 15) == (0, 0):
+            raise Success
+
+    @TestCase
+    def test_byteorder_8():
+        F = utils.byteorder_calculator(16)
+        if next(F) == (15, 0) and F.send(8 * 16) == (31, 0):
+            raise Success
 
 if __name__ == '__main__':
     import logging

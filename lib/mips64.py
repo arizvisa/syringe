@@ -2,7 +2,7 @@ from ptypes import bitmap
 
 def consume(iterable, bits=32 - 6):
     source = bitmap.consumer(iterable)
-    special = source.consume(6)
+    _, special = source.consume(6)
 
     result = []
     for item in [bits] if not hasattr(bits, '__iter__') else bits:

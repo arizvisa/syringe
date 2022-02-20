@@ -319,9 +319,10 @@ class consumer(object):
             # XXX: but, in python3 byte-iterators always return ints...
             return iter(iterable)
 
-    def __init__(self, iterable=()):
+    def __init__(self, iterable=(), position=0):
         self.source = self.__make_interator__(iterable)
         self.cache = new(0, 0)
+        self.position = position
 
     def insert(self, bitmap):
         self.cache = insert(self.cache, bitmap)
@@ -353,6 +354,7 @@ class consumer(object):
             self.read(bs)
             return self.consume(bits)
         self.cache, result = shift(self.cache, bits)
+        self.position += bits
         return result
 
     def __repr__(self):
