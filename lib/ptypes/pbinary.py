@@ -380,10 +380,10 @@ class type(base):
         if not istype(type):
             raise error.UserError(self, 'type.cast', message="Unable to cast binary type ({:s}) to a none-binary type ({:s})".format(self.typename(), type.typename()))
 
-        source = bitmap.consumer()
+        position = offset, suboffset = self.getposition()
+        source = bitmap.consumer(position=8 * offset + suboffset)
         source.push(self.__getvalue__())
 
-        position = self.getposition()
         target = self.new(type, __name__=self.name(), position=position, **attrs)
         try:
             target.__deserialize_consumer__(source)
@@ -396,19 +396,17 @@ class type(base):
         attrs.setdefault('source', provider.empty())
 
         with utils.assign(self, **attrs):
-            position = self.getposition()
-            def repeat(position=position):
-                offset, _ = position
+            offset, suboffset = self.getposition()
+            def repeat(offset=offset):
                 self.source.seek(offset)
                 while True:
                     yield self.source.consume(1)
                 return
 
             iterable = repeat()
-            consumer = bitmap.consumer(iterable)
-            _, boffset = position
+            consumer = bitmap.consumer(iterable, position=8 * offset + suboffset)
             try:
-                consumer.consume(boffset)
+                consumer.consume(suboffset)
                 result = self.__deserialize_consumer__(consumer)
             except (StopIteration, error.ProviderError) as E:
                 raise error.LoadError(self, exception=E)
@@ -477,6 +475,7 @@ class integer(type):
 
         # Now that we've grabbed the number of bits that we're sized
         # for, use it to consume an integer
+        position = consumer.position
         try:
             res = consumer.consume(abs(blocksize))
 
@@ -488,6 +487,7 @@ class integer(type):
         # then assign it.
         else:
             self.__setvalue__(bitmap.new(res, blocksize))
+            self.__position__ = (position // 8, position % 8)
         return self
 
     def __setvalue__(self, *values, **attrs):
@@ -749,7 +749,7 @@ class enum(integer):
 class container(type):
     '''contains a list of variable-bit integers'''
 
-    ## positioning
+    ## FIXME: positioning doesn't really exist in container types.
     def getposition(self, *field, **options):
         if not len(field):
             return super(container, self).getposition()
@@ -760,6 +760,7 @@ class container(type):
             (field, res) = (lambda hd, *tl:(hd, tl))(*field)
             return self.__field__(field).getposition(res) if len(res) > 0 else self.getposition(field)
 
+        # otherwise, try and get the index and return its position.
         index = self.__getindex__(field)
         if 0 <= index < len(self.value):
             return self.value[index].getposition()
@@ -769,10 +770,9 @@ class container(type):
             return super(container, self).getposition()
 
         # If our field does not exist, then we must be being asked for the end
-        # of the container. So use the last member to calculate the position.
-        res = self.value[-1]
-        offset, suboffset = res.getposition()
-        offset, suboffset = offset, suboffset + res.blockbits()
+        # of the container. So we take our current position, and add the size.
+        offset, suboffset = self.getposition()
+        offset, suboffset = offset, suboffset + self.blockbits()
         return offset + (suboffset // 8), suboffset % 8
 
     def setposition(self, position, recurse=False):
@@ -781,13 +781,32 @@ class container(type):
             (offset, suboffset) = offset + (suboffset // 8), suboffset % 8
         res = super(container, self).setposition((offset, suboffset))
 
-        if recurse and self.value is not None:
-            # FIXME: if the byteorder is little-endian, then this fucks up
-            #        the positions pretty hard
+        # If we're being asked to do things recursively, but it doesn't actually
+        # contain our calculator, then we need to step back a bit and figure
+        # out what partial type that we're relative to (if any) and get a calculator.
+        if recurse is True:
+            p = self.getparent(partial, default=None)
+            recurse = (lambda _: utils.byteorder_calculator(1)) if p is None else p.__calculate__
+
+        # If we have at least one member, then we need to seed our calculator
+        # at the first member in order to calculate the position of each member.
+        if recurse and len(self.value or []) > 0:
+            calculator = recurse(self.value[0].getposition())
+
+            # Now that we have our partial calculator, check what position
+            # that we're actually at.
+            current = next(calculator)
+            if position != current:
+                _hex, _precision, value = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0, self.bitmap()
+                p = getattr(recurse, ['__self__', 'im_self'][sys.version_info.major < 3]) if isinstance(recurse, types.MethodType) else partial(length=0)
+                Log.warning("container.setposition : {:s} : Members of container position ({:s}) start at {:s} due to {:s}-endian word size ({:d}).".format(self.instance(), utils.repr_position(position, hex=_hex, precision=_precision), utils.repr_position(current, hex=_hex, precision=_precision), 'little' if p.length > 1 else 'big', p.length))
+
+            # Iterate through all of our members using the calculator to
+            # figure out the correct position they should be at.
             for item in self.value:
-                item.setposition((offset, suboffset), recurse=recurse)
-                suboffset += item.bits() if item.initializedQ() else item.blockbits()
-            pass
+                item.setposition(current, recurse=recurse)
+                current = calculator.send(item.bits() if item.initializedQ() else item.blockbits())
+            return res
         return res
 
     def copy(self, **attrs):
@@ -920,34 +939,31 @@ class container(type):
         #        first as long as it fits within a byte (or the consumer already has
         #        data cached) so that we can read a field that depends on bits
         #        that follow it
-        position = self.getposition()
+        self.__position__ = consumer.position // 8, consumer.position % 8
         for item in generator:
             self.__append__(item)
-            item.setposition(position)
             item.__deserialize_consumer__(consumer)
-
-            # FIXME: if the byteorder is little-endian, then this fucks up
-            #        the positions pretty hard
-            offset, suboffset = position
-            suboffset += item.blockbits()
-            offset, suboffset = (offset + suboffset // 8, suboffset % 8)
-            position = (offset, suboffset)
+            self.__position__ = min(self.__position__, item.__position__)
         return self
 
     def __append__(self, object):
         size = 0 if self.value is None else self.bits()
         offset, suboffset = self.getposition()
-        offset, suboffset = res = offset + (size // 8), suboffset + (size % 8)
+        offset, suboffset = position = offset + (size // 8), suboffset + (size % 8)
 
         object.parent, object.source = self, None
-        if object.getposition() != res:
-            object.setposition(res, recurse=True)
 
+        # FIXME: it would probably be best to figure out where to grab the position
+        #        of the previous member, in order to calculate the current one.
+
+        # Assign a list, if our value is currently empty, and then append.
         if self.value is None:
             self.value = []
-
         self.value.append(object)
-        return res
+
+        # Return the current "projected" position, this should actually change
+        # during deserialization due to us now doing the calculation.
+        return position
 
     ## method overloads
     def __iter__(self):
@@ -960,35 +976,75 @@ class container(type):
 
     def __setitem__(self, index, value):
         '''x.__setitem__(i, y) <==> x[i]=y'''
-        ## validate the index
-        #if not (0 <= index < len(self.value)):
-        #    raise IndexError(self, 'container.__setitem__', index)
+        # validate the index, and figure out whether we can find our parent
+        # partial in order to adjust other members that have been shifted.
+        _, p = self.value[index], self.getparent(partial, default=None)
+        recurse = (lambda _: utils.byteorder_calculator(1)) if p is None else p.__calculate__
 
-        # if it's a pbinary element
+        # if it's a pbinary element, then assign it and reset the position if necessary.
         if isinstance(value, type):
-            res = self.value[index].getposition()
-            if value.getposition() != res:
-                value.setposition(res, recurse=True)
             value.parent, value.source = self, None
-            self.value[index] = value
+            if value.getposition() != self.value[index].getposition():
+                value.setposition(self.value[index].getposition(), recurse=recurse)
+
+            res, self.value[index] = self.value[index], value
+
+            # if our bits don't match, then we need to recalculate the position
+            # of everything that exists after our value.
+            if res.bits() != value.bits():
+                calculator = recurse(value.getposition())
+                position = next(calculator)
+                for item in self.value[index:]:
+                    item.setposition(position, recurse=recurse)
+                    position = calculator.send(bitmap.size(item) if bitmap.isinstance(item) else item.bits())
+                return value
             return value
 
-        # if element it's being assigned to is a container
-        res = self.value[index]
-        if not isinstance(res, type):
-            raise error.AssertionError(self, 'container.__setitem__', message="Unknown `{!s}` at index {:d} while trying to assign to it".format(res.__class__, index))
+        # if element it's being assigned to is a container, then we can't really
+        # get its position and we'll need to set our calculator to the next item.
+        item = self.value[index]
+        if not isinstance(item, type):
+            raise error.AssertionError(self, 'container.__setitem__', message="Unknown `{!s}` at index {:d} while trying to assign to it".format(item.__class__, index))
+        calculator = recurse(self.value[0].getposition()); next(calculator)
 
-        # if value is a bitmap
+        # if value is a bitmap, then we need to compare the bits in order to
+        # figure out whether its size is changed.
         if bitmap.isinstance(value):
-            size = res.blockbits()
-            res.update(value)
+            size = item.bits()
+            item.update(value)
             if bitmap.size(value) != size:
-                self.setposition(self.getposition(), recurse=True)
-            return value
+                return value
 
         # try update the element with the provided value, because if
-        # it doesn't work than it should fail
-        return res.set(value)
+        # it doesn't work than we need to fail before recalculating.
+        else:
+            size, result = item.bits(), item.set(value)
+            if item.bits() != size:
+                return result
+
+        # if we're here, then we need to readjust the rest of the elements
+        # due to the size having changed. create an iterator for everything
+        # so that we can use it to calculate the boundaries of each item.
+        items = iter(self.value)
+
+        # we need to first shift the calculator to the correct position for
+        # the current index and then process the item at the current index.
+        [ calculator.send(bitmap.size(item) if bitmap.isinstance(item) else item.bits()) for _, item in zip(range(index), items) ]
+
+        item = next(items)
+        position = calculator.send(bitmap.size(item) if bitmap.isinstance(item) else item.bits())
+
+        # now we can adjust the rest of the members using the current position.
+        for item in items:
+            if bitmap.isinstance(item):
+                size = bitmap.size(item)
+            else:
+                item.setposition(position, recurse=recurse)
+                size = item.bits()
+
+            # adjust for the next position
+            position = calculator.send(size)
+        return result
 
 ### generics
 class __array_interface__(container):
@@ -996,42 +1052,38 @@ class __array_interface__(container):
 
     def alloc(self, fields=(), **attrs):
         result = super(__array_interface__, self).alloc(**attrs)
+        p = self.getparent(partial, default=None)
+        Fcalculate = (lambda _: utils.byteorder_calculator(1)) if p is None else p.__calculate__
+
+        # generate an index that we'll use for the allocation.
         if len(fields) > 0 and isinstance(fields[0], tuple):
-            for name, val in fields:
-                idx = result.__getindex__(name)
-                position = result.value[idx].getposition()
-                #if any((istype(val), isinstance(val, type), ptype.isresolveable(val))):
-                if istype(val) or ptype.isresolveable(val):
-                    result.value[idx] = result.new(val, __name__=name, position=position).a
-                elif isinstance(val, type):
-                    result.value[idx] = result.new(val, __name__=name, position=position)
-                elif bitmap.isinstance(val):
-                    result.value[idx] = result.new(integer, __name__=name, position=position).__setvalue__(val)
-                else:
-                    result.value[idx].set(val)
-                continue
-
+            indices = {result.__getindex__(name) : (name, value) for name, value in fields}
         else:
-            position = result.getposition()
-            for idx, val in enumerate(fields):
-                name = "{:d}".format(idx)
+            indices = {index : ("{:d}".format(index), value) for index, value in enumerate(fields)}
+
+        # create our calculator seeded at the position of the very first member.
+        position = self.value[0].getposition() if len(self.value or []) > 0 else result.getposition()
+        calculator = Fcalculate(position)
+        position = next(calculator)
+
+        # Nowe we need to go through our members, and figure out what needs to change.
+        for index, item in enumerate(self.value):
+            if index in indices:
+                name, value = indices[index]
+
+                # figure out what type we're going to be allocating the member with.
                 #if any((istype(val), isinstance(val, type), ptype.isresolveable(val))):
-                if istype(val) or ptype.isresolveable(val):
-                    result.value[idx] = result.new(val, __name__=name, position=position).a
-                elif isinstance(val, type):
-                    result.value[idx] = result.new(val, __name__=name, position=position)
-                elif bitmap.isinstance(val):
-                    result.value[idx] = result.new(integer, __name__=name, position=position).__setvalue__(val)
+                if istype(value) or ptype.isresolveable(value):
+                    result.value[index] = item = result.new(value, __name__=name, position=position).a
+                elif isinstance(value, type):
+                    result.value[index] = item = result.new(value, __name__=name, position=position)
+                elif bitmap.isinstance(value):
+                    result.value[index] = item = result.new(integer, __name__=name, position=position).__setvalue__(value)
                 else:
-                    result.value[idx].set(val)
+                    item, _ = result.value[index], result.value[index].set(value)
 
-                # Adjust the current position by the current element that we just modified.
-                (offset, suboffset) = position
-                suboffset += result.value[idx].blockbits()
-                offset, suboffset = (offset + suboffset // 8, suboffset % 8)
-                position = (offset, suboffset)
-
-        result.setposition(result.getposition(), recurse=True)
+            # update our calculator with whatever was just processed.
+            position = calculator.send(item.bits())
         return result
 
     def summary(self, **options):
@@ -1165,30 +1217,40 @@ class __array_interface__(container):
     def set(self, *values, **attrs):
         if not values:
             return self
-
         items, = values
+
+        # if we're already initialized, then none of the sizes should actually change.
         if self.initializedQ():
             iterable = iter(items) if isinstance(items, (tuple, list)) and len(items) > 0 and isinstance(items[0], tuple) else iter(enumerate(items))
             for idx, value in iterable:
                 if istype(value) or ptype.isresolveable(value) or isinstance(value, type):
-                    self.value[idx] = self.new(value, __name__=str(idx))
+                    self.value[idx] = self.new(value, __name__=str(idx), position=self.value[idx].getposition())
+
+                # so we pass this onto the parent method, and let the user fuck themselves
+                # if they explicitly choose to do so.
                 else:
                     self[idx] = value
                 continue
-            self.setposition(self.getposition(), recurse=True)
             return self
 
+        # since we're not initialized, we need to figure out our parent, and create a calculator to start with.
+        p = self.getparent(partial, default=None)
+        Fcalculate = (lambda _: utils.byteorder_calculator(1)) if p is None else p.__calculate__
+        position = self.value[0].getposition() if len(self.value or []) > 0 else self.getposition()
+        calculator = Fcalculate(position)
+        position = next(calculator)
+
+        # now we just need to iterate through our items, and keep track of the position.
         self.value = result = []
         for idx, value in enumerate(items):
             name = "{:d}".format(idx)
             if istype(value) or ptype.isresolveable(value):
-                res = self.new(value, __name__=name).a
+                res = self.new(value, __name__=name, position=position).a
             elif isinstance(value, type):
-                res = self.new(value, __name__=name)
+                res = self.new(value, __name__=name, position=position)
             else:
-                res = self.new(self._object_, __name__=name).a.set(value)
-            self.value.append(res)
-
+                res = self.new(self._object_, __name__=name, position=position).a.set(value)
+            position, _ = calculator.send(res.bits()), self.value.append(res)
         self.length = len(self.value)
         return self
 
@@ -1207,34 +1269,39 @@ class __structure_interface__(container):
             names = [name for _, name in self._fields_ or []]
             fields = {names[self.__getindex__(name)] : item for name, item in fields.items()}
 
-            # now we can iterate through our structure fields to allocate
-            # them using the fields given to us by the caller.
-            position = result.getposition()
+            # as we're going to be assigning everything, figure out a calculator to use.
+            p = self.getparent(partial, default=None)
+            Fcalculate = (lambda _: utils.byteorder_calculator(1)) if p is None else p.__calculate__
+
+            position = self.value[0].getposition() if len(self.value or []) > 0 else result.getposition()
+            calculator = Fcalculate(position)
+            position = next(calculator)
+
+            # now we can iterate through our structure fields to allocate them using
+            # the fields that were actually given to us by the caller.
             for idx, (t, name) in enumerate(self._fields_ or []):
                 if name not in fields:
                     if ptype.isresolveable(t):
-                        result.value[idx] = result.new(t, __name__=name, position=position).a
+                        result.value[idx] = item = result.new(t, __name__=name, position=position).a
+                        position = calculator.send(item.bits())
                     continue
+
                 item = fields[name]
                 #if any((istype(item), isinstance(item, type), ptype.isresolveable(item))):
                 if istype(item) or ptype.isresolveable(item):
-                    result.value[idx] = result.new(item, __name__=name, position=position).a
+                    result.value[idx] = item = result.new(item, __name__=name, position=position).a
                 elif isinstance(item, type):
-                    result.value[idx] = result.new(item, __name__=name, position=position)
+                    result.value[idx] = item = result.new(item, __name__=name, position=position)
                 elif bitmap.isinstance(item):
-                    result.value[idx] = result.new(integer, __name__=name, position=position).__setvalue__(item)
+                    result.value[idx] = item = result.new(integer, __name__=name, position=position).__setvalue__(item)
                 elif isinstance(item, dict):
-                    result.value[idx].alloc(**item)
+                    item, _ = result.value[idx], result.value[idx].alloc(**item)
                 else:
-                    result.value[idx].set(item)
+                    item, _ = result.value[idx], result.value[idx].set(item)
 
-                # Shift the current position that we're keeping track of by the number of bits
-                # that were found for the current field.
-                (offset, suboffset) = position
-                suboffset += result.value[idx].blockbits()
-                offset, suboffset = (offset + suboffset // 8, suboffset % 8)
-                position = (offset, suboffset)
-            self.setposition(self.getposition(), recurse=True)
+                # update our calculator with the item was just processed.
+                position = calculator.send(item.bits())
+            return result
         return result
 
     def __append__(self, object):
@@ -1403,31 +1470,59 @@ class __structure_interface__(container):
         result = self
         value, = values or ((),)
 
+        # First we'll define a closure that will be used to assign
+        # each member that was given to us in the parameters.
         def assign(pack_indexvalue):
-            (index, value) = pack_indexvalue
+            (index, value, position) = pack_indexvalue
             if istype(value) or ptype.isresolveable(value):
                 name = result.value[index].__name__
-                result.value[index] = result.new(value, __name__=name).a
+                result.value[index] = item = result.new(value, __name__=name, position=position).a
             elif isinstance(value, type):
                 name = result.value[index].__name__
-                result.value[index] = result.new(value, __name__=name)
+                result.value[index] = item = result.new(value, __name__=name, position=position)
             elif isinstance(value, dict):
-                result.value[index].set(**value)
+                item, _ = result.value[index], result.value[index].set(**value)
             else:
-                result.value[index].set(value)
-            return
+                item, _ = result.value[index], result.value[index].set(value)
+            return item
 
+        # Now we're actually ready to do an actual assignment, so start out
+        # by first searching to see if we have a parent to calculate position.
         if result.initializedQ():
+            p = self.getparent(partial, default=None)
+            Fcalculate = (lambda _: utils.byteorder_calculator(1)) if p is None else p.__calculate__
+
+            # update our current fields with the value we got, and instantiate
+            # the index that we'll use to allocate the entire type.
             if isinstance(value, dict):
                 value = fields.update(value)
+            indices = {}
 
+            # If we were given a value, then we need to first check that it
+            # has the right number of elements before updating our index.
             if value:
                 if len(result._fields_) != len(value):
                     raise error.UserError(result, 'struct.set', message="Unable to assign iterable to instance due to iterator length ({:d}) being different from instance ({:d})".format(len(value), len(result._fields_)))
-                [ assign((index, value)) for index, value in enumerate(value) ]
+                for index, value in enumerate(value):
+                    indices[index] = value
 
-            [ assign((self.__getindex__(name), item)) for name, item in fields.items() ]
-            result.setposition(result.getposition(), recurse=True)
+            # Now we need to iterate through the fields were were given, figure
+            # out their index, and update our index with that too.
+            for name, item in fields.items():
+                index = self.__getindex__(name)
+                indices[index] = item
+
+            # Finally we seed our calculator with the position of the very first
+            # member, and only then will we actually update things.
+            position = self.value[0].getposition() if len(self.value or []) > 0 else result.getposition()
+            calculator = Fcalculate(position)
+            position = next(calculator)
+
+            for index, item in enumerate(self.value):
+                if index in indices:
+                    value = indices[index]
+                    item = assign((index, value, position))
+                position = calculator.send(item.bits())
             return result
         return result.a.set(value, **fields)
 
@@ -1477,10 +1572,19 @@ class array(__array_interface__):
         return result
 
     def __deserialize_consumer__(self, consumer):
-        position = self.getposition()
-        object = getattr(self, '_object_', 0)
         self.value = []
-        generator = (self.new(object, __name__=str(index), position=position) for index in range(self.length))
+        position = consumer.position
+        self.__position__ = position // 8, position % 8
+
+        # Define a generator that yields each element that gets created.
+        def elements(position, object=getattr(self, '_object_', 0)):
+            for index in range(self.length):
+                item = self.new(object, __name__=str(index), position=position)
+                yield item
+            return
+
+        # Generate and deserialize all the elements starting from our initial container position.
+        generator = elements(self.__position__)
         return super(array, self).__deserialize_consumer__(consumer, generator)
 
     def __blockbits_originalQ__(self):
@@ -1519,8 +1623,20 @@ class struct(__structure_interface__):
 
     def __deserialize_consumer__(self, consumer):
         self.value = []
-        position = self.getposition()
-        generator = (self.new(t, __name__=name, position=position) for t, name in self._fields_ or [])
+
+        # Figure our our starting position to create members at.
+        position = consumer.position
+        self.__position__ = position // 8, position % 8
+
+        # Define a closure that's responsible for creating each member.
+        def members(position):
+            for t, name in self._fields_ or []:
+                item = self.new(t, __name__=name, position=position)
+                yield item
+            return
+
+        # Generate as many members as possible from our initial container position.
+        generator = members(self.__position__)
         return super(struct, self).__deserialize_consumer__(consumer, generator)
 
     def __blockbits_originalQ__(self):
@@ -1555,22 +1671,29 @@ class terminatedarray(__array_interface__):
 
     def __deserialize_consumer__(self, consumer):
         self.value = []
-        object = self._object_
         forever = itertools.count() if self.length is None else range(self.length)
-        position = self.getposition()
 
-        def generator():
+        # Figure out our current position that we're going to start at.
+        position = consumer.position
+        self.__position__ = position // 8, position % 8
+
+        # Define a generator that's responsible for each element of the array.
+        def elements(position, object=getattr(self, '_object_', 0)):
             for index in forever:
                 item = self.new(object, __name__=str(index), position=position)
                 yield item
+
+                # At this point the item should've been loaded, so we need to
+                # check to see if it's our sentinel element.
                 if self.isTerminator(item):
                     break
                 continue
             return
 
-        iterable = generator()
+        # Generate and deserialize all the members from the initial container position.
+        generator = elements(self.__position__)
         try:
-            return super(terminatedarray, self).__deserialize_consumer__(consumer, iterable)
+            return super(terminatedarray, self).__deserialize_consumer__(consumer, generator)
 
         # terminated arrays can also stop when out-of-data
         except StopIteration as E:
@@ -1616,37 +1739,48 @@ class blockarray(terminatedarray):
         return False
 
     def __deserialize_consumer__(self, consumer):
-        object, position = getattr(self, '_object_', 0), self.getposition()
         total = self.blockbits()
         value = self.value = []
         forever = itertools.count() if self.length is None else range(self.length)
-        generator = (self.new(object, __name__=str(index), position=position) for index in forever)
+
+        # Figure out our position from the consumer, and assign it to each
+        # member so they start out where we're currently at.
+        position = consumer.position
+        self.__position__ = position // 8, position % 8
+
+        # Define a generator that simply yields each new array element.
+        def elements(position, object=getattr(self, '_object_', 0)):
+            for index in forever:
+                yield self.new(object, __name__=str(index), position=position)
+            return
+        generator = elements(self.__position__)
 
         # fork the consumer
-        consumer = bitmap.consumer().push((consumer.consume(total), total))
+        bc = bitmap.consumer(position=position)
+        bc.push((consumer.consume(total), total))
 
+        # now we can enter our loop generating each individual element. we have
+        # to do this manually because when loading a blockarray, an element can
+        # be partially loaded and thus we need to ensure it's still in the array.
         try:
             while total > 0:
                 item = next(generator, None)
                 if item is None:
                     break
 
-                item.setposition(position)
+                # Add the item that we just constructed, and then deserialize it.
                 value.append(item)
+                item.__deserialize_consumer__(bc)
 
-                item.__deserialize_consumer__(consumer)
+                # Now we need to look at the item's position to see if it's our
+                # lowest that the container will start at. If it's a sentinel
+                # item, then we also exit our loop.
+                self.__position__ = min(self.__position__, item.__position__)
                 if self.isTerminator(item):
                     break
 
                 size = item.blockbits()
                 total -= size
-
-                # FIXME: if the byteorder is little-endian, then this fucks up
-                #        the positions pretty hard
-                (offset, suboffset) = position
-                suboffset += size
-                offset, suboffset = (offset + suboffset // 8, suboffset % 8)
-                position = (offset, suboffset)
 
             if total < 0:
                 Log.info("blockarray.__deserialize_consumer__ : {:s} : Read {:d} extra bits during deserialization.".format(self.instance(), -total))
@@ -1747,8 +1881,41 @@ class partial(ptype.container):
         result = self.object.bitmap()
         return self.__transform__(bitmap.data(result))
 
+    def __calculate__(self, position=(0, 0)):
+        '''Coroutine that consumes an arbitrary number of bits, and yields the translated positions whilst maintaining the byte order.'''
+        base, = self.getposition()
+        length = max(1, self.length)
+        mask = length - 1
+
+        # Instantiate our coroutine, grab the very first position, and discard it.
+        # This is because we're going to calculate the bits needed to get to the
+        # position we were given within our position parameter.
+        coro = utils.byteorder_calculator(length)
+        _, _ = next(coro)
+
+        # Now we need to figure out how many bits we need to discard before we
+        # get to the position the user has requested. To accomplish this, we
+        # again need to take away the alignment to get the offset, and then use
+        # it to calculate the number of bits to get to the actual desried position.
+        offset, suboffset = position
+        goal = offset - base
+        start, bytes = goal & ~mask, mask - goal & mask
+        bits = 8 * (start + bytes) + suboffset
+
+        # Finally we can actually discard the bits and recalculate our offset and suboffset.
+        offset, suboffset = coro.send(bits)
+        translated = base + offset, suboffset
+        assert translated == position
+
+        # This is doing 2 additions and a comparison for every single iteration...
+        while True:
+            bits = (yield translated)
+            offset, suboffset = coro.send(bits)
+            translated = base + offset, suboffset
+        return
+
     def __consumer__(self, iterator, size=None):
-        length = getattr(self, 'length', Config.integer.size)
+        offset, length = self.getoffset(), getattr(self, 'length', Config.integer.size)
 
         # Figure out what kind of iterator we're being given,
         # because we can only process things that yield bytes.
@@ -1775,10 +1942,10 @@ class partial(ptype.container):
                         yield result[index : index + 1]
                     size = Faggregate(size, len(result))
                 return
-            return bitmap.consumer(transform(iterable))
+            return bitmap.consumer(transform(iterable), position=8 * offset)
 
         # Otherwise we can just process it as it is.
-        return bitmap.consumer(iterable)
+        return bitmap.consumer(iterable, position=8 * offset)
 
     def __transform__(self, data):
 
@@ -2039,7 +2206,7 @@ class partial(ptype.container):
 
     def setposition(self, offset, recurse=False):
         if self.initializedQ():
-            self.object.setposition((offset[0], 0), recurse=recurse)
+            self.object.setposition((offset[0], 0), recurse=self.__calculate__)
         return super(partial, self).setposition(offset, recurse=False)
 
 class flags(struct):
@@ -2247,9 +2414,8 @@ if __name__ == '__main__':
         # 1011 1111 0000 0001
         data = b'\xbf\x01'
         a = blah
-        res = pbinary.littleendian(blah)
-        b = res
-        res = res()
+        t = pbinary.littleendian(blah)
+        res = t()
 
         data = itertools.islice(data, res.a.size())
         res.source = provider.bytes(bytes(bytearray(data)))
@@ -3872,6 +4038,89 @@ if __name__ == '__main__':
         if x['a'] == 4 and x['b'].serialize() == b'\x43\x42' and x['c'] == 0x41:
             raise Success
         raise Failure
+
+    @TestCase
+    def test_partial_calculate_0():
+        class blah(partial):
+            length = 8
+
+        x = blah(offset=0)
+        I = x.__calculate__((8, 0))
+        if next(I) == (8, 0) and I.send(0) == (8, 0):
+            raise Success
+
+    @TestCase
+    def test_partial_calculate_1():
+        class blah(partial):
+            length = 8
+
+        x = blah(offset=8)
+        I = x.__calculate__((8, 0))
+        if next(I) == (8, 0) and I.send(0) == (8, 0):
+            raise Success
+
+    @TestCase
+    def test_partial_calculate_2():
+        class blah(partial):
+            length = 8
+
+        x = blah(offset=8)
+        I = x.__calculate__((12, 0))
+        if next(I) == (12, 0) and I.send(8 * 4) == (8, 0):
+            raise Success
+
+    @TestCase
+    def test_partial_calculate_3():
+        class blah(partial):
+            length = 8
+
+        x = blah(offset=8)
+        I = x.__calculate__((15, 0))
+        if next(I) == (15, 0) and I.send(8 * 2) == (13, 0):
+            raise Success
+
+    @TestCase
+    def test_partial_calculate_4():
+        class blah(partial):
+            length = 4
+
+        # logically, we shouldn't be able to seek backwards...but
+        # mathematically we can. seeking to (0, 0), pushes us forward
+        # to the next dword at offset 4...which means 16-bits = 4+2
+        x = blah(offset=3)
+        I = x.__calculate__((0, 0))
+        if next(I) == (0, 0) and I.send(8 * 2) == (6, 0):
+            raise Success
+
+    @TestCase
+    def test_partial_calculate_5():
+        class blah(partial):
+            length = 16
+
+        x = blah(offset=0)
+        I = x.__calculate__((0, 0))
+        if next(I) == (0, 0) and I.send(8 * 16) == (16, 0):
+            raise Success
+
+    @TestCase
+    def test_partial_calculate_6():
+        class blah(partial):
+            length = 16
+
+        x = blah(offset=4)
+        I = x.__calculate__((4, 0))
+        if next(I) == (4, 0) and I.send(8 * 16) == (16 + 4, 0):
+            raise Success
+
+    @TestCase
+    def test_partial_calculate_7():
+        class blah(partial):
+            length = 16
+
+        x = blah(offset=0)
+        I = x.__calculate__((13, 0))
+        if next(I) == (13, 0) and I.send(8) == (12, 0):
+            raise Success
 
 if __name__ == '__main__':
     import logging
