@@ -9,6 +9,8 @@ class Header(pstruct.type):
         (UI8, 'Version'),
         (UI32, 'FileLength'),
     ]
+    def summary(self):
+        return "Signature={:s} Version={:d} FileLength={!s}".format(self['Signature'].str(), self['Version'].int(), self['FileLength'].summary())
 
 class FrameInfo(pstruct.type):
     _fields_ = [
@@ -46,6 +48,7 @@ class CompressedData(ptype.encoded_t):
         compressed_block = self._compress(block)
         print('%s: compressed %x to %x bytes'%(self.__class__.__name__,len(block),len(compressed_block)))
         return super(CompressedData,self).encode(ptype.block(length=len(compressed_block)).set(compressed_block))
+    @ptypes.utils.memoize_method(self=lambda self: self.value, attrs=lambda self: tuple(sorted(self.items())))
     def decode(self, object, **attrs):
         block = object.serialize()
         decompressed_block = self._decompress(block)
@@ -88,22 +91,20 @@ class File(pstruct.type, ptype.boundary):
 if __name__ == '__main__':
     import sys
     import ptypes,vector.swf as swf
-    ptypes.setsource(ptypes.file('./test.swf', mode='r'))
+    ptypes.setsource(ptypes.prov.file(sys.argv[1] if len(sys.argv) > 1 else '../../../samples/dog.swf', mode='rb'))
 
-    z = File
-#    z = ptypes.debugrecurse(z)
-    z = z()
+    z = swf.File()
     z = z.l
-    for x in z['data']['tags']:
-        print('-'*32)
-        print(x)
+    print(z['header'])
 
-    a = z['data']['tags'][0]
-    print(a.hexdump())
-    print(a.li.hexdump())
-    print(repr(a.l['Header'].serialize()))
+    data = z['data'].d
+    data = data.l
+
+    tags = data['tags']
+    for item in tags:
+        print('-'*32)
+        print(item)
 
     correct=b'\x44\x11\x08\x00\x00\x00'
     print(ptypes.utils.hexdump(correct))
-
     print(a.serialize() == correct)

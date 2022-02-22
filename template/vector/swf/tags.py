@@ -18,24 +18,19 @@ class TagDef(ptype.definition):
 
 class Tag(pstruct.type):
     '''this wraps around a tag'''
-    def __unknown(self):
-        total = self.blocksize() - (self['Header'].size() + self['HeaderLongLength'].size())
-        used = self['data'].size()
-        if used > total:
-            logging.warning('invalid size specified (%d > %d) : %s'%(used, total, self['data'].classname()))
-            return Empty
-        return dyn.block(total - used)
-
     def __HeaderLongLength(self):
         header = self['Header'].li
         return UI32 if header['Length'] == 0x3f else pint.uint_t
 
     def __data(self):
         header = self['Header'].li
-        res = header['Type']
+        t, length = header['Type'], header['length'] if header['length'] < 0x3f else self['HeaderLongLength'].li.int()
+        return TagDef.withdefault(t, type=t, length=length)
+
+    def __unknown(self):
+        header = self['Header'].li
         length = header['length'] if header['length'] < 0x3f else self['HeaderLongLength'].li.int()
-        size = header['length'] - sum(self[fld].li.size() for fld in ['Header', 'HeaderLongLength'])
-        return TagDef.withdefault(res, type=res, length=max(0, size))
+        return dyn.block(max(0, length - self['data'].li.size()))
 
     _fields_ = [
         (RECORDHEADER, 'Header'),
@@ -44,15 +39,9 @@ class Tag(pstruct.type):
         (__unknown, 'unknown')
     ]
 
-    def serialize(self):
-        # fix up header
-        tag, size = self['data'].type, self['data'].size()
-        self['Header']['type'] = tag
-        if size >= 0x3f:
-            self['Header']['length'] = 0x3f
-            self['HeaderLongLength'] = self.new(UI32).set(size)     # this creates a bad reference but whatever..
-            self['HeaderLongLength'].set(size)
-        return super(Tag, self).serialize()
+    def Size(self):
+        header = self['Header'].li
+        return header['length'] if header['length'] < 0x3f else self['HeaderLongLength'].li.int()
 
 class TagList(parray.terminated):
     _object_ = Tag
@@ -117,9 +106,10 @@ class PlaceObject(pstruct.type):
     version = 1
 
     def __ColorTransform(self):
-        bs = self.p.blocksize() - self.p.size()
-        raise NotImplementedError
-        return CXFORM
+        p = self.getparent(Tag)
+        if sum(self[fld].li.size() for fld in ['CharacterId', 'Depth', 'Matrix']) < p.Size():
+            return CXFORM
+        return Empty
 
     _fields_ = [
         (UI16, 'CharacterId'),
@@ -401,8 +391,8 @@ class DefineShape(pstruct.type):
     _fields_ = [
         (UI16, 'ShapeId'),
         (RECT, 'ShapeBounds'),
-        #(Empty, 'Shapes')   #XXX
-        (SHAPEWITHSTYLE, 'Shapes')
+        (Empty, 'Shapes')   #XXX
+        #(SHAPEWITHSTYLE, 'Shapes')
     ]
 
 @TagDef.define
@@ -636,13 +626,43 @@ class DefineSceneAndFrameLabelData(pstruct.type):
 class DefineBinaryData(pstruct.type):
     type = 87
     def __data(self):
-        sz = self.p.blocksize() - self.p.size()
-        return dyn.block(sz - 6)
+        p = self.getparent(Tag)
+        return dyn.block(p.Size() - 6)
 
     _fields_ = [
         (UI16, 'characterId'),
         (UI32, 'reserved'),
         (__data, 'data'),
+    ]
+
+@TagDef.define
+class DefineSound(pstruct.type):
+    type = 14
+    class _f_sound(pbinary.struct):
+        class _format(pbinary.enum):
+            length, _values_ = 4, [
+                ('Raw', 0),
+                ('ADPCM', 1),
+                ('MP3', 2),
+                ('Uncompressed', 3),
+                ('Nellymoser', 6),
+            ]
+        _fields_ = [
+            (_format, 'format'),
+            (2, 'rate'),
+            (1, 'is_16bits'),
+            (1, 'is_stereo'),
+        ]
+
+    def __f_sound_data(self):
+        p, fields = self.getparent(Tag), ['f_sound_id', 'f_sound', 'f_sound_samples_count']
+        return dyn.block(max(0, p.Size() - sum(self[fld].li.size() for fld in fields)))
+
+    _fields_ = [
+        (UI16, 'f_sound_id'),
+        (_f_sound, 'f_sound'),
+        (UI32, 'f_sound_samples_count'),
+        (__f_sound_data, 'f_sound_data'),
     ]
 
 ##############################################

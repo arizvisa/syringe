@@ -550,32 +550,36 @@ class LINESTYLE2(pstruct.type):
     ]
 
 class FILLSTYLEARRAY(pstruct.type):
+    def __FillStyleCountExtended(self):
+        return UI16 if self['FillStyleCount'].li.int() == 0xff else Empty
+    def __FillStyles(self):
+        count = self['FillStyleCountExtended'].int() if self['FillStyleCount'].li.int() == 0xff else self['FillStyleCount'].int()
+        return dyn.array(FILLSTYLE, count)
+
     _fields_ = [
         (UI8, 'FillStyleCount'),
-        (lambda s: UI16 if s['FillStyleCount'].li.int() == 0xff else Empty, 'FillStyleCountExtended'),
-        (lambda s: dyn.array(FILLSTYLE, s.getcount()), 'FillStyles'),
+        (__FillStyleCountExtended, 'FillStyleCountExtended'),
+        (__FillStyles, 'FillStyles'),
     ]
-
-    def getcount(self):
-        return self['FillStyleCountExtended'] if self['FillStyleCount'].int() == 0xff else self['FillStyleCount']
 
 class LINESTYLEARRAY(pstruct.type):
     def __LineStyles(self):
+        count = self['LineStyleCountExtended'].int() if self['LineStyleCount'] == 0xff else self['LineStyleCount'].int()
         type = tags.DefineShape.type  # FIXME
         if type == tags.DefineShape4.type:
-            return dyn.array(LINESTYLE2, self.getcount())
+            return dyn.array(LINESTYLE2, count)
         if type in (tags.DefineShape.type,tags.DefineShape2.type,tags.DefineShape3.type):
-            return dyn.array(LINESTYLE, self.getcount())
+            return dyn.array(LINESTYLE, count)
         raise NotImplementedError
+
+    def __LineStyleCountExtended(self):
+        return UI16 if self['LineStyleCount'].li.int() == 0xff else Empty
 
     _fields_ = [
         (UI8, 'LineStyleCount'),
-        (lambda s: UI16 if s['LineStyleCount'].li.int() == 0xff else Empty, 'LineStyleCountExtended'),
+        (__LineStyleCountExtended, 'LineStyleCountExtended'),
         (__LineStyles, 'LineStyles'),
     ]
-
-    def getcount(self):
-        return self['LineStyleCountExtended'] if self['LineStyleCount'] == 0xff else self['LineStyleCount']
 
 class SHAPEWITHSTYLE(pstruct.type, ShapeDefinition):
     class __NumBits(pbinary.struct):
