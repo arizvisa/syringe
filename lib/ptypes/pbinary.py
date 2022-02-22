@@ -380,6 +380,7 @@ class type(base):
         if not istype(type):
             raise error.UserError(self, 'type.cast', message="Unable to cast binary type ({:s}) to a none-binary type ({:s})".format(self.typename(), type.typename()))
 
+        # FIXME: this discards the byteorder which makes the offsets all wrong.
         position = offset, suboffset = self.getposition()
         source = bitmap.consumer(position=8 * offset + suboffset)
         source.push(self.__getvalue__())
@@ -403,6 +404,7 @@ class type(base):
                     yield self.source.consume(1)
                 return
 
+            # FIXME: this discards the byteorder fucking up the position for littleendian
             iterable = repeat()
             consumer = bitmap.consumer(iterable, position=8 * offset + suboffset)
             try:
@@ -794,12 +796,8 @@ class container(type):
             calculator = recurse(self.value[0].getposition())
 
             # Now that we have our partial calculator, check what position
-            # that we're actually at.
+            # that we're actually at for the very first member.
             current = next(calculator)
-            if position != current:
-                _hex, _precision, value = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0, self.bitmap()
-                p = getattr(recurse, ['__self__', 'im_self'][sys.version_info.major < 3]) if isinstance(recurse, types.MethodType) else partial(length=0)
-                Log.warning("container.setposition : {:s} : Members of container position ({:s}) start at {:s} due to {:s}-endian word size ({:d}).".format(self.instance(), utils.repr_position(position, hex=_hex, precision=_precision), utils.repr_position(current, hex=_hex, precision=_precision), 'little' if p.length > 1 else 'big', p.length))
 
             # Iterate through all of our members using the calculator to
             # figure out the correct position they should be at.
@@ -1755,7 +1753,8 @@ class blockarray(terminatedarray):
             return
         generator = elements(self.__position__)
 
-        # fork the consumer
+        # fork the consumer so we can populate our instance
+        # FIXME: this is discarding the byteorder which fucks up positions for little-endian
         bc = bitmap.consumer(position=position)
         bc.push((consumer.consume(total), total))
 
@@ -1884,7 +1883,7 @@ class partial(ptype.container):
     def __calculate__(self, position=(0, 0)):
         '''Coroutine that consumes an arbitrary number of bits, and yields the translated positions whilst maintaining the byte order.'''
         base, = self.getposition()
-        length = max(1, self.length)
+        length = max(1, min(self.blocksize(), self.length))
         mask = length - 1
 
         # Instantiate our coroutine, grab the very first position, and discard it.
@@ -1942,6 +1941,9 @@ class partial(ptype.container):
                         yield result[index : index + 1]
                     size = Faggregate(size, len(result))
                 return
+
+            # FIXME: we need some way to pass the position for little-endian
+            #        (wrt performance) to any elements that use this class.
             return bitmap.consumer(transform(iterable), position=8 * offset)
 
         # Otherwise we can just process it as it is.
@@ -4063,6 +4065,7 @@ if __name__ == '__main__':
     def test_partial_calculate_2():
         class blah(partial):
             length = 8
+            blocksize = lambda self: 1024
 
         x = blah(offset=8)
         I = x.__calculate__((12, 0))
@@ -4073,6 +4076,7 @@ if __name__ == '__main__':
     def test_partial_calculate_3():
         class blah(partial):
             length = 8
+            blocksize = lambda self: 1024
 
         x = blah(offset=8)
         I = x.__calculate__((15, 0))
@@ -4083,6 +4087,7 @@ if __name__ == '__main__':
     def test_partial_calculate_4():
         class blah(partial):
             length = 4
+            blocksize = lambda self: 1024
 
         # logically, we shouldn't be able to seek backwards...but
         # mathematically we can. seeking to (0, 0), pushes us forward
@@ -4116,6 +4121,7 @@ if __name__ == '__main__':
     def test_partial_calculate_7():
         class blah(partial):
             length = 16
+            blocksize = lambda self: 1024
 
         x = blah(offset=0)
         I = x.__calculate__((13, 0))
