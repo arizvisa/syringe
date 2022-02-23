@@ -1884,34 +1884,7 @@ class partial(ptype.container):
         '''Coroutine that consumes an arbitrary number of bits, and yields the translated positions whilst maintaining the byte order.'''
         base, = self.getposition()
         length = max(1, min(self.blocksize(), self.length))
-        mask = length - 1
-
-        # Instantiate our coroutine, grab the very first position, and discard it.
-        # This is because we're going to calculate the bits needed to get to the
-        # position we were given within our position parameter.
-        coro = utils.byteorder_calculator(length)
-        _, _ = next(coro)
-
-        # Now we need to figure out how many bits we need to discard before we
-        # get to the position the user has requested. To accomplish this, we
-        # again need to take away the alignment to get the offset, and then use
-        # it to calculate the number of bits to get to the actual desried position.
-        offset, suboffset = position
-        goal = offset - base
-        start, bytes = goal & ~mask, mask - goal & mask
-        bits = 8 * (start + bytes) + suboffset
-
-        # Finally we can actually discard the bits and recalculate our offset and suboffset.
-        offset, suboffset = coro.send(bits)
-        translated = base + offset, suboffset
-        assert translated == position
-
-        # This is doing 2 additions and a comparison for every single iteration...
-        while True:
-            bits = (yield translated)
-            offset, suboffset = coro.send(bits)
-            translated = base + offset, suboffset
-        return
+        return utils.position_calculator(length, base, position)
 
     def __consumer__(self, iterator, size=None):
         offset, length = self.getoffset(), getattr(self, 'length', Config.integer.size)

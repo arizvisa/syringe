@@ -15,11 +15,42 @@ def byteorder_calculator(length):
 
     # I was raised with slow divisions, so I'm pretty sure this can be made faster.
     while True:
-        shift = mask - offset & mask
+        shift = (mask - offset) & mask
         translated = offset & ~mask | shift, suboffset
         bits = (yield translated)
         suboffset += bits
         offset, suboffset = offset + suboffset // 8, suboffset & 7
+    return
+
+def position_calculator(length, base=0, position=(0, 0)):
+    '''Coroutine that consumes an arbitrary number of bits, and yields the translated positions whilst maintaining the byte order.'''
+    mask = length - 1
+
+    # Instantiate our coroutine, grab the very first position, and discard it.
+    # This is because we're going to calculate the bits needed to get to the
+    # position we were given within our position parameter.
+    coro = byteorder_calculator(length)
+    _, _ = next(coro)
+
+    # Now we need to figure out how many bits we need to discard before we
+    # get to the position the user has requested. To accomplish this, we
+    # again need to take away the alignment to get the offset, and then use
+    # it to calculate the number of bits to get to the actual desried position.
+    offset, suboffset = position
+    goal = offset - base
+    start, bytes = goal & ~mask, mask - (goal & mask)
+    bits = 8 * (start + bytes) + suboffset
+
+    # Finally we can actually discard the bits and recalculate our offset and suboffset.
+    offset, suboffset = coro.send(bits)
+    translated = base + offset, suboffset
+    assert translated == position
+
+    # This is doing 2 additions and a comparison for every single iteration...
+    while True:
+        bits = (yield translated)
+        offset, suboffset = coro.send(bits)
+        translated = base + offset, suboffset
     return
 
 ## string formatting
@@ -1109,6 +1140,59 @@ if __name__ == '__main__':
     def test_byteorder_8():
         F = utils.byteorder_calculator(16)
         if next(F) == (15, 0) and F.send(8 * 16) == (31, 0):
+            raise Success
+
+    @TestCase
+    def test_position_calculate_0():
+        I = utils.position_calculator(8, base=0, position=(8, 0))
+        if next(I) == (8, 0) and I.send(0) == (8, 0):
+            raise Success
+
+    @TestCase
+    def test_position_calculate_1():
+        I = utils.position_calculator(8, base=8, position=(8, 0))
+        if next(I) == (8, 0) and I.send(0) == (8, 0):
+            raise Success
+
+    @TestCase
+    def test_position_calculate_2():
+        I = utils.position_calculator(8, base=8, position=(12, 0))
+        if next(I) == (12, 0) and I.send(8 * 4) == (8, 0):
+            raise Success
+
+    @TestCase
+    def test_position_calculate_3():
+        I = utils.position_calculator(8, base=8, position=(15, 0))
+        if next(I) == (15, 0) and I.send(8 * 2) == (13, 0):
+            raise Success
+
+    @TestCase
+    def test_position_calculate_4():
+
+        # logically, we shouldn't be able to seek backwards...but
+        # mathematically we can. seeking to (0, 0), pushes us forward
+        # to the next dword at offset 4...which means 16-bits = 4+2
+
+        I = utils.position_calculator(4, base=3, position=(0, 0))
+        if next(I) == (0, 0) and I.send(8 * 2) == (6, 0):
+            raise Success
+
+    @TestCase
+    def test_position_calculate_5():
+        I = utils.position_calculator(16, base=0, position=(0, 0))
+        if next(I) == (0, 0) and I.send(8 * 16) == (16, 0):
+            raise Success
+
+    @TestCase
+    def test_position_calculate_6():
+        I = utils.position_calculator(16, base=4, position=(4, 0))
+        if next(I) == (4, 0) and I.send(8 * 16) == (16 + 4, 0):
+            raise Success
+
+    @TestCase
+    def test_position_calculate_7():
+        I = utils.position_calculator(16, base=0, position=(13, 0))
+        if next(I) == (13, 0) and I.send(8) == (12, 0):
             raise Success
 
 if __name__ == '__main__':
