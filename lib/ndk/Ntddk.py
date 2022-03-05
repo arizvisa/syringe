@@ -43,6 +43,7 @@ class ACTIVATION_CONTEXT_STACK(pstruct.type, versioned):
     ]
 
 # copied from https://improsec.com/tech-blog/windows-kernel-shellcode-on-windows-10-part-4-there-is-no-code
+# http://blog.airesoft.co.uk/2011/07/hookers-underneath-the-sheets/
 class THREADINFO(pstruct.type):
     _fields_ = [
         (W32THREAD, 'ti'),
