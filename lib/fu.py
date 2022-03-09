@@ -876,7 +876,9 @@ if 'core':
 
         @classmethod
         def p_constructor(cls, object, **attributes):
-            return object.__name__
+            if sys.version_info.major < 3:
+                return object.__name__
+            return object.__spec__.name
 
         @classmethod
         def u_constructor(cls, data, **attributes):
@@ -950,6 +952,95 @@ if sys.version_info.major >= 3:
         def u_instance(cls, instance, data, **attributes):
             instance.submodule_search_locations = data
             return instance
+
+    @package.cache.register_const
+    class RLock(__constant):
+        @classmethod
+        def getclass(cls):
+            return __import__('_thread').RLock
+
+    @package.cache.register_type
+    class RLock_(__type__):
+        @classmethod
+        def getclass(cls):
+            return __import__('_thread').RLock
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            cons = cls.getclass()
+            return cons()
+        @classmethod
+        def p_instance(cls, object, **attributes):
+            return ()
+
+    @package.cache.register_type
+    class IOStreamWrapper(__type__):
+        @classmethod
+        def getclass(cls):
+            return __import__('_io').TextIOWrapper
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            return object.buffer, object.encoding, object.errors, object.newlines, object.line_buffering, object.write_through
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            cons = cls.getclass()
+            return cons(*data)
+        @classmethod
+        def p_instance(cls, object, **attributes):
+            return ()
+
+    class IOStreamBuffer(__type__):
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            return object.raw,
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            cons = cls.getclass()
+            # FIXME: object.raw._blksize might contain the blocksize
+            return cons(*data)
+        @classmethod
+        def p_instance(cls, object, **attributes):
+            return ()
+
+    @package.cache.register_type
+    class IOStreamBufferedWriter(IOStreamBuffer):
+        @classmethod
+        def getclass(cls):
+            return __import__('_io').BufferedWriter
+    @package.cache.register_type
+    class IOStreamBufferedReader(IOStreamBuffer):
+        @classmethod
+        def getclass(cls):
+            return __import__('_io').BufferedReader
+    @package.cache.register_type
+    class IOStreamBufferedRandom(IOStreamBuffer):
+        @classmethod
+        def getclass(cls):
+            return __import__('_io').BufferedRandom
+
+    @package.cache.register_type
+    class IOFileIO(__type__):
+        @classmethod
+        def getclass(cls):
+            return __import__('_io').FileIO
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            if object is sys.stdin.buffer.raw:
+                return 0, object.name, object.mode, object.closefd
+            elif object is sys.stdout.buffer.raw:
+                return 1, object.name, object.mode, object.closefd
+            elif object is sys.stderr.buffer.raw:
+                return 2, object.name, object.mode, object.closefd
+            return -1, object.name, object.mode, object.closefd
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            fd, name, mode, closefd = data
+            if fd in {-1}:
+                cons = cls.getclass()
+                return cons(name, mode, closefd)
+            return (sys.stdin.buffer.raw, sys.stdout.buffer.raw, sys.stderr.buffer.raw)[fd]
+        @classmethod
+        def p_instance(cls, object, **attributes):
+            return ()
 
 if 'builtin':
     class __builtin(__type__):
@@ -1210,35 +1301,46 @@ if 'special':
         # FIXME: having to include the globals for an unbound function (__module__ is undefined) might be weird
         @classmethod
         def p_constructor(cls, object, **attributes):
+
+            if sys.version_info.major < 3:
+                func_closure = object.func_closure
+                func_code = object.func_code
+                func_name = object.func_name
+
+            else:
+                func_closure = object.__closure__
+                func_code = object.__code__
+                func_name = object.__name__
+
             # so...it turns out that only the closure property is immutable
-            res = object.func_closure if sys.version_info.major < 3 else object.__closure__
-            func_closure = () if res is None else res
-            func_code = object.func_code if sys.version_info.major < 3 else object.__code__
             if object.__module__ is None:
                 raise AssertionError('FIXME: Unable to pack an unbound function')
-            return object.__module__, func_code, ().__class__(cell.cell_contents for cell in func_closure)
+            return object.__module__, func_code, func_name, ().__class__(cell.cell_contents for cell in (func_closure or ()))
 
         @classmethod
         def u_constructor(cls, data, **attributes):
 #            modulename, code, closure, globals = data
-            modulename, code, closure = data
+            modulename, code, name, closure = data
             if object.__module__ is None:
                 raise AssertionError('FIXME: Unable to unpack an unbound function')
 
             # XXX: assign the globals from hints if requested
             globs = attributes['globals'] if 'globals' in attributes else module.instance(modulename).__dict__
             result = cls.cell(*closure)
-            return function.new(code, globs, closure=result)
+            return function.new(code, globs, name=name, closure=result)
 
         @classmethod
         def p_instance(cls, object, **attributes):
             if sys.version_info.major < 3:
-                return object.func_code, object.func_name, object.func_defaults
-            return object.__code__, object.__name__, object.__defaults__
+                return object.func_code, object.func_defaults
+            return object.__code__, object.__defaults__, object.__annotations__
 
         @classmethod
         def u_instance(cls, instance, data, **attributes):
-            instance.func_code, instance.func_name, instance.func_defaults = data
+            if sys.version_info.major < 3:
+                instance.func_code, instance.func_defaults = data
+            else:
+                instance.__code__, instance.__defaults__, instance.__annotations__ = data
             return instance
 
         @classmethod
