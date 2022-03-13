@@ -66,7 +66,7 @@ def encodeInteger(number, count):
 
 def consume(iterable):
     '''given a byte generator, will consume an instruction'''
-    iterable = (bytes(bytearray([by])) for by in iter(iterable))
+    iterable = (bytes(bytearray(by if isinstance(by, bytes) else [by])) for by in iter(iterable))
 
     ## prefixes and instruction
     instruction, prefixes = b'', b''
