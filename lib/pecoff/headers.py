@@ -128,35 +128,66 @@ class IMAGE_FILE_MACHINE_(pint.enum, WORD):
         ('UNKNOWN', 0x0000),        # Unknown
         ('TARGET_HOST', 0x0001),    # Interacts with the host and not a WOW64 guest
         ('I386', 0x014c),           # Intel 386
-        ('R3000', 0x0162),          # MIPS little-endian, 0x160 big-endian
-        ('R4000', 0x0166),          # MIPS little-endian
-        ('R10000', 0x0168),         # MIPS little-endian
+        ('I860', 0x014d),           # Intel i860
+        ('R3000BE', 0x0160),        # MIPS R3000 big-endian
+        ('R3000', 0x0162),          # MIPS R3000 little-endian,
+        ('R4000', 0x0166),          # MIPS R4000 little-endian
+        ('R10000', 0x0168),         # MIPS R10000 little-endian
         ('WCEMIPSV2', 0x0169),      # MIPS little-endian WCE v2
-        ('ALPHA', 0x0184),          # Alpha_AXP
-        ('SH3', 0x01a2),            # SH3 little-endian
-        ('SH3DSP', 0x01a3),         # SH3DSP
-        ('SH3E', 0x01a4),           # SH3E little-endian
-        ('SH4', 0x01a6),            # SH4 little-endian
-        ('SH5', 0x01a8),            # SH5
+        ('ALPHAOLD', 0x0183),       # Alpha AXP (old)
+        ('ALPHA', 0x0184),          # Alpha AXP
+        ('SH3', 0x01a2),            # (Hitachi) SH3 little-endian
+        ('SH3DSP', 0x01a3),         # (Hitachi) SH3DSP
+        ('SH3E', 0x01a4),           # (Hitachi) SH3E little-endian
+        ('SH4', 0x01a6),            # (Hitachi) SH4 little-endian
+        ('SH5', 0x01a8),            # (Hitachi) SH5
         ('ARM', 0x01c0),            # ARM Little-Endian
         ('THUMB', 0x01c2),          # ARM Thumb/Thumb-2 Little-Endian
-        ('ARMV7', 0x01c4),          # ARM Thumb-2 Little-Endian
-        ('AM33', 0x01d3),           # TAM33BD
+        ('ARM2', 0x01c4),           # ARM Thumb-2 Little-Endian
+        ('AM33', 0x01d3),           # (Matsushita) TAM33BD
         ('POWERPC', 0x01f0),        # IBM PowerPC Little-Endian
-        ('POWERPCFP', 0x01f1),      # POWERPCFP
-        ('IA64', 0x0200),           # Intel 64
+        ('POWERPCFP', 0x01f1),      # IBM POWERPC with floating-point
+        ('IA64', 0x0200),           # Intel IA64
         ('MIPS16', 0x0266),         # MIPS
-        ('ALPHA64', 0x0284),        # AXP64 ALPHA64
-        ('MIPSFPU', 0x0366),        # MIPS
-        ('MIPSFPU16', 0x0466),      # MIPS
+        ('ALPHA64', 0x0284),        # ALPHA AXP64 (64-bit)
+        ('MIPSFPU', 0x0366),        # MIPS with FPU
+        ('MIPSFPU16', 0x0466),      # MIPS16 with FPU
         ('TRICORE', 0x0520),        # Infineon
         ('CEF', 0x0cef),            # CEF
         ('EBC', 0x0ebc),            # EFI Byte Code
         ('AMD64', 0x8664),          # AMD64 (K8)
         ('M32R', 0x9041),           # M32R little-endian
         ('ARM64', 0xaa64),          # ARM64 Little-Endian
-        ('CEE', 0xc0ee),            # CEE
+        ('CEE', 0xc0ee),            # CEE (Common Instruction Language)
     ]
+
+    def Architecture(self):
+        '''Return the word size for the stored machine type.'''
+        sixteen = {'MIPS16', 'MIPSFPU', 'MIPSFPU16'}
+        thirtytwo = {'I386', 'R3000BE', 'R3000', 'WCEMIPSV2', 'ALPHAOLD', 'ALPHA', 'SH3', 'SH3DSP', 'SH3E', 'SH4', 'SH5', 'ARM', 'THUMB', 'ARM2', 'AM33', 'POWERPC', 'POWERPCFP', 'TRICORE', 'CEF', 'M32R'}
+        sixtyfour = {'I860', 'R4000', 'R10000', 'IA64', 'ALPHA64', 'AMD64', 'ARM64'}
+        variable = {'EBC', 'CEE'}
+
+        name = self.str()
+        if name in sixteen:
+            return 16
+        elif name in thirtytwo:
+            return 32
+        elif name in sixtyfour:
+            return 64
+        return 8 * ptypes.Config.integer.size
+
+    def Order(self):
+        '''Return the byteorder (endianness) for the stored machine type.'''
+        big_or_mixed = {'R3000BE', 'ALPHAOLD', 'ALPHA', 'SH5', 'MIPS16', 'ALPHA64', 'MIPSFPU', 'MIPSFPU16', 'EBC', 'CEE'}
+        little = {'SH3', 'SH3DSP', 'SH3E', 'SH4', 'ARM', 'THUMB', 'ARM2', 'AM33', 'POWERPC', 'POWERPCFP', 'IA64', 'TRICORE', 'CEF', 'AMD64', 'M32R', 'ARM64'}
+
+        name = self.str()
+        if name in big_or_mixed:
+            return 'big'
+        elif name in little:
+            return 'little'
+        return 'unknown'
 
 class IMAGE_FILE_(pbinary.flags):
     '''IMAGE_FILE_HEADER.Characteristics'''
