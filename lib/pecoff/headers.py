@@ -268,3 +268,11 @@ class IMPORT_NAME_TYPE(pbinary.enum):
         ('NAME_NOPREFIX', 2),
         ('NAME_UNDECORATE', 3),
     ]
+
+@pbinary.littleendian
+class IMAGE_IMPORT_TYPE_INFORMATION(pbinary.struct):
+    _fields_ = [
+        (11, 'Reserved'),
+        (IMPORT_NAME_TYPE, 'Name'),
+        (IMPORT_TYPE, 'Type'),
+    ]

@@ -39,13 +39,6 @@ class Index(pint.uint16_t):
 
 class Import(pstruct.type):
     class Header(pstruct.type):
-        class _Type(pbinary.struct):
-            _fields_ = [
-                (headers.IMPORT_TYPE, 'Type'),
-                (headers.IMPORT_NAME_TYPE, 'Name Type'),
-                (11, 'Reserved')
-            ]
-
         _fields_ = [
             (headers.IMAGE_FILE_MACHINE_, 'Sig1'),
             (pint.uint16_t, 'Sig2'),
@@ -54,7 +47,7 @@ class Import(pstruct.type):
             (headers.TimeDateStamp, 'Time-Date Stamp'),
             (pint.uint32_t, 'Size Of Data'),
             (pint.uint16_t, 'Ordinal/Hint'),
-            (_Type, 'Type')
+            (headers.IMAGE_IMPORT_TYPE_INFORMATION, 'Type')
         ]
 
         def valid(self):
@@ -67,9 +60,13 @@ class Import(pstruct.type):
             (pstr.szstring, 'Module')
         ]
 
+        def str(self):
+            fields = ['Module', 'Name']
+            return '!'.join(self[fld].str() for fld in fields)
+
         def repr(self):
             if self.initializedQ():
-                return '!'.join(self[fld].str() for fld in ['Module', 'Name'])
+                return self.str()
             return super(Import, self).repr()
 
     _fields_ = [

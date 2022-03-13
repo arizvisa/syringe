@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-from . import portable
+from . import headers, portable
 from .headers import *
 
 import logging
@@ -12,25 +12,22 @@ class ObjectHeader(portable.IMAGE_FILE_HEADER):
 class ImportHeader(pstruct.type):
     _fields_ = [
         (uint16, 'Version'),
-        (IMAGE_FILE_MACHINE_, 'Machine'),
-        (TimeDateStamp, 'TimeDateStamp'),
+        (headers.IMAGE_FILE_MACHINE_, 'Machine'),
+        (headers.TimeDateStamp, 'TimeDateStamp'),
         (uint32, 'SizeOfData'),
     ]
 
 class ImportData(pstruct.type):
-    class _Type(pbinary.struct):
-        _fields_ = [
-            (11, 'Reserved'),
-            (IMPORT_NAME_TYPE, 'Name'),
-            (IMPORT_TYPE, 'Type'),
-        ]
-
     _fields_ = [
         (portable.imports.word, 'Ordinal/Hint'),
-        (_Type, 'Type'),
+        (headers.IMAGE_IMPORT_TYPE_INFORMATION, 'Type'),
         (pstr.szstring, 'Symbol'),
         (pstr.szstring, 'Library'),
     ]
+
+    def str(self):
+        fields = ['Library', 'Symbol']
+        return '!'.join(self[fld].str() for fld in fields)
 
 class FileSegmentEntry(pstruct.type):
     def __Data(self):
@@ -53,12 +50,12 @@ class FileSegmentEntry(pstruct.type):
 
 class SegmentTableArray(parray.type):
     def _object_(self):
-        p = self.getparent(Header)
+        p = self.getparent(headers.Header)
         sections = p['Sections'].li
         section = sections[len(self.value)]
         return dynamic.clone(FileSegmentEntry, Section=section)
 
-class File(pstruct.type, Header, ptype.boundary):
+class File(pstruct.type, headers.Header, ptype.boundary):
     """Coff Object File"""
     def __Header(self):
         machine = self['Machine'].li
@@ -67,23 +64,29 @@ class File(pstruct.type, Header, ptype.boundary):
         return ObjectHeader
 
     def __Sections(self):
-        machine = self['Machine'].li
-        if machine['UNKNOWN'] and self['NumberOfSections'].li.int() == 0xffff:
+        header = self['Header'].li
+        if isinstance(header, ImportHeader):
             return dynamic.clone(portable.SectionTableArray, length=0)
 
         count = self['NumberOfSections'].li
         return dynamic.clone(portable.SectionTableArray, length=count.int())
 
     def __Segments(self):
-        machine = self['Machine'].li
-        if machine['UNKNOWN'] and self['NumberOfSections'].li.int() == 0xffff:
+        header = self['Header'].li
+        if isinstance(header, ImportHeader):
             return ImportData
 
         count = self['NumberOfSections'].li
         return dynamic.clone(SegmentTableArray, length=count.int())
 
+    def __SymbolTable(self):
+        header = self['Header'].li
+        if isinstance(header, ImportHeader):
+            return ptype.undefined
+        return portable.symbols.SymbolTableAndStringTable
+
     _fields_ = [
-        (IMAGE_FILE_MACHINE_, 'Machine'),
+        (headers.IMAGE_FILE_MACHINE_, 'Machine'),
         (uint16, 'NumberOfSections'),
         (__Header, 'Header'),
         (__Sections, 'Sections'),
@@ -94,7 +97,7 @@ class File(pstruct.type, Header, ptype.boundary):
         #        a completely different order.
 
         (__Segments, 'Segments'),
-        (portable.symbols.SymbolTableAndStringTable, 'SymbolTable'),
+        (__SymbolTable, 'SymbolTable'),
     ]
 
     def ImportLibraryQ(self):
