@@ -47,11 +47,11 @@ class Import(pstruct.type):
             ]
 
         _fields_ = [
-            (pint.uint16_t, 'Sig1'),
+            (headers.IMAGE_FILE_MACHINE_, 'Sig1'),
             (pint.uint16_t, 'Sig2'),
             (pint.uint16_t, 'Version'),
-            (pint.uint16_t, 'Machine'),
-            (pint.uint32_t, 'Time-Date Stamp'),
+            (headers.IMAGE_FILE_MACHINE_, 'Machine'),
+            (headers.TimeDateStamp, 'Time-Date Stamp'),
             (pint.uint32_t, 'Size Of Data'),
             (pint.uint16_t, 'Ordinal/Hint'),
             (_Type, 'Type')

@@ -6,18 +6,6 @@ from .headers import *
 
 import logging
 
-class Signature(portable.IMAGE_FILE_HEADER):
-    _fields_ = [
-        (IMAGE_FILE_MACHINE_, 'Machine'),
-        (uint16, 'NumberOfSections'),
-    ]
-
-    def isImportSignature(self):
-        machine = self['Machine'].li
-        if machine['UNKNOWN']:
-            return self['NumberOfSections'].li.int() == 0xffff
-        return False
-
 class ObjectHeader(portable.IMAGE_FILE_HEADER):
     _fields_ = portable.IMAGE_FILE_HEADER._fields_[2:]
 
@@ -72,41 +60,57 @@ class SegmentTableArray(parray.type):
 
 class File(pstruct.type, Header, ptype.boundary):
     """Coff Object File"""
+    def __Header(self):
+        machine = self['Machine'].li
+        if machine['UNKNOWN'] and self['NumberOfSections'].li.int() == 0xffff:
+            return ImportHeader
+        return ObjectHeader
+
     def __Sections(self):
-        sig = self['Signature'].li
-        count = 0 if sig.isImportSignature() else sig['NumberOfSections'].int()
-        return dynamic.clone(portable.SectionTableArray, length=count)
+        machine = self['Machine'].li
+        if machine['UNKNOWN'] and self['NumberOfSections'].li.int() == 0xffff:
+            return dynamic.clone(portable.SectionTableArray, length=0)
+
+        count = self['NumberOfSections'].li
+        return dynamic.clone(portable.SectionTableArray, length=count.int())
 
     def __Segments(self):
-        sig = self['Signature'].li
-        if sig.isImportSignature():
+        machine = self['Machine'].li
+        if machine['UNKNOWN'] and self['NumberOfSections'].li.int() == 0xffff:
             return ImportData
-        return dynamic.clone(SegmentTableArray, length=sig['NumberOfSections'].int())
+
+        count = self['NumberOfSections'].li
+        return dynamic.clone(SegmentTableArray, length=count.int())
 
     _fields_ = [
-        (Signature, 'Signature'),
-        (lambda self: ImportHeader if self['Signature'].li.isImportSignature() else ObjectHeader, 'Header'),
+        (IMAGE_FILE_MACHINE_, 'Machine'),
+        (uint16, 'NumberOfSections'),
+        (__Header, 'Header'),
         (__Sections, 'Sections'),
 
         # FIXME: we're actually assuming that these fields are packed and
-        #        aligned, so there's a large chance that that empty space
-        #        could exist in between each item, or the segments could
-        #        be in a completely different order.
+        #        aligned, so there's a large chance that empty space could
+        #        exist in between each item, or the segments could be in
+        #        a completely different order.
+
         (__Segments, 'Segments'),
         (portable.symbols.SymbolTableAndStringTable, 'SymbolTable'),
     ]
+
+    def ImportLibraryQ(self):
+        machine = self['Machine'].li
+        if machine['UNKNOWN']:
+            return self['NumberOfSections'].li.int() == 0xffff
+        return False
 
     def FileHeader(self):
         '''Return the Header which contains a number of sizes used by the file.'''
         return self['Header']
 
     def Machine(self):
-        sig = self['Signature']
-        return self['Header']['Machine'] if sig.isImportSignature() else sig['Machine']
-
-    def isImportLibrary(self):
-        sig = self['Signature']
-        return sig.isImportSignature()
+        if self.ImportLibraryQ():
+            return self['Header']['Machine']
+        return self['Machine']
 
 if __name__ == '__main__':
     ## parse the file
@@ -118,15 +122,13 @@ if __name__ == '__main__':
     coff = pecoff.Object.File(source=provider.file(sys.argv[1]))
     coff.load()
 
-    __name__ = 'ImportLibrary' if coff.isImportLibrary() else 'CoffObject'
+    __name__ = 'ImportLibrary' if coff.ImportLibraryQ() else 'CoffObject'
 
 if __name__ == 'ImportLibrary':
-    print(coff['Signature'])
     print(coff['Header'])
     print(coff['Data'])
 
 if __name__ == 'CoffObject':
-    print(coff['Signature'])
     print(coff['Header'])
     print(coff['Sections'])
 
@@ -155,7 +157,7 @@ if __name__ == 'CoffObject':
         sym = sst.Symbol(name)
         if sym['StorageClass'].int() == sym['StorageClass'].byname('STATIC') and sym['Value'].int() == 0:
             idx = sym.SectionIndex()
-            sym_static[idx] = (sym, sst.AuxiliarySymbols(name))
+            sym_static[idx] = (sym, sst.Auxiliary(name))
         continue
 
     for x in sym_static.keys():
@@ -214,7 +216,7 @@ if __name__ == 'CoffObject':
     for section in coff['Sections']:
         print(section['Name'].str())
         print(ptypes.utils.indent('\n'.join(map(lambda x: formatrelocation(x, symboltable), section['PointerToRelocations'].d.l))))
-        print(ptypes.utils.hexdump(section.data()))
+        print(section.data())
 
     if False:
         print('-'*20 + 'dumping relocated sections')

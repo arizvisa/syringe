@@ -12,10 +12,8 @@ class MachineRelocation(ptype.definition):
 class Relocation(pstruct.type):
     def __Type(self):
         header = LocateHeader(self)
-
-        # FileHeader is for PE executables, Signature is for COFF objects
-        res = header['FileHeader'] if 'FileHeader' in header else header['Signature']
-        return MachineRelocation.lookup(res['Machine'].int())
+        machine = header.Machine()
+        return MachineRelocation.lookup(machine.int())
 
     _fields_ = [
         (uint32, 'VirtualAddress'), # FIXME: this can be a virtualaddress(...) to the actual relocation
