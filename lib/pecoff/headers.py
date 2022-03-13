@@ -122,13 +122,61 @@ def virtualaddress(target, **kwds):
 ## core header types
 class Header(object): pass
 
-class Machine(pint.enum, WORD):
+class IMAGE_FILE_MACHINE_(pint.enum, WORD):
+    '''IMAGE_FILE_HEADER.Machine'''
     _values_ = [
-        ('UNKNOWN', 0x0000), ('AM33', 0x01d3), ('AMD64', 0x8664), ('ARM', 0x01c0),
-        ('EBC', 0x0ebc), ('I386', 0x014c), ('IA64', 0x0200), ('M32R', 0x9041),
-        ('MIPS16', 0x0266), ('MIPSFPU', 0x0366), ('MIPSFPU16', 0x0466), ('POWERPC', 0x01f0),
-        ('POWERPCFP', 0x01f1), ('R4000', 0x0166), ('SH3', 0x01a2), ('SH3DSP', 0x01a3),
-        ('SH4', 0x01a6), ('SH5', 0x01a8), ('THUMB', 0x01c2), ('WCEMIPSV2', 0x0169),
+        ('UNKNOWN', 0x0000),        # Unknown
+        ('TARGET_HOST', 0x0001),    # Interacts with the host and not a WOW64 guest
+        ('I386', 0x014c),           # Intel 386
+        ('R3000', 0x0162),          # MIPS little-endian, 0x160 big-endian
+        ('R4000', 0x0166),          # MIPS little-endian
+        ('R10000', 0x0168),         # MIPS little-endian
+        ('WCEMIPSV2', 0x0169),      # MIPS little-endian WCE v2
+        ('ALPHA', 0x0184),          # Alpha_AXP
+        ('SH3', 0x01a2),            # SH3 little-endian
+        ('SH3DSP', 0x01a3),         # SH3DSP
+        ('SH3E', 0x01a4),           # SH3E little-endian
+        ('SH4', 0x01a6),            # SH4 little-endian
+        ('SH5', 0x01a8),            # SH5
+        ('ARM', 0x01c0),            # ARM Little-Endian
+        ('THUMB', 0x01c2),          # ARM Thumb/Thumb-2 Little-Endian
+        ('ARMV7', 0x01c4),          # ARM Thumb-2 Little-Endian
+        ('AM33', 0x01d3),           # TAM33BD
+        ('POWERPC', 0x01f0),        # IBM PowerPC Little-Endian
+        ('POWERPCFP', 0x01f1),      # POWERPCFP
+        ('IA64', 0x0200),           # Intel 64
+        ('MIPS16', 0x0266),         # MIPS
+        ('ALPHA64', 0x0284),        # AXP64 ALPHA64
+        ('MIPSFPU', 0x0366),        # MIPS
+        ('MIPSFPU16', 0x0466),      # MIPS
+        ('TRICORE', 0x0520),        # Infineon
+        ('CEF', 0x0cef),            # CEF
+        ('EBC', 0x0ebc),            # EFI Byte Code
+        ('AMD64', 0x8664),          # AMD64 (K8)
+        ('M32R', 0x9041),           # M32R little-endian
+        ('ARM64', 0xaa64),          # ARM64 Little-Endian
+        ('CEE', 0xc0ee),            # CEE
+    ]
+
+class IMAGE_FILE_(pbinary.flags):
+    '''IMAGE_FILE_HEADER.Characteristics'''
+    _fields_ = [
+        (1, 'BYTES_REVERSED_HI'),
+        (1, 'UP_SYSTEM_ONLY'),
+        (1, 'DLL'),
+        (1, 'SYSTEM'),
+        (1, 'NET_RUN_FROM_SWAP'),
+        (1, 'REMOVABLE_RUN_FROM_SWAP'),
+        (1, 'DEBUG_STRIPPED'),
+        (1, '32BIT_MACHINE'),
+        (1, 'BYTES_REVERSED_LO'),
+        (1, 'reserved_9'),
+        (1, 'LARGE_ADDRESS_AWARE'),
+        (1, 'AGGRESSIVE_WS_TRIM'),
+        (1, 'LOCAL_SYMS_STRIPPED'),
+        (1, 'LINE_NUMS_STRIPPED'),
+        (1, 'EXECUTABLE_IMAGE'),
+        (1, 'RELOCS_STRIPPED'),
     ]
 
 class TimeDateStamp(DWORD):

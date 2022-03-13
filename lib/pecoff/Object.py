@@ -8,7 +8,7 @@ import logging
 
 class Signature(portable.IMAGE_FILE_HEADER):
     _fields_ = [
-        (Machine, 'Machine'),
+        (IMAGE_FILE_MACHINE_, 'Machine'),
         (uint16, 'NumberOfSections'),
     ]
 
@@ -21,7 +21,7 @@ class ObjectHeader(portable.IMAGE_FILE_HEADER):
 class ImportHeader(pstruct.type):
     _fields_ = [
         (uint16, 'Version'),
-        (Machine, 'Machine'),
+        (IMAGE_FILE_MACHINE_, 'Machine'),
         (TimeDateStamp, 'TimeDateStamp'),
         (uint32, 'SizeOfData'),
     ]

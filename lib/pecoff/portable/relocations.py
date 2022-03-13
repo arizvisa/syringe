@@ -67,7 +67,7 @@ class RelocationTable(parray.type):
 ## I386
 @MachineRelocation.define
 class IMAGE_REL_I386(pint.enum, uint16):
-    type = Machine.byname('I386')
+    type = IMAGE_FILE_MACHINE_.byname('I386')
 
     _values_ = [
         ('ABSOLUTE', 0x0000),
@@ -149,7 +149,7 @@ class IMAGE_REL_I386(pint.enum, uint16):
 ## AMD64
 @MachineRelocation.define
 class IMAGE_REL_AMD64(pint.enum, uint16):
-    type = Machine.byname('AMD64')
+    type = IMAGE_FILE_MACHINE_.byname('AMD64')
     _values_ = [
         ('ABSOLUTE', 0x0000),
         ('ADDR64', 0x0001),

@@ -221,7 +221,7 @@ class IMAGE_SUBSYSTEM_(pint.enum, uint16):
         ('WINDOWS_BOOT_APPLICATION', 16)
     ]
 
-class IMAGE_DLLCHARACTERISTICS(pbinary.flags):
+class IMAGE_DLLCHARACTERISTICS_(pbinary.flags):
     # TODO: GUARD_CF
     _fields_ = [
         (1, 'TERMINAL_SERVER_AWARE'),
@@ -272,7 +272,7 @@ class IMAGE_OPTIONAL_HEADER(pstruct.type):
         ( uint32, 'SizeOfHeaders' ),
         ( uint32, 'CheckSum' ),
         ( IMAGE_SUBSYSTEM_, 'Subsystem' ),
-        ( pbinary.littleendian(IMAGE_DLLCHARACTERISTICS), 'DllCharacteristics' ),
+        ( pbinary.littleendian(IMAGE_DLLCHARACTERISTICS_), 'DllCharacteristics' ),
         ( lambda self: uint64 if self.is64() else uint32, 'SizeOfStackReserve' ),
         ( lambda self: uint64 if self.is64() else uint32, 'SizeOfStackCommit' ),
         ( lambda self: uint64 if self.is64() else uint32, 'SizeOfHeapReserve' ),
@@ -284,23 +284,14 @@ OptionalHeader = IMAGE_OPTIONAL_HEADER64 = IMAGE_OPTIONAL_HEADER
 
 class IMAGE_FILE_HEADER(pstruct.type):
     """PE Executable File Header"""
-    class Characteristics(pbinary.flags):
-        _fields_ = [
-            (1, 'BYTES_REVERSED_HI'), (1, 'UP_SYSTEM_ONLY'), (1, 'DLL'), (1, 'SYSTEM'),
-            (1, 'NET_RUN_FROM_SWAP'), (1, 'REMOVABLE_RUN_FROM_SWAP'), (1, 'DEBUG_STRIPPED'),
-            (1, '32BIT_MACHINE'), (1, 'BYTES_REVERSED_LO'), (1, 'reserved_9'),
-            (1, 'LARGE_ADDRESS_AWARE'), (1, 'AGGRESSIVE_WS_TRIM'), (1, 'LOCAL_SYMS_STRIPPED'),
-            (1, 'LINE_NUMS_STRIPPED'), (1, 'EXECUTABLE_IMAGE'), (1, 'RELOCS_STRIPPED'),
-        ]
-
     _fields_ = [
-        (Machine, 'Machine'),
+        (IMAGE_FILE_MACHINE_, 'Machine'),
         (uint16, 'NumberOfSections'),
         (TimeDateStamp, 'TimeDateStamp'),
         (fileoffset(symbols.SymbolTableAndStringTable, type=uint32), 'PointerToSymbolTable'),
         (uint32, 'NumberOfSymbols'),
         (word, 'SizeOfOptionalHeader'),
-        (pbinary.littleendian(Characteristics), 'Characteristics')
+        (pbinary.littleendian(IMAGE_FILE_), 'Characteristics')
     ]
 FileHeader = IMAGE_FILE_HEADER
 
