@@ -108,25 +108,77 @@ if hasattr(sys, 'getwindowsversion'):
     __SOURCE__ = 'sys-module'
 
 # If the pykd module was imported at some point, then we should be able to use
-# it to find the PEB. From the PEB, we can seek to some offsets to extract the
-# version components.
+# it to figure out what version we're debugging.
 if 'pykd' in sys.modules and sys.modules['pykd'].isWindbgExt():
-    pykd = sys.modules['pykd']
-    pebaddr = pykd.expr('@$peb')
-    if pykd.is64bitSystem():
-        WIN64 = 1
-        version = pykd.ptrDWord(pebaddr + 0x118), pykd.ptrDWord(pebaddr + 0x11c), pykd.ptrWord(pebaddr + 0x120), pykd.ptrWord(pebaddr + 0x122), pykd.ptrDWord(pebaddr + 0x124)
-    else:
-        WIN64 = 0
-        version = pykd.ptrDWord(pebaddr + 0xa4), pykd.ptrDWord(pebaddr + 0xa8), pykd.ptrWord(pebaddr + 0xac), pykd.ptrWord(pebaddr + 0xae), pykd.ptrDWord(pebaddr + 0xb0)
-    del(pebaddr)
-    del(pykd)
+    pykd, attributes = sys.modules['pykd'], ['isKernelDebugging', 'is64bitSystem', 'getSystemVersion']
 
-    # Assign the NTDDI_VERSION from the version components we found
-    NTDDI_VERSION = ((version[0] & 0xff) << 24) | ((version[1] & 0xff) << 16) | version[3]
-    del(version)
+    # if we have all of the newer pykd attributes, then this shit is fucking easy.
+    if all(hasattr(pykd, attribute) for attribute in attributes):
+        system, VER_PLATFORM_ = pykd.getSystemVersion(), {'WIN32s': 0, 'WIN32_WINDOWS': 1, 'WIN32_NT': 2}
+        version = system.win32Major, system.win32Minor, system.buildNumber, system.servicePack, VER_PLATFORM_['WIN32_NT']
 
-    __SOURCE__ = 'pykd-peb'
+        WIN64, NTDDI_VERSION = 1 if pykd.is64bitSystem() else 0, ((version[0] & 0xff) << 24) | ((version[1] & 0xff) << 16) | ((version[3] & 0xff) << 8) | (version[4] & 0xff)
+
+        del(version)
+        del(VER_PLATFORM_)
+        del(system)
+
+        __SOURCE__ = 'pykd'
+
+    # otherwise, check if we're in the kernel debugger because we'll have to disassemble
+    # a symbol in order to extract the version information.
+    elif all(hasattr(pykd, 'is64bitSystem'), hasattr(pykd, 'isKernelDebugging')) and pykd.isKernelDebugging():
+        import ia32
+        WIN64 = 1 if pykd.is64bitSystem() else 0
+
+        # resolve the address for the exact ntddi_version symbol, and create a disassembler
+        # at its entrypoint that terminates when we get to a return instruction.
+        ea = pykd.expr('nt!RtlIsNtDdiVersionAvailable')
+        iterable = (bytes(bytearray(pykd.loadBytes(ea + index, 1))) for index in __import__('itertools').count())
+        disassembler = (ia32.decode(item) for item in __import__('itertools').repeat(iterable))
+        items = __import__('itertools').takewhile(lambda ins: not ia32.isReturn(ins), disassembler)
+
+        # keep disassembling things until we find the version information in the operand.
+        for ins in items:
+            if len(ia32.getImmediate(ins)) < 4:
+                continue
+
+            # okay. this immediate should already be the NTDDI_VERSION, so we just need to use it.
+            NTDDI_VERSION = ia32.decodeInteger(ia32.getImmediate(ins))
+            break
+
+        # nothing happened, so we issue a warning and just accept our failure.
+        else:
+            logging.warning("Unable to determine the version from the disassembly of the {:s} symbol.".format('nt!RtlIsNtDdiVersionAvailable'))
+
+        del(ins)
+        del(items)
+        del(disassembler)
+        del(iterable)
+        del(ea)
+        del(ia32)
+
+        __SOURCE__ = 'pykd-kernel'
+
+    # otherwise, we need to find the PEB. we then use this to seek to some offsets
+    # in order to extract the version components.
+    elif hasattr(pykd, 'is64bitSystem'):
+        pebaddr = pykd.expr('@$peb')
+        if pykd.is64bitSystem():
+            WIN64 = 1
+            version = pykd.ptrDWord(pebaddr + 0x118), pykd.ptrDWord(pebaddr + 0x11c), pykd.ptrWord(pebaddr + 0x120), pykd.ptrWord(pebaddr + 0x122), pykd.ptrDWord(pebaddr + 0x124)
+        else:
+            WIN64 = 0
+            version = pykd.ptrDWord(pebaddr + 0xa4), pykd.ptrDWord(pebaddr + 0xa8), pykd.ptrWord(pebaddr + 0xac), pykd.ptrWord(pebaddr + 0xae), pykd.ptrDWord(pebaddr + 0xb0)
+        del(pebaddr)
+        del(pykd)
+
+        # Assign the NTDDI_VERSION from the version components we found (Major, Minor, ServicePack, PlatformId)
+        NTDDI_VERSION = ((version[0] & 0xff) << 24) | ((version[1] & 0xff) << 16) | ((version[3] & 0xff) << 8) | (version[4] & 0xff)
+        del(version)
+
+        __SOURCE__ = 'pykd-peb'
+    del(attributes)
 
 ### Inform the user what was determined
 
