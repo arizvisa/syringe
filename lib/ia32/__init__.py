@@ -6,41 +6,39 @@ from . import optable,decoder,modrm
 #      for this module. (without having to use __all__)
 
 from .decoder import isprefix,consume,decodeInteger,encodeInteger
-lookup = optable.Lookup
+lookup = optable.LookupTableValue
 
 # equivalent to decoder.consume(iter(string)) ->
 #     (prefix, opcode, modrm, sib, disp, immediate)
-decode = lambda string: consume(iter(string))
+decode = lambda bytes: consume(iter(bytes))
 
 def extractmodrm(instruction):
     '''Return the (Mod, Reg, r/m) components of an instruction'''
     modrm = getModrm(instruction)
-    return decoder.extractmodrm( decodeInteger(modrm) )
+    return decoder.extractmodrm(decodeInteger(modrm))
 
 def extractsib(instruction):
     '''Returns (scale,index,base) of an instruction'''
     sib = getSib(instruction)
-    return decoder.extractsib( decodeInteger(sib) )
+    return decoder.extractsib(decodeInteger(sib))
 
 def disassemble(codeblock):
     '''Disassembles string into a list of instruction tuples'''
-    result = []
     code = iter(codeblock)
     try:
         while True:
-            result.append( consume(code) )
+            yield consume(code)
 
     except StopIteration:
         pass
-
-    return result
+    return
 
 def new():
     '''A new empty instruction'''
-    return ('','','','','','')
+    return (b'',) * 6
 
 def length(instruction):
-    return len(b''.join(instruction))
+    return len(bytes().join(instruction))
 
 def stringToNumber(string):
     '''This function name is deprecated in favor of encodeInteger'''
@@ -49,12 +47,12 @@ def numberToString(number, bytes):
     '''This function name is deprecated in favor of encodeInteger'''
     return encodeInteger(number, bytes)
 
-def getPrefix(instruction): return instruction[0:1]
-def getOpcode(instruction): return instruction[1:2]
-def getModrm(instruction): return instruction[2:3]
-def getSIB(instruction): return instruction[3:4]
-def getDisplacement(instruction): return instruction[4:5]
-def getImmediate(instruction): return instruction[5:6]
+def getPrefix(instruction): return instruction[0]
+def getOpcode(instruction): return instruction[1]
+def getModrm(instruction): return instruction[2]
+def getSIB(instruction): return instruction[3]
+def getDisplacement(instruction): return instruction[4]
+def getImmediate(instruction): return instruction[5]
 
 #instruction = (prefix, opcode, modrm, sib, disp, immediate)
 
@@ -109,11 +107,11 @@ def promoteBranch_8(instruction):
 def promoteBranch_32(instruction):
     imm = getImmediate(instruction)
     offset = decodeInteger(imm, True) + length(instruction)
-    prefix = b''.join([x for x in getPrefix(instruction) if x != b'\x66'])
+    prefix = bytes().join([x for x in getPrefix(instruction) if x != b'\x66'])
 
     if isConditionalBranch8(instruction):
-        column = ord(getOpcode(instruction)) & 0xf
-        result = setOpcode(instruction, b'\x0f'+chr(column | 0x80))
+        column = bytearray(getOpcode(instruction))[0] & 0xf
+        result = setOpcode(instruction, bytes(bytearray([0x0f, column | 0x80])))
 
     elif isUnconditionalBranch8(instruction):
         result = setOpcode(instruction, b'\xe9')
@@ -138,9 +136,7 @@ def promoteBranch_16(instruction):
     if b'\x66' not in prefix:
         prefix += b'\x66'
     result = setPrefix(result, prefix)
-
     offset += length(result)
-
     return setImmediate(result, encodeInteger(offset, 2))
 
 def getRelativeAddress(pc, instruction):
@@ -188,14 +184,14 @@ def setRelativeAddress(source, instruction, target):
 def isConditionalBranch8(instruction):
     opcode = getOpcode(instruction)
     if len(opcode) == 1:
-        ch = ord(opcode[0])
+        ch, = bytearray(opcode)
         return ch & 0xf0 == 0x70
     return False
 
 def isConditionalBranch32(instruction):
     opcode = getOpcode(instruction)
     if len(opcode) == 2:
-        ch = ord(opcode[1])
+        _, ch = bytearray(opcode)
         return ch & 0xf0 == 0x80
     return False
 
@@ -215,51 +211,51 @@ def isUnconditionalBranch(instruction):
 def isJmpFF(instruction):
     opcode = getOpcode(instruction)
     if opcode == b'\xff':
-        modrm = getModrm(instruction)
-        mod,reg,rm = decoder.extractmodrm(ord(modrm))
+        modrm, = bytearray(getModrm(instruction))
+        mod,reg,rm = decoder.extractmodrm(modrm)
         return reg in [4,5]
     return False
 def isShortJmp(instruction):
     opcode = getOpcode(instruction)
     if opcode == b'\xff':
-        modrm = getModrm(instruction)
-        mod,reg,rm = decoder.extractmodrm(ord(modrm))
+        modrm, = bytearray(getModrm(instruction))
+        mod,reg,rm = decoder.extractmodrm(modrm)
         return reg == 4
     return False
 def isFarJmp(instruction):
     opcode = getOpcode(instruction)
     if opcode == b'\xff':
-        modrm = getModrm(instruction)
-        mod,reg,rm = decoder.extractmodrm(ord(modrm))
+        modrm, = bytearray(getModrm(instruction))
+        mod,reg,rm = decoder.extractmodrm(modrm)
         return reg == 5
     return False
 
 ### XXX: these branch tests will need to be legitimately tested
 def isRegisterBranch(instruction):
     if isJmpFF(instruction):
-        modrm = getModrm(instruction)
-        mod,reg,rm = decoder.extractmodrm(ord(modrm))
+        modrm, = bytearray(getModrm(instruction))
+        mod,reg,rm = decoder.extractmodrm(modrm)
         return mod == 3
     return False
 
 def isMemoryBranch(instruction):
     if isJmpFF(instruction):
-        modrm = getModrm(instruction)
-        mod,reg,rm = decoder.extractmodrm(ord(modrm))
+        modrm, = bytearray(getModrm(instruction))
+        mod,reg,rm = decoder.extractmodrm(modrm)
         return mod < 3
     return False
 
 def isDispBranch(instruction):
     if isJmpFF(instruction):
-        modrm = getModrm(instruction)
-        mod,reg,rm = decoder.extractmodrm(ord(modrm))
+        modrm, = bytearray(getModrm(instruction))
+        mod,reg,rm = decoder.extractmodrm(modrm)
         return rm == 5 and mod in [1,2]
     return False
 
 def isSibBranch(instruction):
     if isJmpFF(instruction):
-        modrm = getModrm(instruction)
-        mod,reg,rm = decoder.extractmodrm(ord(modrm))
+        modrm, = bytearray(getModrm(instruction))
+        mod,reg,rm = decoder.extractmodrm(modrm)
         return rm == 4 and mod < 3
     return False
 
@@ -288,16 +284,16 @@ def isRelativeCall(instruction):
 def isRegisterCall(instruction):
     '''call Ev'''
     if getOpcode(instruction) == b'\xff':
-        modrm = getModrm(instruction)
-        mod,reg,rm = decoder.extractmodrm(ord(modrm))
+        modrm, = bytearray(getModrm(instruction))
+        mod,reg,rm = decoder.extractmodrm(modrm)
         return reg == 2 and mod == 3
     return False
 
 def isMemoryCall(instruction):
     '''call Mp'''
     if getOpcode(instruction) == b'\xff':
-        modrm = getModrm(instruction)
-        mod,reg,rm = decoder.extractmodrm(ord(modrm))
+        modrm, = bytearray(getModrm(instruction))
+        mod,reg,rm = decoder.extractmodrm(modrm)
         return reg in [2,3] and mod < 3
     return False
 

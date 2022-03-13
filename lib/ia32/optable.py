@@ -1,23 +1,26 @@
 from ._optable import OperandLookupTable
 from . import typesize
 
-def Lookup(opcode):
+def LookupTableValue(opcode):
     '''Lookup specified opcode in the lookup table'''
-    res = ord(opcode[0])
-    if res == 0x0f:
-        res = ord(opcode[1])
-        return OperandLookupTable[res+0x100]
-    return OperandLookupTable[res]
+    bytes = bytearray(opcode)
+    index = bytes[0]
+    if index == 0x0f:
+        index = bytes[1]
+        result, = bytearray([OperandLookupTable[index + 0x100]])
+    else:
+        result, = bytearray([OperandLookupTable[index]])
+    return result
 
-def HasModrm(lookup):
+def HasModrm(tval):
     '''Returns True if specified opcode requires a modrm byte'''
-    return bool(ord(lookup) & 0x80)
-def HasImmediate(lookup):
+    return bool(tval & 0x80)
+def HasImmediate(tval):
     '''Returns True if specified opcode contains an immediate value'''
-    return bool(ord(lookup) & 0x40)
+    return bool(tval & 0x40)
 
-def GetImmediateLength(lookup, prefixes):
-    res = ord(lookup) & 0x3f
+def GetImmediateLength(tval, prefixes):
+    res = tval & 0x3f
 
     opsizeindex = not int(b'\x66' in prefixes)
 

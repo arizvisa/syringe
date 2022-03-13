@@ -1,9 +1,10 @@
 #instruction = (prefix( opcode, modrm, sib, disp, immediate))
+from itertools import islice
 from ptypes import bitmap
-from . import optable,typesize
+from . import optable, typesize
 
 prefix_string = b'\x26\x2e\x36\x3e\x64\x65\x66\x67\xf0\xf2\xf3'
-prefix_lookup = {item : None for item in prefix_string}
+prefix_lookup = {bytes(bytearray([item])[:]) : None for item in prefix_string}
 
 def isprefix(byte):
     try:
@@ -14,81 +15,86 @@ def isprefix(byte):
 
 def extractmodrm(byte):
     '''Return (mod,reg,rm)'''
-    mod,reg,rm = ((byte&0xc0) >> 6, (byte&0x38) >> 3, (byte&7) >> 0)
-    return mod,reg,rm
+    mod, reg, rm = (byte & 0xc0) >> 6, (byte & 0x38) >> 3, (byte & 7) >> 0
+    return mod, reg, rm
 def extractsib(byte):
     '''Return (scale,index,byte)'''
     return extractmodrm(byte)
 def getsiblength(modrm, sib, prefixes):
-    mod,reg,rm = extractmodrm(ord(modrm))
+    by, = bytearray([modrm])
+    mod, reg, rm = extractmodrm(by)
     assert rm == 4
 
-    scale,index,base = extractsib(ord(sib))
+    by, = bytearray([sib])
+    scale, index, base = extractsib(by)
     if base == 5:
         return [typesize.word, typesize.byte, typesize.word, 0][mod]
     return 0
 
 def getdisp16length(modrm, prefixes):
-    return [0, typesize.byte, typesize.halfword, 0][ (ord(modrm) & 0xc0)>>6 ]
+    by, = bytearray([modrm])
+    return [0, typesize.byte, typesize.halfword, 0][(by & 0xc0) >> 6]
 def getdisp32length(modrm, prefixes):
-    return [0, typesize.byte, typesize.word, 0][ (ord(modrm) & 0xc0)>>6 ]
+    by, = bytearray(modrm)
+    return [0, typesize.byte, typesize.word, 0][(by & 0xc0) >> 6]
 
-def decodeInteger(string, signed=False):
-    '''given a string encoded in the native byte-order, will produce an integer'''
-    res = bitmap.new(0,0)
-    for ch in string:
-        res = bitmap.append(res, (ord(ch),8))
+def decodeInteger(bytes, signed=False):
+    '''given some bytes encoded in the native byte-order, will produce an integer'''
+    res, octets = bitmap.new(0,0), bytearray(bytes)
+    for octet in octets:
+        res = bitmap.append(res, (octet, 8))
     res,_ = res
     if not signed:
         return res
 
-    bitflag = pow(0x100, len(string)) // 2
+    bitflag = pow(0x100, len(octets)) // 2
     signbit,value = res & bitflag, res & (bitflag - 1)
     if res & signbit:
         return value - bitflag
     return value
 
-def encodeInteger(number, bytes):
-    '''given an integer and a number of bytes, will return a string encoded in the native endianness'''
-    number &= pow(0x100, bytes) - 1    # convert to absolute using side-effect of &
+def encodeInteger(number, count):
+    '''given an integer and a number of bytes, will return a bytes encoded in the native endianness'''
+    number &= pow(0x100, count) - 1    # convert to absolute using side-effect of &
 
-    counter = bitmap.new(number, bytes * 8)
-    res = ''
+    counter = bitmap.new(number, count * 8)
+    res = bytearray()
     while counter[1] > 0:
         counter, _ = bitmap.consume(counter, 8)
-        res += chr(_)
-    return res
+        res.append(_)
+    return bytes(res)
 
 def consume(iterable):
     '''given a byte generator, will consume an instruction'''
-    iterable = iter(iterable)
-    instruction = None
+    iterable = (bytes(bytearray([by])) for by in iter(iterable))
 
-    ## prefixes
-    prefixes = ''
+    ## prefixes and instruction
+    instruction, prefixes = b'', b''
     while len(prefixes) < 4:    # XXX: i forgot what the max number of executed prefixes is
-        x = iterable.next()
+        x = next(iterable)
         if isprefix(x):
             prefixes += x
             continue
-        instruction = x
+        instruction += x
         break
 
     ## instruction
     if not instruction:
-        instruction = iterable.next()
-    if instruction == b'\x0f':
-        instruction += iterable.next()
+        instruction += next(iterable)
+    if bytes(instruction) == b'\x0f':
+        instruction += next(iterable)
 
     ## initialize all defaults
     modrm, sib, disp, imm = (b'', b'', b'', b'')
     immlength = displength = 0
 
     ## modrm
-    lookup = optable.Lookup(instruction)
+    lookup = optable.LookupTableValue(instruction)
     if optable.HasModrm(lookup):
-        modrm = iterable.next()     #
-        mod,reg,rm = extractmodrm(ord(modrm))
+        modrm = next(iterable)
+
+        by, = bytearray(modrm)
+        mod, reg, rm = extractmodrm(by)
 
         if mod < 3:
             if b'\x67' not in prefixes:
@@ -100,7 +106,7 @@ def consume(iterable):
                 displength = typesize.word
 
             elif rm == 4:
-                sib = iterable.next()
+                sib = next(iterable)
                 #print('modrm',hex(ord(modrm)),extractmodrm(ord(modrm)))
                 #print('sib',hex(ord(sib)),extractsib(ord(sib)))
 
@@ -111,7 +117,7 @@ def consume(iterable):
             pass
         pass
 #    print('disp',displength)
-    disp = ''.join([x for i,x in zip(xrange(displength), iterable)])   #
+    disp = bytes().join(islice(iterable, displength))
 
     ## immediates
     if optable.HasImmediate(lookup):
@@ -119,7 +125,7 @@ def consume(iterable):
 
         ## design hack for modrm instructions that don't get an imm due to modrm
         if instruction in [b'\xf6', b'\xf7']:
-            if reg not in [0,1]:
+            if reg not in [0, 1]:
                 immlength = 0
             pass
 
@@ -128,7 +134,7 @@ def consume(iterable):
             immlength = 4
         pass
 
-    imm = ''.join([x for i,x in zip(xrange(immlength), iterable)])   #
+    imm = bytes().join(islice(iterable, immlength))
 
     ## done
     return (prefixes, instruction, modrm, sib, disp, imm)
@@ -172,7 +178,7 @@ if __name__ == '__main__':
         print(decoder.consume(b'\xff\x15\xe0\x11\xde\x77'))
     #    import optable
     #    opcode = b'\xff'
-    #    lookup = optable.Lookup(opcode)
+    #    lookup = optable.LookupTableValue(opcode)
     #    print(optable.HasImmediate(lookup))
 
     #    mov edi, [esp+10]
@@ -247,11 +253,11 @@ if __name__ == '__main__':
 
     if False:
         code = b'\x6b\xc0\x2c'
-        lookup = optable.Lookup(b'\x6b')
+        lookup = optable.LookupTableValue(b'\x6b')
 #        print(optable.HasModrm(lookup),optable.HasImmediate(lookup))
 
         modrm = b'\xc0'
-        mod,reg,rm = decoder.extractmodrm(ord(modrm))
+        mod,reg,rm = decoder.extractmodrm(bytearray([modrm])[0])
 #        print(mod,reg,rm)
 
     if True:
@@ -280,7 +286,7 @@ if __name__ == '__main__':
         insn = decoder.consume(source)
 #        print(insn)
 
-        lookup = optable.Lookup(b'\xa0')
+        lookup = optable.LookupTableValue(b'\xa0')
 #        print(optable.HasModrm(lookup),optable.HasImmediate(lookup))
 
     if True:
@@ -293,14 +299,14 @@ if __name__ == '__main__':
             return a == number
 
         print('1 byte')
-        for n in xrange(-0x80, 0x7f):
+        for n in range(-0x80, 0x7f):
             res = test(n, 1)
             if res is True:
                 continue
             print(n, 1)
 
         print('2 byte')
-        for n in xrange(-0x8000, 0x7fff):
+        for n in range(-0x8000, 0x7fff):
             res = test(n, 2)
             if res is True:
                 continue
@@ -308,7 +314,7 @@ if __name__ == '__main__':
 
     if False:
         print('4 byte')
-        for n in xrange(-0x80000000, 0x7fffffff):
+        for n in range(-0x80000000, 0x7fffffff):
             res = test(n, 4)
             if res is True:
                 continue
@@ -319,5 +325,5 @@ if __name__ == '__main__':
         source = iter(code)
         insn = decoder.consume(source)
         print(insn)
-        lookup = optable.Lookup(b'\x9b')
+        lookup = optable.LookupTableValue(b'\x9b')
         print(optable.HasModrm(lookup),optable.HasImmediate(lookup))
