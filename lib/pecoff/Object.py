@@ -13,7 +13,10 @@ class Signature(portable.IMAGE_FILE_HEADER):
     ]
 
     def isImportSignature(self):
-        return all((self['Machine'].li.int() == self['Machine'].byname('UNKNOWN'), self['NumberOfSections'].li.int() == 0xffff))
+        machine = self['Machine'].li
+        if machine['UNKNOWN']:
+            return self['NumberOfSections'].li.int() == 0xffff
+        return False
 
 class ObjectHeader(portable.IMAGE_FILE_HEADER):
     _fields_ = portable.IMAGE_FILE_HEADER._fields_[2:]
@@ -26,32 +29,17 @@ class ImportHeader(pstruct.type):
         (uint32, 'SizeOfData'),
     ]
 
-class IMPORT_TYPE(pbinary.enum):
-    length, _values_ = 2, [
-        ('CODE', 0),
-        ('DATA', 1),
-        ('CONST', 2),
-    ]
-
-class IMPORT_(pbinary.enum):
-    length, _values_ = 3, [
-        ('ORDINAL', 0),
-        ('NAME', 1),
-        ('NAME_NOPREFIX', 2),
-        ('NAME_UNDECORATE', 3),
-    ]
-
 class ImportData(pstruct.type):
-    class Type(pbinary.struct):
+    class _Type(pbinary.struct):
         _fields_ = [
             (11, 'Reserved'),
-            (IMPORT_, 'Name'),
+            (IMPORT_NAME_TYPE, 'Name'),
             (IMPORT_TYPE, 'Type'),
         ]
 
     _fields_ = [
         (portable.imports.word, 'Ordinal/Hint'),
-        (Type, 'Type'),
+        (_Type, 'Type'),
         (pstr.szstring, 'Symbol'),
         (pstr.szstring, 'Library'),
     ]
@@ -97,7 +85,7 @@ class File(pstruct.type, Header, ptype.boundary):
 
     _fields_ = [
         (Signature, 'Signature'),
-        (lambda s: ImportHeader if s['Signature'].li.isImportSignature() else ObjectHeader, 'Header'),
+        (lambda self: ImportHeader if self['Signature'].li.isImportSignature() else ObjectHeader, 'Header'),
         (__Sections, 'Sections'),
 
         # FIXME: we're actually assuming that these fields are packed and

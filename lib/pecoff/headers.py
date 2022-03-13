@@ -253,3 +253,18 @@ class GUID(rfc4122):
     _fields_ = [
         (bo(t), n) for bo, (t, n) in zip((pint.littleendian, pint.littleendian, pint.littleendian, pint.bigendian), rfc4122._fields_)
     ]
+
+class IMPORT_TYPE(pbinary.enum):
+    length, _values_ = 2, [
+        ('CODE', 0),
+        ('DATA', 1),
+        ('CONST', 2),
+    ]
+
+class IMPORT_NAME_TYPE(pbinary.enum):
+    length, _values_ = 3, [
+        ('ORDINAL', 0),
+        ('NAME', 1),
+        ('NAME_NOPREFIX', 2),
+        ('NAME_UNDECORATE', 3),
+    ]

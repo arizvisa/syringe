@@ -3,7 +3,7 @@ import logging, itertools, datetime
 import ptypes
 from ptypes import *
 
-from . import Object
+from . import headers, Object
 
 class ulong(pint.bigendian(pint.uint32_t)): pass
 
@@ -37,27 +37,12 @@ class Index(pint.uint16_t):
     def GetIndex(self):
         return self.int() - 1      # 1 off
 
-class IMPORT_TYPE(pbinary.enum):
-    length, _values_ = 2, [
-        ('CODE', 0),
-        ('DATA', 1),
-        ('CONST', 2),
-    ]
-
-class IMPORT_NAME_TYPE(pbinary.enum):
-    length, _values_ = 3, [
-        ('ORDINAL', 0),
-        ('NAME', 1),
-        ('NAME_NOPREFIX', 2),
-        ('NAME_UNDECORATE', 3),
-    ]
-
 class Import(pstruct.type):
     class Header(pstruct.type):
-        class Type(pbinary.struct):
+        class _Type(pbinary.struct):
             _fields_ = [
-                (IMPORT_TYPE, 'Type'),
-                (IMPORT_NAME_TYPE, 'Name Type'),
+                (headers.IMPORT_TYPE, 'Type'),
+                (headers.IMPORT_NAME_TYPE, 'Name Type'),
                 (11, 'Reserved')
             ]
 
@@ -69,7 +54,7 @@ class Import(pstruct.type):
             (pint.uint32_t, 'Time-Date Stamp'),
             (pint.uint32_t, 'Size Of Data'),
             (pint.uint16_t, 'Ordinal/Hint'),
-            (Type, 'Type')
+            (_Type, 'Type')
         ]
 
         def valid(self):
