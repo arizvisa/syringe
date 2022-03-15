@@ -278,7 +278,9 @@ class type(ptype.type):
             Finvert = littleendian
         elif order is config.byteorder.littleendian:
             Finvert = bigendian
-        return self.cast(F(self.__class__))
+        else:
+            raise error.AssertionError(self, 'type.flip', message="An unexpected byteorder ({!s}) was returned by an internal function.".format(order))
+        return self.cast(Finvert(self.__class__))
 
     def __getvalue__(self):
         if not self.initializedQ():
@@ -742,6 +744,31 @@ if __name__ == '__main__':
         res = 0xdddddddd
         a = e().set(res)
         if a.str() == '{:x}'.format(res):
+            raise Success
+
+    @TestCase
+    def test_int_flip_bigendian():
+        integer, expected, input = 0x41424344, 0x44434241, b'\x41\x42\x43\x44'
+        t = pint.bigendian(pint.uint32_t)
+        x = t(source=ptypes.prov.bytes(input)).l
+        if x.int() == integer and x.serialize() == input and x.flip().int() == expected and x.flip().serialize() == input:
+            raise Success
+
+    @TestCase
+    def test_int_flip_littleendian():
+        integer, expected, input = 0x41424344, 0x44434241, b'\x44\x43\x42\x41'
+        t = pint.littleendian(pint.uint32_t)
+        x = t(source=ptypes.prov.bytes(input)).l
+        if x.int() == integer and x.serialize() == input and x.flip().int() == expected and x.flip().serialize() == input:
+            raise Success
+
+    @TestCase
+    def test_int_doubleflip():
+        integer, expected, input = 0x41424344, 0x44434241, b'\x41\x42\x43\x44'
+        t = pint.bigendian(pint.uint32_t)
+        x = t(source=ptypes.prov.bytes(input)).l
+        flipped = x.flip().flip()
+        if x.int() == integer and x.serialize() == flipped.serialize() == input:
             raise Success
 
 if __name__ == '__main__':
