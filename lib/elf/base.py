@@ -77,8 +77,10 @@ class ElfXX_BaseAddr(ptype.opointer_t):
         except Exception: pass
         else: return "{:s}<{:s}>".format(self.typename(), type)
 
-        type = object.__name__
-        return "{:s}<{:s}>".format(self.typename(), type)
+        if hasattr(object, '__name__'):
+            type = object.__name__
+            return "{:s}<{:s}>".format(self.typename(), type)
+        return super(ElfXX_BaseAddr, self).classname()
 
     def _calculate_(self, offset):
         base = self.getparent(ElfXX_File)
