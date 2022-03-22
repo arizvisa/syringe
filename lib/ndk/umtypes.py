@@ -47,13 +47,22 @@ class CLIENT_ID(pstruct.type, versioned):
     ]
 
 class UNICODE_STRING(pstruct.type, versioned):
+    def __Padding(self):
+        length = 4 if getattr(self, 'WIN64', False) else 0
+        return dyn.block(length)
+
+    def __Buffer(self):
+        length = self['Length'].li
+        t = dyn.clone(WSTR, length=length.int() // 2)
+        return P(t)
+
     _fields_ = [
         (USHORT, 'Length'),
         (USHORT, 'MaximumLength'),
 #        (PWSTR, 'Buffer'),
-#        (lambda s: P(dyn.clone(WSTR, length=s['MaximumLength'].li.int())), 'Buffer')
-        (lambda s: ULONG if getattr(s, 'WIN64', False) else pint.uint_t, 'Unknown'),
-        (lambda s: P(dyn.clone(WSTR, length=s['Length'].li.int()//2)), 'Buffer')
+#        (lambda self: P(dyn.clone(WSTR, length=self['MaximumLength'].li.int())), 'Buffer')
+        (__Padding, 'Padding'),
+        (__Buffer, 'Buffer')
     ]
 
     def get(self):
@@ -66,13 +75,33 @@ class UNICODE_STRING(pstruct.type, versioned):
     def summary(self):
         return 'Length={:x} MaximumLength={:x} Buffer={!r}'.format(self['Length'].int(), self['MaximumLength'].int(), self.str())
 
+    def alloc(self, **fields):
+        res = super(UNICODE_STRING, self).alloc(**fields)
+        if not res['Buffer'].d.initializedQ():
+            return res
+        if 'Length' not in fields:
+            res['Length'].set(res['Buffer'].d.size())
+        if 'MaximumLength' not in fields:
+            res['MaximumLength'].set(res['Length'].int())
+        return res
+
 class PUNICODE_STRING(P(UNICODE_STRING)): pass
 
 class STRING(pstruct.type):
+    def __Padding(self):
+        length = 4 if getattr(self, 'WIN64', False) else 0
+        return dyn.block(length)
+
+    def __Buffer(self):
+        length = self['Length'].li
+        t = dyn.clone(PSTR, length=length.int())
+        return P(t)
+
     _fields_ = [
         (USHORT, 'Length'),
         (USHORT, 'MaximumLength'),
-        (lambda s: P(dyn.clone(PSTR, length=s['Length'].li.int())), 'Buffer')
+        (__Padding, 'Padding'),
+        (__Buffer, 'Buffer')
     ]
 
     def get(self):
@@ -84,6 +113,16 @@ class STRING(pstruct.type):
 
     def summary(self):
         return 'Length={:x} MaximumLength={:x} Buffer={!r}'.format(self['Length'].int(), self['MaximumLength'].int(), self.str())
+
+    def alloc(self, **fields):
+        res = super(UNICODE_STRING, self).alloc(**fields)
+        if not res['Buffer'].d.initializedQ():
+            return res
+        if 'Length' not in fields:
+            res['Length'].set(res['Buffer'].d.size())
+        if 'MaximumLength' not in fields:
+            res['MaximumLength'].set(res['Length'].int())
+        return res
 
 class PSTRING(P(STRING)): pass
 
