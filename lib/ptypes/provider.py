@@ -1462,23 +1462,30 @@ try:
             self.address += len(data)
             return res
 
-        @staticmethod
-        def _read(address, length):
+        @classmethod
+        def _read(cls, address, length):
             block_t = ctypes.c_char * length
             pointer_t = ctypes.POINTER(block_t)
             voidpointer = ctypes.c_void_p(address)
             blockpointer = ctypes.cast(voidpointer, pointer_t)
-            return builtins.memoryview(blockpointer.contents).tobytes()
+            if length:
+                return builtins.memoryview(blockpointer.contents).tobytes()
+            if not address:
+                Log.warning("{:s}._read({:#x}, {:+d}): dereferenced a NULL pointer ({:#x}) to read {:d} bytes.".format(cls.__name__, address, length, address, length))
+            return builtins.memoryview(b'').tobytes()
 
-        @staticmethod
-        def _write(address, value):
+        @classmethod
+        def _write(cls, address, value):
             block_t = ctypes.c_char * len(value)
             pointer_t = ctypes.POINTER(block_t)
             voidpointer = ctypes.c_void_p(address)
             blockpointer = ctypes.cast(voidpointer, pointer_t)
-            for i, item in enumerate(value):
-                blockpointer.contents[i] = item
-            return 1 + i
+            if value:
+                for i, item in enumerate(value):
+                    blockpointer.contents[i] = item
+                return 1 + i
+            Log.warning("{:s}._write({:#x}, {!r}): dereferenced a NULL pointer ({:#x}) to write {:d} bytes.".format(cls.__name__, address, value, address, len(value)))
+            return 0
 
     DEFAULT.append(memory)
 
