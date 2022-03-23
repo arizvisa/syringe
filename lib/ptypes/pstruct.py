@@ -124,12 +124,11 @@ class __structure_interface__(ptype.container):
         except Exception as E:
             path = str().join(map("<{:s}>".format, self.backtrace()))
             Log.warning("type.initializedQ : {:s} : instance.blocksize() raised an exception when attempting to determine the initialization state of the instance : {!s} : {:s}".format(self.instance(), E, path), exc_info=True)
-        finally:
-            return res
 
         # if we're under the expected size, then we're uninitialized.
-        if size < blocksize:
-            return False
+        else:
+            if size < blocksize:
+                return False
 
         # otherwise we need to check if the fields are initialized at least.
         return all(self.value[index].initializedQ() for index, _ in enumerate(self._fields_))
