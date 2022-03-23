@@ -535,25 +535,27 @@ class __interface__(object):
         if not getattr(self, '__name__', ''):
             result['unnamed'] = True
 
-        # Check if we're initialized
-        if self.value is not None:
-            try:
-                size = self.size()
-
-            # If we can't get our size because of an InitializationError, then
-            # there's no reason to check our load/commit state
-            except error.InitializationError:
-                pass
-
-            # Otherwise, we were successful and we need to check the state in
-            # order to update the type's properties
-            else:
-                key = 'overcommit'  if self.blocksize() < size else 'underload' if self.blocksize() > size else None
-                if key: result[key] = True
-
-        # Otherwise, we're uninitialized and the properties should say this
-        else:
+        # Do an immediate uninitialization check
+        if self.value is None:
             result['uninitialized'] = True
+            return result
+
+        # Otherwise we need to check the sizes in order to determine
+        # whether we're underloaded (blocksize too small) or if we're
+        # overcommitted (actual size too large).
+        try:
+            size = self.size()
+
+        # If we can't get our size because of an InitializationError, then
+        # there's no reason to check our load/commit state
+        except error.InitializationError:
+            pass
+
+        # We finally got a valid size, and we need to figure out whether the type is
+        # either overcommited (size > blocksize) or it's underloaded (size < blocksize)
+        else:
+            key = 'overcommit'  if self.blocksize() < size else 'underload' if self.blocksize() > size else None
+            if key: result[key] = True
         return result
 
     def traverse(self, edges, filter=lambda node: True, **kwds):
@@ -1224,7 +1226,7 @@ class container(base):
         """True if the type is fully initialized"""
         if self.value is None:
             return False
-        return all(item is not None and item.initializedQ() for item in self.value) and self.size() >= self.blocksize()
+        return all(item and item.initializedQ() for item in self.value)
 
     def size(self):
         """Returns a sum of the number of bytes that are currently in use by all sub-elements"""
@@ -1370,7 +1372,6 @@ class container(base):
         if total < expected:
             path = str().join(map("<{:s}>".format, self.backtrace()))
             Log.warning("container.__deserialize_block__ : {:s} : Container less than expected blocksize : {:#x} < {:#x} : {{{:s}}}".format(self.instance(), total, expected, path))
-            raise StopIteration(self.name(), total)
 
         elif total > expected:
             path = str().join(map("<{:s}>".format, self.backtrace()))
@@ -1550,6 +1551,15 @@ class container(base):
                 yield ofs, (tuple(s), tuple(o))
             continue
         return
+
+    def __properties__(self):
+        cls, result = self.__class__, super(container, self).__properties__()
+
+        # if we're a container, then we need to check for uninitialized members
+        # which can happen if an atomic member's underloaded (size < blocksize)
+        if not result.get('uninitialized', False) and not self.initializedQ():
+            result['uninitialized'] = True
+        return result
 
     def repr(self, **options):
         """Display all ptype.container types as a hexstring"""
@@ -3549,6 +3559,104 @@ if __name__ == '__main__':
 
         rec = records.get(49, ptype.undefined, myattrib=42)
         if rec is not ptype.undefined and builtins.issubclass(rec, ptype.undefined) and rec.myattrib == 42:
+            raise Success
+
+    @TestCase
+    def test_container_underalloc():
+        class cunt(ptype.container):
+            def load(self, **attrs):
+                self.value = []
+                self.value.append(pint.uint32_t())
+                self.value.append(pint.uint32_t())
+                return super(cunt, self).load(**attrs)
+            def blocksize(self):
+                return 9
+        x = cunt(source=ptypes.provider.empty()).a
+        if (x.size(), x.blocksize()) == (8, 9) and x.value[0].size() == x.value[1].size() == 4:
+            raise Success
+
+    @TestCase
+    def test_container_underload():
+        class cunt(ptype.container):
+            def load(self, **attrs):
+                self.value = []
+                self.value.append(pint.uint32_t())
+                self.value.append(pint.uint32_t())
+                return super(cunt, self).load(**attrs)
+            def blocksize(self):
+                return 9
+        x = cunt(source=ptypes.provider.empty()).l
+        tests, properties = [], x.properties()
+        tests.append(x.size() == 8 and x.blocksize() == 9)
+        tests.append(all(item.blocksize() == 4 for item in x.value))
+        tests.append(x.value[0].initializedQ() and x.value[0].size() == 4 and x.value[0].serialize() == b'\0\0\0\0')
+        tests.append(x.value[1].initializedQ() and x.value[1].size() == 4 and x.value[1].serialize() == b'\0\0\0\0')
+        tests.append(properties.get('underload', False) and not properties.get('uninitialized', False))
+        if all(tests):
+            raise Success
+
+    @TestCase
+    def test_container_alloc_uninitialized():
+        class cunt(ptype.container):
+            def load(self, **attrs):
+                self.value = []
+                self.value.append(pint.uint32_t())
+                self.value.append(pint.uint32_t())
+                return super(cunt, self).load(**attrs)
+            def blocksize(self):
+                return 7
+        x = cunt(source=ptypes.provider.bytes(b'\0'*7 + b'\1'))
+        try: x.a
+        except Exception: pass
+        tests, properties = [], x.properties()
+        tests.append(x.size() == 7 == x.blocksize())
+        tests.append(all(item.blocksize() == 4 for item in x.value))
+        tests.append(x.value[0].initializedQ() and x.value[0].size() == 4 and x.value[0].serialize() == b'\0\0\0\0')
+        tests.append((not x.value[1].initializedQ() and x.value[1].size() == 3 and x.value[1].serialize() == b'\0\0\0\0'))
+        tests.append((not properties.get('underload', False) and properties.get('uninitialized', False)))
+        if all(tests):
+            raise Success
+
+    @TestCase
+    def test_container_underload_source():
+        class cunt(ptype.container):
+            def load(self, **attrs):
+                self.value = []
+                self.value.append(pint.uint32_t())
+                self.value.append(pint.uint32_t())
+                return super(cunt, self).load(**attrs)
+        x = cunt(source=ptypes.provider.bytes(b'\0'*7))
+        try: x.l
+        except Exception: pass
+        tests, properties = [], x.properties()
+        tests.append(x.size() == 7 and x.blocksize() == 8)
+        tests.append(all(item.blocksize() == 4 for item in x.value))
+        tests.append(x.value[0].initializedQ() and x.value[0].size() == 4 and x.value[0].serialize() == b'\0\0\0\0')
+        tests.append((not x.value[1].initializedQ() and x.value[1].size() == 3 and x.value[1].serialize() == b'\0\0\0\0'))
+        tests.append(properties.get('underload', False) and properties.get('uninitialized', False))
+        if all(tests):
+            raise Success
+
+    @TestCase
+    def test_container_underload_blocksize():
+        class cunt(ptype.container):
+            def load(self, **attrs):
+                self.value = []
+                self.value.append(pint.uint32_t())
+                self.value.append(pint.uint32_t())
+                return super(cunt, self).load(**attrs)
+            def blocksize(self):
+                return 7
+        x = cunt(source=ptypes.provider.bytes(b'\0'*7 + b'\1'))
+        try: x.l
+        except Exception: pass
+        tests, properties = [], x.properties()
+        tests.append(x.size() == 7 == x.blocksize())
+        tests.append(all(item.blocksize() == 4 for item in x.value))
+        tests.append(x.value[0].initializedQ() and x.value[0].size() == 4 and x.value[0].serialize() == b'\0\0\0\0')
+        tests.append((not x.value[1].initializedQ() and x.value[1].size() == 3 and x.value[1].serialize() == b'\0\0\0\0'))
+        tests.append((not properties.get('underload', False) and properties.get('uninitialized', False)))
+        if all(tests):
             raise Success
 
 if __name__ == '__main__':

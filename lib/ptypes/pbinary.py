@@ -816,7 +816,7 @@ class container(type):
         return result
 
     def initializedQ(self):
-        return super(container, self).initializedQ() and all(item is not None and isinstance(item, type) and item.initializedQ() for item in self.value)
+        return super(container, self).initializedQ() and all(isinstance(item, type) and item.initializedQ() for item in self.value)
 
     ### standard stuff
     def int(self):
@@ -1794,7 +1794,7 @@ class partial(ptype.container):
     length = 1
 
     def initializedQ(self):
-        return isinstance(self.value, list) and len(self.value) > 0 and self.value[0].initializedQ()
+        return self.value and isinstance(self.value, list) and self.value[0].initializedQ()
 
     def __object__(self, **attrs):
         offset, object = self.getoffset(), force(self._object_ or 0, self)

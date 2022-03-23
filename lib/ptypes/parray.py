@@ -429,16 +429,6 @@ class terminated(type):
 
         return self
 
-    def initializedQ(self):
-        '''Returns True if all elements excluding the last one (sentinel) are initialized'''
-
-        # Check to see if array contains any elements
-        if self.value is None:
-            return False
-
-        # Check if all elements are initialized.
-        return all(item.initializedQ() for item in self.value)
-
 class uninitialized(terminated):
     """An array that can contain uninitialized or partially initialized elements.
 
@@ -699,7 +689,8 @@ class block(uninitialized):
         return super(block if args else terminated, self).alloc(*args, **attrs)
 
     def initializedQ(self):
-        return super(block, self).initializedQ() and (self.size() >= self.blocksize() if self.length is None else len(self.value) == self.length)
+        length = self.length
+        return super(block, self).initializedQ() and (self.size() >= self.blocksize() if length is None else len(self.value) == length)
 
 if __name__ == '__main__':
     class Result(Exception): pass

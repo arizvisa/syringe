@@ -110,6 +110,30 @@ class __structure_interface__(ptype.container):
         raise KeyError(name)
 
     ## informational methods
+    def initializedQ(self):
+        if utils.callable_eq(self.blocksize, ptype.container.blocksize):
+            return super(__structure_interface__, self).initializedQ()
+
+        # if there's no value, we're uninitialized.. plain and simple
+        if self.value is None:
+            return False
+
+        # otherwise we need to extract the actual and expected sizes.
+        try:
+            size, blocksize = self.size(), self.blocksize()
+        except Exception as E:
+            path = str().join(map("<{:s}>".format, self.backtrace()))
+            Log.warning("type.initializedQ : {:s} : instance.blocksize() raised an exception when attempting to determine the initialization state of the instance : {!s} : {:s}".format(self.instance(), E, path), exc_info=True)
+        finally:
+            return res
+
+        # if we're under the expected size, then we're uninitialized.
+        if size < blocksize:
+            return False
+
+        # otherwise we need to check if the fields are initialized at least.
+        return all(self.value[index].initializedQ() for index, _ in enumerate(self._fields_))
+
     def __properties__(self):
         result = super(__structure_interface__, self).__properties__()
         if self.initializedQ():
@@ -208,19 +232,6 @@ class type(__structure_interface__):
     '''
     _fields_ = None     # list of (type, name) tuples
     ignored = ptype.container.__slots__['ignored'] | {'_fields_'}
-
-    def initializedQ(self):
-        if utils.callable_eq(self.blocksize, ptype.container.blocksize):
-            return super(type, self).initializedQ()
-
-        res = self.value is not None
-        try:
-            res = res and self.size() >= self.blocksize()
-        except Exception as E:
-            path = str().join(map("<{:s}>".format, self.backtrace()))
-            Log.warning("type.initializedQ : {:s} : .blocksize() raised an exception when attempting to determine the initialization state of the instance : {!s} : {:s}".format(self.instance(), E, path), exc_info=True)
-        finally:
-            return res
 
     def copy(self, **attrs):
         result = super(type, self).copy(**attrs)
