@@ -51,7 +51,7 @@ Example usage:
     print( repr(instance) )
 """
 import sys, os, builtins, itertools, functools
-import importlib, random as _random
+import importlib, pkgutil, random as _random
 
 from . import config, utils, error
 Config = config.defaults
@@ -766,14 +766,18 @@ class file(fileobj):
         return builtins.open(filename, access, 0)
 
 try:
+    if not pkgutil.find_loader('tempfile'):
+        raise ImportError
+
     class filecopy(fileobj):
         """A provider that reads/writes from a temporary copy of the specified file.
 
         If the user wishes to save the file to another location, a .save method is provided.
         """
-        import tempfile as __tempfile__
-
         def __init__(self, *args, **kwds):
+            import tempfile
+            self.__tempfile__ = tempfile
+
             res = self.open(*args, **kwds)
             return super(filecopy, self).__init__(res)
 
@@ -838,7 +842,11 @@ except OSError as E:
     Log.info("{:s} : Skipping defining any linux-based providers (`LinuxProcessId`) due to being on a non-linux platform ({:s}).".format(__name__, sys.platform))
 
 try:
+    if not pkgutil.find_loader('ctypes'):
+        raise ImportError
+
     import ctypes
+
     try:
         k32 = ctypes.WinDLL('kernel32.dll')
     except Exception as E:
@@ -1182,11 +1190,12 @@ except ImportError:
     Log.info("{:s} : Unable to import the 'idaapi' module (not running IDA?). Failed to define the `Ida` provider.".format(__name__))
 
 try:
+    if not pkgutil.find_loader('binaryninja'):
+        raise ImportError
+
     _ = 'binaryninja' in sys.modules
     class Binja(debuggerbase):
         '''A provider that uses Binary Ninja's BinaryViewType API for reading/writing from an address space.'''
-        import binaryninja
-
         def __init__(self, bv):
             self._view = bv
             self._address = 0
@@ -1224,6 +1233,9 @@ except ImportError:
     Log.info("{:s} : Unable to import the 'binaryninja' module (not running Binja?). Failed to define the `Binja` provider.".format(__name__))
 
 try:
+    if not pkgutil.find_loader('_PyDbgEng'):
+        raise ImportError
+
     _ = '_PyDbgEng' in sys.modules
     class PyDbgEng(debuggerbase):
         '''A provider that uses the PyDbgEng.pyd module to interact with the memory of the current debugged process.'''
@@ -1289,22 +1301,24 @@ except ImportError:
     Log.info("{:s} : Unable to import the '_PyDbgEng' module. Failed to define the `PyDbgEng` provider.".format(__name__))
 
 try:
+    if not pkgutil.find_loader('pykd'):
+        raise ImportError
+
     _ = 'pykd' in sys.modules
     class Pykd(debuggerbase):
         '''A provider that uses the Pykd library to interact with the memory of a debugged process.'''
-        import pykd as __pykd__
-
         def __init__(self):
-            self.addr = 0
+            import pykd
+            self.__pykd__ = pykd
+            self.address = 0
 
-        @classmethod
-        def expr(cls, string):
-            return cls.__pykd__.expr(string)
+        def expr(self, string):
+            return self.__pykd__.expr(string)
 
         def seek(self, offset):
             '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
             # FIXME: check to see if we're at an invalid address
-            res, self.addr = self.addr, offset
+            res, self.address = self.address, offset
             return res
 
         def consume(self, amount):
@@ -1312,18 +1326,18 @@ try:
             if amount == 0:
                 return b''
             try:
-                data = self.__pykd__.loadBytes(self.addr, amount)
+                data = self.__pykd__.loadBytes(self.address, amount)
                 res = bytearray(data)
             except Exception:
-                raise error.ConsumeError(self, self.addr, amount, 0)
-            self.addr += amount
+                raise error.ConsumeError(self, self.address, amount, 0)
+            self.address += amount
             return builtins.bytes(res)
 
         def store(self, data):
             '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-            raise error.StoreError(self, self.addr, len(data), message="Pykd doesn't allow you to write to memory.")
+            raise error.StoreError(self, self.address, len(data), message="Pykd doesn't allow you to write to memory.")
             res = len(data)
-            self.addr += res
+            self.address += res
             return res
 
     Log.info("{:s} : Successfully loaded the `Pykd` provider.".format(__name__))
@@ -1333,6 +1347,9 @@ except ImportError:
     Log.info("{:s} : Unable to import the 'pykd' module. Failed to define the `Pykd` provider.".format(__name__))
 
 try:
+    if not pkgutil.find_loader('lldb'):
+        raise ImportError
+
     _ = 'lldb' in sys.modules
     class lldb(debuggerbase):
         module = importlib.import_module('lldb')
@@ -1375,6 +1392,9 @@ except ImportError:
     Log.info("{:s} : Unable to import the 'lldb' module. Failed to define the `lldb` provider.".format(__name__))
 
 try:
+    if not pkgutil.find_loader('gdb'):
+        raise ImportError
+
     _ = 'gdb' in sys.modules
     class gdb(debuggerbase):
         module = importlib.import_module('gdb')
@@ -1428,6 +1448,9 @@ except ImportError:
     Log.info("{:s} : Unable to import the 'gdb' module. Failed to define the `gdb` provider.".format(__name__))
 
 try:
+    if not pkgutil.find_loader('ctypes'):
+        raise ImportError
+
     import ctypes
 
     ## TODO: figure out an elegant way to catch exceptions we might cause
