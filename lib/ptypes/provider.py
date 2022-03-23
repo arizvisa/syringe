@@ -1307,13 +1307,13 @@ try:
     _ = 'pykd' in sys.modules
     class Pykd(debuggerbase):
         '''A provider that uses the Pykd library to interact with the memory of a debugged process.'''
+        import pykd as __pykd__
         def __init__(self):
-            import pykd
-            self.__pykd__ = pykd
             self.address = 0
 
-        def expr(self, string):
-            return self.__pykd__.expr(string)
+        @classmethod
+        def expr(cls, string):
+            return cls.__pykd__.expr(string)
 
         def seek(self, offset):
             '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
@@ -1335,10 +1335,16 @@ try:
 
         def store(self, data):
             '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-            raise error.StoreError(self, self.address, len(data), message="Pykd doesn't allow you to write to memory.")
-            res = len(data)
-            self.address += res
-            return res
+            if not len(data):
+                return 0
+            amount, argh = len(data), bytearray(data)
+            items = [octet for octet in argh]
+            try:
+                self.__pykd__.writeBytes(self.address, items)
+            except Exception:
+                raise error.StoreError(self, self.address, len(data))
+            self.address += amount
+            return amount
 
     Log.info("{:s} : Successfully loaded the `Pykd` provider.".format(__name__))
     if _: DEFAULT.append(Pykd)
