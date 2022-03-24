@@ -891,6 +891,27 @@ class FILETIME(pstruct.type):
         ts, seconds = self.timestamp(), res.second + res.microsecond * 1e-6
         return "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:s}{:s} ({:#x})".format(res.year, res.month, res.day, res.hour, res.minute, "{:02.6f}".format(seconds).zfill(9), res.strftime('%z'), ts)
 
+    def days(self):
+        ts = self.timestamp()
+        #864e11 = nanoseconds in day
+        #864e9 = 100ns in day
+        return ts * 125e-12 / 108
+    def hours(self):
+        ts = self.timestamp()
+        return ts * 25e-11 / 9
+    def minutes(self):
+        ts = self.timestamp()
+        return ts * 15e-9 / 9
+    def seconds(self):
+        ts = self.timestamp()
+        return ts * 1e-7
+    def milliseconds(self):
+        ts = self.timestamp()
+        return ts * 1e-4
+    def microseconds(self):
+        ts = self.timestamp()
+        return ts * 1e-1
+
 class EVENT_DESCRIPTOR(pstruct.type):
     _fields_ = [
         (USHORT, 'Id'),
