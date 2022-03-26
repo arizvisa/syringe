@@ -9,10 +9,14 @@
 #          to serialization service
 
 import sys
-if sys.version_info.major < 3:
-    import builtins, types
-else:
-    import builtins, types
+if sys.version_info.major < 3:  import __builtin__ as builtins, types
+else:                           import builtins, types
+try:
+    if sys.version_info.major < 3:  import thread as _thread
+    else:                           import _thread as _thread
+except ImportError:
+    pass
+
 __all__ = ['caller', 'pack', 'unpack', 'loads', 'dumps']
 
 VERSION = '0.7'
@@ -138,12 +142,12 @@ class package:
 
             # special types
             if t is module and instance is not module:
-                # XXX: implement binary modules
-                if hasattr(instance, '__file__'):
+                if sys.version_info.major < 3 and hasattr(instance, '__file__'):
                     if instance.__file__.endswith('.pyd'):
-                        raise NotImplementedError('Binary modules are un-supported')
+                        raise NotImplementedError('Binary modules are un-supported', instance)
                     return module_
-                return module_local
+                # python3 lets us use a module-spec
+                return module_
 
             # by type
             try:
@@ -154,7 +158,6 @@ class package:
             # builtins for known-modules that can be copied from
             if t == builtin_.getclass():
                 if instance.__module__ is None:
-                    #return incomplete  # XXX
                     raise KeyError(instance, 'Unable to determine module name from builtin method')
                 return builtin_
 
@@ -164,7 +167,7 @@ class package:
 
             # FIXME: if it follows the pickle protocol..
             if hasattr(instance, '__getstate__'):
-                raise NotImplementedError('Pickle protocol for type %r is unimplemented'% instance)
+                raise NotImplementedError(instance, 'Pickle protocol for type is unimplemented')
                 pickle.loads(pickle.dumps(instance))
                 return incomplete
 
@@ -711,7 +714,6 @@ if 'constants':
         def getclass(cls):
             return builtins.super
 
-    import _thread
     @package.cache.register_const
     class threadlock(__constant):
         @classmethod
@@ -833,7 +835,7 @@ if 'core':
 
             # FIXME: create the instance illegitimately
             if type.__new__.__class__ is not builtin_function_or_method:
-                raise Exception('Unable to support custom-defined .__new__ operators')
+                raise Exception('Unable to support custom-defined .__new__ operators', name, type)
 
             # TODO: bniemczyk would like a hint here for customizing __new__
             old_init, new_init = type.__init__, lambda self: None,
@@ -877,13 +879,15 @@ if 'core':
         @classmethod
         def p_constructor(cls, object, **attributes):
             if sys.version_info.major < 3:
-                return object.__name__
-            return object.__spec__.name
+                return object.__name__, None, None
+            spec, loader = object.__spec__, object.__loader__
+            return object.__name__, spec, loader
 
         @classmethod
         def u_constructor(cls, data, **attributes):
-            name = data
-            return module.instancelocal(name)
+            name, spec, loader = data
+            if spec is None or loader is None:
+                return module.instancelocal(name)
 
     @package.cache.register_type
     class module_(module_local):
@@ -891,26 +895,45 @@ if 'core':
         @classmethod
         def p_constructor(cls, object, **attributes):
             if sys.version_info.major < 3:
-                return '', object.__name__, object.__doc__
-
-            spec = object.__spec__
-            return spec.name if isinstance(spec.loader, __import__('_frozen_importlib').BuiltinImporter) else '', object.__name__, object.__doc__
+                return None, None, object.__name__, object.__doc__
+            return object.__spec__, object.__loader__, object.__name__, object.__doc__
 
         @classmethod
         def u_constructor(cls, data, **attributes):
-            spec, name, doc = data
+            spec, loader, name, doc = data
             if sys.version_info.major < 3 or not spec:
                 return cls.new(name, doc)
+            elif isinstance(loader, __import__('_frozen_importlib').BuiltinImporter):
+                module = loader.create_module(spec)
+            elif isinstance(loader, __import__('_frozen_importlib').FrozenImporter):
+                module = loader.create_module(spec)
+            elif isinstance(loader, __import__('_frozen_importlib_external').ExtensionFileLoader):
+                module = loader.create_module(spec)
+            elif isinstance(loader, __import__('_frozen_importlib_external').FileLoader):
+                module = loader.create_module(spec)
+            elif isinstance(loader, __import__('_frozen_importlib_external').SourceFileLoader):
+                module = loader.create_module(spec)
+            elif isinstance(loader, __import__('_frozen_importlib_external').SourcelessFileLoader):
+                module = loader.create_module(spec)
 
-            res = __import__('spec')
-            res.__name__, res.__doc__ = name, doc
-            return res
+            # these loaders can be used without needing to be instantiated.
+            elif loader is __import__('_frozen_importlib').FrozenImporter:
+                module = loader.create_module(spec)
+            elif loader is __import__('_frozen_importlib').BuiltinImporter:
+                module = loader.create_module(spec)
+
+            # if we hit conditional then Python refuses to let us compare against it.
+            else:
+                raise NotImplementedError(spec, loader)
+            module.__spec__, module.__loader__ = spec, loader
+            module.__name__, module.__doc__ = name, doc
+            return module
 
         @classmethod
         def p_instance(cls, object, **attributes):
-            if sys.version_info.major >= 3 and hasattr(object, '__spec__') and isinstance(object.__spec__.loader, __import__('_frozen_importlib').BuiltinImporter):
+            if sys.version_info.major >= 3 and hasattr(object, '__loader__') and not isinstance(object.__loader__, __import__('_frozen_importlib_external').SourceFileLoader):
                 return {}
-            ignored = ('__builtins__', '__loader__')
+            ignored = {'__builtins__', '__loader__', '__spec__'}
             return {k : v for k, v in object.__dict__.items() if k not in ignored}
 
         @classmethod
@@ -935,14 +958,14 @@ if sys.version_info.major >= 3:
         @classmethod
         def p_constructor(cls, object, **attributes):
             #return object.name, object.loader, object.origin, object.loader_state, hasattr(object, '__path__')
-            return object.name, None, object.origin, object.loader_state, hasattr(object, '__path__')
+            return object.name, object.loader, object.origin, object.loader_state, hasattr(object, '__path__')
 
         @classmethod
         def u_constructor(cls, data, **attributes):
             cons = cls.getclass()
             name, loader, origin, loader_state, is_package = data
             #return cons(name, loader, parent=parent, origin=origin, loader_state=loader_state, is_package=is_package)
-            return cons(name, None, origin=origin, loader_state=loader_state, is_package=is_package)
+            return cons(name, loader, origin=origin, loader_state=loader_state, is_package=is_package)
 
         @classmethod
         def p_instance(cls, object, **attributes):
@@ -1041,6 +1064,44 @@ if sys.version_info.major >= 3:
         @classmethod
         def p_instance(cls, object, **attributes):
             return ()
+
+    @package.cache.register_const
+    class ModuleLoaderExternal(__constant):
+        @classmethod
+        def getclass(cls):
+            return __import__('_frozen_importlib_external').ExtensionFileLoader
+
+    @package.cache.register_type
+    class ModuleLoaderExternal_(__type__):
+        @classmethod
+        def getclass(cls):
+            return __import__('_frozen_importlib_external').ExtensionFileLoader
+
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            return object.name, object.path, [item for item in object.contents()]
+
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            cons = cls.getclass()
+            name, path, contents = data
+            return cons(name, path)
+
+        @classmethod
+        def p_instance(cls, object, **attributes):
+            return ()
+
+    class module_spec(module_):
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            loader, spec = object.__loader__, object.__spec__
+            return spec, loader.name, loader.path, [item for item in loader.contents()]
+
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            spec, name, path, contents = data
+            ExtensionFileLoader = __import__('_frozen_importlib_external').ExtensionFileLoader
+            loader = ExtensionFileLoader(name, path)
 
 if 'builtin':
     class __builtin(__type__):
@@ -1451,7 +1512,6 @@ if 'special':
         def p_instance(cls, object, **attributes):
             return ()
 
-    import _thread
     @package.cache.register_type
     class threadlock_(__type__):
         @classmethod
@@ -1476,14 +1536,14 @@ if 'special':
 
         @classmethod
         def p_constructor(cls, object, **attributes):
-            raise NotImplementedError('Unable to pack objects of type generator_')  # Due to the gi_frame property
+            raise NotImplementedError('Unable to pack objects of type generator_', object)  # Due to the gi_frame property
             return object.gi_running, object.gi_code, object.gi_frame
 
         @classmethod
         def u_constructor(cls, data, **attributes):
             co, fr = data
             result = function.new(co, fr.f_globals)
-            raise NotImplementedError('Unable to unpack objects of type generator_')
+            raise NotImplementedError('Unable to unpack objects of type generator_', co, fr)
             return result
 
         @classmethod
@@ -1722,6 +1782,36 @@ if 'operator':
             t, (args, keywords) = data
             return t(*args, **keywords)
 
+def generate():
+    items = [
+        builtins.tuple,
+        builtins.list,
+        builtins.dict,
+        builtins.str,
+        builtins.type,
+        builtins.bytes,
+        builtins.object
+    ]
+    for item in items:
+        for name in dir(item):
+            if name not in {'__dict__', '__abstractmethods__'}:
+                yield item, name, getattr(item, name)
+            continue 
+        continue
+    return
+table = {instance : hash((item, name)) for item, name, instance in generate() if instance not in package.cache.registration.const}
+rtable = {value : instance for instance, value in table.items()}
+
+for callable_instance, value in table.items():
+    class builtin_callable_(__constant):
+        '''for any kind of builtin callable'''
+        @classmethod
+        def getclass(cls, type=callable_instance):
+            return type
+    builtin_callable_.__name__ = 'callable_instance_%d'% value
+    builtin_callable_ = package.cache.register_const(builtin_callable_)
+    del(builtin_callable_)
+
 ## regular functions
 #import cPickle as pickle
 import marshal as pickle
@@ -1775,14 +1865,17 @@ if __name__ == '__main__':
                 print('%s: %r'% (name, E))
             except Exception as E:
                 print('%s: %r : %r'% (name, Failure(), E))
-            #print(traceback.format_exc())
             return False
         TestCaseList.append(harness)
         return fn
 
 if __name__ == '__main__':
-    from builtins import *
-    import builtins, fu
+    if sys.version_info.major < 3:
+        import __builtin__ as builtins, fu
+        from builtins import *
+    else:
+        from builtins import *
+        import builtins, fu
 
     # lame helpers for testcases
     def make_package(cls, cons, inst):
@@ -2083,14 +2176,6 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_module_builtin():
-        import sys
-        a = fu.pack(sys)
-        b = fu.unpack(a)
-        if b is sys:
-            raise Success
-
-    @TestCase
     def test_module_general():
         import re
         a = re.compile('fuckyou', 0)
@@ -2099,7 +2184,7 @@ if __name__ == '__main__':
         if id(b) != id(c) if sys.version_info.major < 3 else c is not a:
             raise Success
 
-#    @TestCase
+    @TestCase
     def test_module():
         import fu
         a = fu.package.pack(fu)
@@ -2107,7 +2192,7 @@ if __name__ == '__main__':
         if b.VERSION == fu.VERSION and b is not fu:
             raise Success
 
-#    @TestCase
+    @TestCase
     def test_ignore_modulepack():
         import sys
         a = fu.package.pack(sys, local=('sys',))
@@ -2119,7 +2204,7 @@ if __name__ == '__main__':
         if sys.winver is b.winver:
             raise Success
 
-#    @TestCase
+    @TestCase
     def test_ignore_moduleunpack():
         import _ast as testpackage
         a = fu.package.pack(testpackage)
@@ -2131,7 +2216,7 @@ if __name__ == '__main__':
         if b is testpackage:
             raise Success
 
-    #@TestCase
+    @TestCase
     def test_ptype_pack():
         from ptypes import pint
         a = pint.uint32_t()
@@ -2141,14 +2226,13 @@ if __name__ == '__main__':
         if b.value == result:
             raise Success
 
-    #@TestCase
+    @TestCase
     def test_continuation_yield():
         def fn():
             yield 1
             yield 2
-        global a, b, c
         a = fn()
-        if a.next() != 1:
+        if next(a) != 1:
             raise AssertionError
         b = fu.package.pack(a)
         c = fu.package.unpack(b)
@@ -2384,6 +2468,48 @@ if __name__ == '__main__':
         f = operator.methodcaller('mine', x=20, y=5)
         g = fu.unpack(fu.pack(f))
         if f(i1) == g(i2):
+            raise Success
+
+    @TestCase
+    def test_module_builtin():
+        import sys
+        a = fu.pack(sys)
+        b = fu.unpack(a)
+        if b is sys:
+            raise Success
+
+    @TestCase
+    def test_importlib_bootstrap():
+        if sys.version_info.major < 3: raise Success('skipped on Py2', sys.version_info.major)
+        import importlib._bootstrap_external as M
+        # print(M.EXTENSION_SUFFIXES)
+        a = fu.pack(M)
+        b = fu.unpack(a)
+        if a is M:
+            raise Success
+
+    @TestCase
+    def test_collection_namedtuple():
+        import collections
+        nt = collections.namedtuple('hi', ['a','b','c','d'])
+        value = nt(1,2,3,4)
+        a = fu.pack(value)
+        b = fu.unpack(a)
+        res = b(1,2,3,4)        
+        if nt == res:
+            raise Success
+
+    @TestCase
+    def test_closure():
+        wtf = [0]
+        def meh():
+            hi = wtf
+            def fuck(y=hi):
+                return 2 * y
+            return fuck
+        a = fu.pack(meh)
+        b = fu.unpack(a)
+        if meh()() == b()():
             raise Success
 
 if __name__ == '__main__':
