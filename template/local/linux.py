@@ -77,11 +77,110 @@ class pid_t(__pid_t): pass
 class off_t(__off_t): pass
 class off64_t(__off64_t): pass
 
+## pointer utilities
+def pointer(target, **attrs):
+    attrs.setdefault('_object_', target)
+    attrs.setdefault('_value_', uintptr_t)
+    return dyn.clone(void_star, **attrs)
+def fpointer(type, fieldname):
+    path = [item for item in fieldname] if isinstance(fieldname, (tuple, list)) else [fieldname]
+    return dyn.clone(fpointer_t, _object_=type, _path_=path, _value_=uintptr_t)
+
+def rpointer(target, base, **attrs):
+    attrs.setdefault('_value_', uintptr_t)
+    return dyn.clone(rpointer_t, _baseobject_=base, _object_=target, **attrs)
+def opointer(target, Fcalculate, **attrs):
+    attrs.setdefault('_value_', uintptr_t)
+    return dyn.clone(opointer_t, _calculate_=Fcalculate, _object_=target, **attrs)
+def vpointer(target, Fprocess, **attrs):
+    attrs.setdefault('_value_', uintptr_t)
+    return dyn.clone(vpointer_t, _process_=Fprocess, _object_=target, **attrs)
+
+# pointer utility types
+class char_star(void_star):
+    class star_char_star(pstr.szstring):
+        class char(pstr.char_t):
+            pass
+        _object_ = char
+    _object_ = star_char_star
+
+class char_star_star(void_star):
+    class star_char_star_star(parray.terminated):
+        _object_ = char_star
+        def isTerminator(self, item):
+            return not item.int()
+    _object_ = star_char_star_star
+
 # base types
-class list_head(pstruct.type): pass
+class list_head(pstruct.type):
+    _fields_ = [
+        (lambda self: self._object_, 'next'),
+        (lambda self: self._object_, 'prev'),
+    ]
+    _path_ = ()
+    flink, blink = 'next', 'prev'
+    _object_ = _sentinel_ = None
+
+    def __init__(self, **attrs):
+        super(list_head, self).__init__(**attrs)
+        if self._object_ and not issubclass(self._object_, ptype.pointer_t):
+            cls, t = self.__class__, self._object_
+            raise AssertionError("the {:s}._object_ property ({!s}) is not a valid pointer".format('.'.join([self.__module__, cls.__name__]), t.typename() if ptypes.istype(t) else t))
+
+    def summary(self):
+        flink, blink = self.flink, self.blink
+        return "next:{:#x}<->prev:{:#x}".format(self[flink].int(), self[blink].int())
+
+    def forward(self):
+        flink = self.flink
+        if self[flink].int() == self._sentinel_:
+            raise StopIteration(self)
+        return self[flink].d
+
+    def backward(self):
+        return self[self.blink].d
+
+    def __walk_nextentry(self, state, path):
+        try:
+            # python doesn't tail-recurse anyways...
+            key = next(path)
+            state = self.__walk_nextentry(state[key], path)
+        except StopIteration:
+            pass
+        return state
+
+    def walk(self, field=flink):
+        '''Walks through a circular linked list'''
+        if self._sentinel_ is None:
+            sentinel = {self.getoffset()}
+        elif isinstance(self._sentinel_, string_types):
+            sentinel = {self[self._sentinel_].int()}
+        elif hasattr(self._sentinel_, '__iter__'):
+            sentinel = {item for item in self._sentinel_}
+        else:
+            sentinel = {self._sentinel_}
+
+        item = self[field]
+        while item.int() != 0 and item.int() not in sentinel:
+            result = item.d
+            yield result.l
+            item = self.__walk_nextentry(result, iter(self._path_))
+            item = item[field]
+        return
+
+    def moonwalk(self):
+        return self.walk(field=self.blink)
+
+list_head._path_ = ()
+list_head._object_ = pointer(list_head)
+
 class atomic_t(pstruct.type):
     _fields_ = [
         (int, 'counter'),
+    ]
+class atomic64_t(pstruct.type):
+    _fields_ = [
+        (long_long, 'counter'),
     ]
 
 class slobidx_t(pint.sint16_t): pass
@@ -851,3 +950,24 @@ class acct_v3(pstruct.type):
         (dyn.clone(pstr.string, length=ACCT_COMM), 'ac_comm'),  # Command Name
     ]
 
+class subprocess_info(pstruct.type):
+    class completion_star(void_star):
+        '''struct completion*'''
+    class work_struct(pstruct.type):
+        _fields_ = [
+            (atomic64_t, 'data'),
+            (list_head, 'entry'),
+        ]
+    _fields_ = [
+        (work_struct, 'work'),
+        (completion_star, 'complete'),
+        (char_star, 'path'),
+        (char_star_star, 'argv'),
+        (char_star_star, 'envp'),
+        (dyn.padding(64), 'cacheline_1_boundary'),
+        (int, 'wait'),
+        (int, 'retval'),
+        (void_star, 'init'),
+        (void_star, 'cleanup'),
+        (void_star, 'data'),
+    ]
