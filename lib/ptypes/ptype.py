@@ -628,10 +628,11 @@ class __interface__(object):
         return name
     def instance(self):
         """Returns a minimal string describing the type and it's location"""
-        name, ofs = self.classname(), self.getoffset()
+        cls, name, ofs = self.__class__, self.classname(), self.getoffset()
         try:
-            bs = self.blocksize()
-            return "{:s}[{:x}:{:+x}]".format(name, ofs, bs)
+            if self.initializedQ() or not utils.callable_eq(self.blocksize, cls.blocksize):
+                bs = self.blocksize()
+                return "{:s}[{:x}:{:+x}]".format(name, ofs, bs)
         except Exception:
             pass
         return "{:s}[{:x}:+???]".format(name, ofs)
