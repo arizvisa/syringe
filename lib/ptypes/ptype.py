@@ -1227,7 +1227,7 @@ class container(base):
         """True if the type is fully initialized"""
         if self.value is None:
             return False
-        return all(item and item.initializedQ() for item in self.value)
+        return all(item is not None and item.initializedQ() for item in self.value)
 
     def size(self):
         """Returns a sum of the number of bytes that are currently in use by all sub-elements"""
