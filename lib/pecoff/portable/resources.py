@@ -152,25 +152,19 @@ class RT_VERSION(pstruct.type):
             ('Text', 1),
         ]
     def __Value(self):
-        length, attribute = self['wValueLength'].li.int(), getattr(self, 'ValueType') if hasattr(self, 'ValueType') else None
+        length, fields = self['wValueLength'].li.int(), ['wLength', 'wValueLength', 'wType', 'szKey', 'Padding1']
+        attribute = getattr(self, 'ValueType') if hasattr(self, 'ValueType') else None
         if callable(attribute):
-            return self.ValueType(length)
+            return self.ValueType(length, self['wLength'].li.int() - sum(self[fld].li.size() for fld in fields))
 
         cls, key = self.__class__, self['szKey'].li.str()
         if cls is not RT_VERSION:
             logging.debug("{:s} : No type callback implemented for Value in {!r}. Searching for one instead.".format('.'.join([cls.__module__, cls.__name__]), key))
         return RT_VERSION_ValueType.withdefault(key, type=key, length=length)
 
-    def __Padding2(self):
-        fields = ['wLength', 'wValueLength', 'wType', 'szKey', 'Padding1', 'Value']
-        length, cb = self['wLength'].li.int(), sum(self[fld].li.size() for fld in fields)
-        return dyn.align(4) if cb < length else dyn.align(0)
-
     def __Children(self):
-        fields = ['wLength', 'wValueLength', 'wType', 'szKey', 'Padding1', 'Value', 'Padding2']
-        length, cb = self['wLength'].li.int(), sum(self[fld].li.size() for fld in fields)
-        if cb > length:
-            raise AssertionError("Invalid block size returned by {!s} for child: {:d} > {:d}".format(self.instance(), cb, length))
+        fields = ['Padding2', 'wLength', 'wValueLength', 'wType', 'szKey', 'Padding1', 'Value']
+        length, cb = self['Padding2'].li.size() + self['wLength'].li.int(), sum(self[fld].li.size() for fld in fields)
         size = max(0, length - cb)
 
         # If our class implements a .Children() method, then use that to determine the type.
@@ -183,24 +177,23 @@ class RT_VERSION(pstruct.type):
         if cls is not RT_VERSION:
             logging.debug("{:s} : No type callback implemented for Children in {!r}. Searching for one instead.".format('.'.join([cls.__module__, cls.__name__]), key))
 
-        # And then use that type to build the array of children.
+        # And then use that type to build the array of children, but rounded to a multiple of 4.
         res = RT_VERSION_EntryType.lookup(key)
         return dyn.blockarray(res, size)
 
     def __Unknown(self):
-        res, fields = self['wLength'].li.int(), ['wLength', 'wValueLength', 'wType', 'szKey', 'Padding1', 'Value', 'Padding2', 'Children']
+        res, fields = self['wLength'].li.int(), ['Padding2', 'wLength', 'wValueLength', 'wType', 'szKey', 'Padding1', 'Value', 'Children']
         cb = sum(self[fld].li.size() for fld in fields)
         return dyn.block(max(0, res - cb))
 
     _fields_ = [
-        (dyn.align(4), 'alignment'),
+        (dyn.align(4), 'Padding2'),     # XXX: this field should be before Children, but can consolidate all of the definitions if you put it here.
         (word, 'wLength'),
         (word, 'wValueLength'),
         (_wType, 'wType'),
         (pstr.szwstring, 'szKey'),
         (dyn.align(4), 'Padding1'),
         (__Value, 'Value'),
-        (__Padding2, 'Padding2'),
         (__Children, 'Children'),
         (__Unknown, 'Unknown'),
     ]
@@ -208,20 +201,40 @@ class RT_VERSION(pstruct.type):
 @RT_VERSION_EntryType.define
 class RT_VERSION_StringFileInfo(RT_VERSION):
     type = 'StringFileInfo'
+    class StringFileInfo(parray.terminated):
+        expected = 0
+        def _object_(self):
+            return RT_VERSION_String
+        def isTerminator(self, item):
+            aligned = (self.size() + 3) & ~3
+            return False if aligned < self.expected else True
+
     def Children(self, size):
-        return dyn.blockarray(RT_VERSION_String, size)
+        return dyn.clone(self.StringFileInfo, expected=size)
 
 class RT_VERSION_String(RT_VERSION):
     def Children(self, length):
         return dyn.clone(pstr.wstring, length=length // 2)
-    def ValueType(self, length):
-        # wValueLength = number of 16-bit words of wValue
-        return dyn.clone(pstr.wstring, length=length)
+
+    def ValueType(self, length, maximum):
+        # wValueLength = number of 16-bit words of wValue (sometimes)
+        if 2 * length <= maximum:
+            return dyn.clone(pstr.wstring, length=length)
+
+        # some VS_VERSIONINFO actually fuck this up and don't follow the documentation
+        elif length == maximum:
+            return dyn.clone(pstr.wstring, length=length // 2)
+
+        # if we hit this case, then we do not understand what's going on and just clamp
+        # our size to whatever the maximum is.
+        cls = self.__class__
+        logging.warning("{:s} : StringFileInfo child for {:s} had a wValueLength ({:d}) that wasn't even close to what was expected ({:d}).".format('.'.join([cls.__module__, cls.__name__]), self.instance(), length, maximum))
+        return dyn.clone(pstr.wstring, length=maximum // 2)
 
 @RT_VERSION_EntryType.define
 class RT_VERSION_VarFileInfo(RT_VERSION):
     type = 'VarFileInfo'
-    def ValueType(self, length):
+    def ValueType(self, length, maximum):
         return dyn.blockarray(dword, length)
 
 @RT_VERSION_EntryType.define
