@@ -21,8 +21,23 @@ def parseResourceDirectory(filename):
 def getChildByKey(versionInfo, szKey):
     return next(item for item in versionInfo['Children'] if item['szKey'].str() == szKey)
 
+def iterateStringFileInfo(versionInfo):
+    sfi = getChildByKey(versionInfo, u'StringFileInfo')
+    for item in sfi['Children']:
+        szkey = item['szKey'].str()
+        if len(szkey) != 8:
+            logging.warning("Skipping invalid format for the \"{:s}\" in the \"{:s}\" table from the version information".format('szKey', 'StringFileInfo'))
+            continue
+        Lg, Cp = szkey[:4], szkey[4:]
+        yield int(Lg, 16), int(Cp, 16)
+    return
+
 def extractLgCpIds(versionInfo):
-    vfi = getChildByKey(versionInfo, u'VarFileInfo')
+    try:
+        vfi = getChildByKey(versionInfo, u'VarFileInfo')
+    except StopIteration:
+        return tuple((cp, lg) for cp, lg in iterateStringFileInfo(versionInfo))
+
     sfi = getChildByKey(versionInfo, u'StringFileInfo')
     fichildren = itertools.chain(vfi['Children'], sfi['Children'])
     res = (val.cast(parray.type(_object_=pint.uint16_t,length=2)) for val in itertools.chain( *(var['Value'] for var in fichildren) ))
@@ -146,8 +161,8 @@ if __name__ == '__main__':
 
     # parse the version info and check its size
     viresource = versionInfo.l
-    vi = viresource.new(pecoff.portable.resources.VS_VERSIONINFO, offset=viresource.getoffset()).load(offset=0, source=ptypes.provider.proxy(viresource))
-    vi.setoffset(vi.getoffset(), recurse=True)
+    vi = viresource.new(pecoff.portable.resources.VS_VERSIONINFO, offset=viresource.getoffset())
+    vi = vi.l
     if vi['Unknown'].size():
         Fhex, unknown = operator.methodcaller('encode', 'hex') if sys.version_info.major < 3 else bytes.hex, vi['Unknown'].serialize()
         logging.warning("Error parsing {:d} bytes from the version information: {:s}".format(vi['Unknown'].size(), Fhex(unknown)))
