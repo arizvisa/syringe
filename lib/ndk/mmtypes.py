@@ -252,17 +252,392 @@ class LARGE_CONTROL_AREA(pstruct.type):
         (ULONG, 'SessionId'),
     ]
 
-class MMPTE(dynamic.union):
+class MMPTE_HIGHLOW(pstruct.type):
     _fields_ = [
-        (ULONG, 'Long'),
-        # TODO
-        #(HARDWARE_PTE, 'Flush'),
-        #(MMPTE_HARDWARE, 'Hard'),
-        #(MMPTE_PROTOTYPE, 'Proto'),
-        #(MMPTE_SOFTWARE, 'Soft'),
-        #(MMPTE_TRANSITION, 'Trans'),
-        #(MMPTE_SUBSECTION, 'Subsect'),
-        #(MMPTE_LIST, 'List'),
+        (ULONG, 'LowPart'),
+        (ULONG, 'HighPart'),
+    ]
+
+class HARDWARE_PTE(pbinary.flags, versioned):
+    '''HARDWARE_PTE, HARDWARE_PTE_X86, HARDWARE_X86PAE'''
+    def __init__(self, **attrs):
+        super(HARDWARE_PTE, self).__init__(**attrs)
+        f = self._fields_ = [
+            (1, 'Valid'),
+            (1, 'Write'),
+            (1, 'Owner'),
+            (1, 'WriteThrough'),
+            (1, 'CacheDisable'),
+            (1, 'Accessed'),
+            (1, 'Dirty'),
+            (1, 'LargePage'),
+            (1, 'Global'),
+            (1, 'CopyOnWrite'),
+            (1, 'Prototype'),
+            (1, 'reserved0'),
+        ]
+
+        # WIN32
+        if not getattr(self, 'WIN64', False):
+            return f.append((20, 'PageFrameNumber'))
+
+        # PAE
+        if getattr(self, 'PAE', False):
+
+            # PAE < 5.1
+            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WINXP:
+                f.extend([
+                    (24, 'PageFrameNumber'),
+                    (28, 'reserved1'),
+                ])
+
+            # PAE < 1703
+            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN10_RS2:
+                f.extend([
+                    (26, 'PageFrameNumber'),
+                    (26, 'reserved1'),
+                ])
+
+            # PAE >= 1703
+            else:
+                f.extend([
+                    (26, 'PageFrameNumber'),
+                    (25, 'reserved1'),
+                    (1, 'NoExecute'),
+                ])
+            return
+
+        # WIN64
+        if getattr(self, 'WIN64', False):
+
+            # WIN64 <= early 6.1
+            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_WIN7:
+                f.extend([
+                    (28, 'PageFrameNumber'),
+                    (12, 'reserved1'),
+                ])
+
+            # WIN64 > early 6.1 (late)
+            else:
+                f.extend([
+                    (36, 'PageFrameNumber'),
+                    (4, 'reserved1'),
+                ])
+
+            return f.extend([
+                (11, 'SoftwareWsIndex'),
+                (1, 'NoExecute'),
+            ])
+        raise NotImplementedError(self.NTDDI_VERSION)
+
+class MMPTE_HARDWARE(pbinary.flags, versioned):
+    def __init__(self, **attrs):
+        super(MMPTE_HARDWARE, self).__init__(**attrs)
+        f = self._fields_ = [
+            (1, 'Valid'),
+        ]
+
+        # FIXME: UP
+        if False and sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_WS03:
+            f += [(1, 'Write')]
+        # MP
+        elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN6:
+            f += [(1, 'Writable')]
+        else:
+            f += [(1, 'Dirty1')]
+
+        f.extend([
+            (1, 'Owner'),
+            (1, 'WriteThrough'),
+            (1, 'CacheDisable'),
+            (1, 'Accessed'),
+            (1, 'Dirty'),
+            (1, 'LargePage'),
+            (1, 'Global'),
+            (1, 'CopyOnWrite'),
+        ])
+
+        # WIN64 < 6.0
+        if getattr(self, 'WIN64', False) and sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN6:
+            f += [(1, 'Prototype')]
+        # WIN64 > 6.0
+        elif getattr(self, 'WIN64', False):
+            f += [(1, 'Unused')]
+        # WIN32
+        else:
+            f += [(1, 'Prototype')]
+
+        # FIXME: UP
+        if False and sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN6:
+            f += [
+                (1, 'reserved' + ('0' if getattr(self, 'WIN64', False) else ''))
+            ]
+        # MP
+        else:
+            f += [(1, 'Write')]
+
+        # WIN32
+        if not getattr(self, 'WIN64', False):
+            return f.append((20, 'PageFrameNumber'))
+
+        # PAE
+        if getattr(self, 'PAE', False):
+
+            # PAE < 5.1
+            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WINXP:
+                f.extend([
+                    (24, 'PageFrameNumber'),
+                    (28, 'reserved1'),
+                ])
+
+            # PAE < 1703
+            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN10_RS2:
+                f.extend([
+                    (26, 'PageFrameNumber'),
+                    (26, 'reserved1'),
+                ])
+
+            # PAE >= 1703
+            else:
+                f.extend([
+                    (26, 'PageFrameNumber'),
+                    (25, 'reserved1'),
+                    (1, 'NoExecute'),
+                ])
+            return
+
+        # WIN64
+        if getattr(self, 'WIN64', False):
+
+            # WIN64 <= early 6.0
+            f += [
+                (28 if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_WIN6 else 36, 'PageFrameNumber'),
+            ]
+
+            # WIN64 <= early 6.0
+            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_WIN6:
+                f.extend([
+                    (12, 'reserved1'),
+                    (11, 'SoftwareWsIndex')
+                ])
+
+            # WIN64 <= 1607
+            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_WIN10_RS1:
+                f.extend([
+                    (4, 'reserved1'),
+                    (11, 'SoftwareWsIndex')
+                ])
+
+            # WIN64 > 1607
+            else:
+                f.extend([
+                    (4, 'ReservedForHardware'),
+                    (4, 'ReservedForSoftware'),
+                    (4, 'WsleAge'),
+                    (3, 'WsleProtection'),
+                ])
+
+            return f.append((1, 'NoExecute'))
+        raise NotImplementedError(self.NTDDI_VERSION)
+
+class MMPTE_PROTOTYPE(pbinary.flags, versioned):
+    def __init__(self, **attrs):
+        super(MMPTE_PROTOTYPE, self).__init__(**attrs)
+        f = self._fields_ = []
+
+        # WIN32
+        if not getattr(self, 'WIN64', False):
+            f.extend([
+                (1, 'Valid'),
+                (8, 'ProtoAddressLow'),
+                (1, 'ReadOnly'),
+                (1, 'Prototype'),
+                (21, 'ProtoAddressHigh'),
+            ])
+
+        # WIN64
+        else:
+            f.extend([
+                (1, 'Valid'),
+                (7, 'Unused0'),
+                (1, 'ReadOnly'),
+                (1, 'Unused1'),
+                (1, 'Prototype'),
+                (5, 'Protection'),
+                (48, 'ProtoAddress'),
+            ])
+        return
+
+class MMPTE_SOFTWARE(pbinary.flags):
+    '''page is in swapfile.'''
+    def __init__(self, **attrs):
+        super(MMPTE_SOFTWARE, self).__init__(**attrs)
+        f = self._fields_ = []
+
+        # WIN32
+        if not getattr(self, 'WIN64', False):
+            f.extend([
+                (1, 'Valid'),
+                (4, 'PageFileLow'),
+                (5, 'Protection'),
+                (1, 'Prototype'),
+                (1, 'Transition'),
+                (20, 'PageFileHigh'),
+            ])
+
+        # WIN64
+        else:
+            f.extend([
+                (1, 'Valid'),
+                (4, 'PageFileLow'),
+                (5, 'Protection'),
+                (1, 'Prototype'),
+                (1, 'Transition'),
+                (10, 'UsedPageTableEntries'),
+                (1, 'InStore'),
+                (9, 'Reserved'),
+                (32, 'PageFileHigh'),
+            ])
+        return
+
+class MMPTE_TIMESTAMP(pbinary.flags):
+    '''"GlobalTimeStamp" is just a page reference counter.'''
+    def __init__(self, **attrs):
+        super(MMPTE_TIMESTAMP, self).__init__(**attrs)
+        f = self._fields_ = []
+
+        # WIN32
+        if not getattr(self, 'WIN64', False):
+            f.extend([
+                (1, 'MustBeZero'),
+                (4, 'PageFileLow'),
+                (5, 'Protection'),
+                (1, 'Prototype'),
+                (1, 'Transition'),
+                (20, 'GlobalTimeStamp'),
+            ])
+
+        # WIN64
+        else:
+            f.extend([
+                (1, 'MustBeZero'),
+                (4, 'PageFileLow'),
+                (5, 'Protection'),
+                (1, 'Prototype'),
+                (1, 'Transition'),
+                (20, 'Reserved'),
+                (32, 'GlobalTimeStamp'),
+            ])
+        return
+
+class MMPTE_TRANSITION(pbinary.flags):
+    def __init__(self, **attrs):
+        super(MMPTE_TRANSITION, self).__init__(**attrs)
+        f = self._fields_ = []
+
+        # WIN32
+        if not getattr(self, 'WIN64', False):
+            f.extend([
+                (1, 'Valid'),
+                (1, 'Write'),
+                (1, 'Owner'),
+                (1, 'WriteThrough'),
+                (1, 'CacheDisable'),
+                (5, 'Protection'),
+                (1, 'Prototype'),
+                (1, 'Transition'),
+                (20, 'PageFrameNumber'),
+            ])
+        # WIN64
+        else:
+            f.extend([
+                (1, 'Valid'),
+                (1, 'Write'),
+                (1, 'Owner'),
+                (1, 'WriteThrough'),
+                (1, 'CacheDisable'),
+                (5, 'Protection'),
+                (1, 'Prototype'),
+                (1, 'Transition'),
+                (26, 'PageFrameNumber'),
+                (26, 'Unused'),
+            ])
+        return
+
+class MMPTE_SUBSECTION(pbinary.flags):
+    def __init__(self, **attrs):
+        super(MMPTE_SUBSECTION, self).__init__(**attrs)
+        f = self._fields_ = []
+
+        # WIN32
+        if not getattr(self, 'WIN64', False):
+            f.extend([
+                (1, 'Valid'),
+                (9, 'SubsectionAddressLow'),
+                (1, 'Prototype'),
+                (21, 'SubsectionAddressHigh'),
+            ])
+
+        # WIN64
+        else:
+            f.extend([
+                (1, 'Valid'),
+                (4, 'Unused0'),
+                (5, 'Protection'),
+                (1, 'Prototype'),
+                (5, 'Unused1'),
+                (48, 'SubsectionAddress'),
+            ])
+        return
+
+class MMPTE_LIST(pbinary.flags):
+    def __init__(self, **attrs):
+        super(MMPTE_LIST, self).__init__(**attrs)
+        f = self._fields_ = []
+
+        # WIN32
+        if not getattr(self, 'WIN64', False):
+            f.extend([
+                (1, 'Valid'),
+                (1, 'OneEntry'),
+                (8, 'filler0'),
+                (1, 'Prototype'),
+                (1, 'filler1'),
+                (20, 'NextEntry'),  # pointer
+            ])
+
+        # WIN64
+        else:
+            f.extend([
+                (1, 'Valid'),
+                (1, 'OneEntry'),
+                (3, 'filler0'),
+                (5, 'Protection'),
+                (1, 'Prototype'),
+                (1, 'Transition'),
+                (20, 'filler1'),
+                (32, 'NextEntry'),  # pointer
+            ])
+        return
+
+class MMPTE(dynamic.union, versioned):
+
+    # FIXME: >= 6.2 is ULONGLONG
+    _fields_ = [
+        (lambda self: ULONG if not getattr(self, 'WIN64', False) else ULONGLONG, 'Long'),
+        (lambda self: ULONG if not getattr(self, 'WIN64', False) else ULONGLONG, 'VolatileLong'),
+        (lambda self: MMPTE_HIGHLOW if getattr(self, 'PAE', False) else ptype.undefined, 'HighLow'),
+
+        (pbinary.littleendian(HARDWARE_PTE), 'Flush'),
+        (pbinary.littleendian(MMPTE_HARDWARE), 'Hard'),
+        (pbinary.littleendian(MMPTE_PROTOTYPE), 'Proto'),
+        (pbinary.littleendian(MMPTE_SOFTWARE), 'Soft'),
+
+        # > late 6.0
+        (lambda self: pbinary.littleendian(MMPTE_TIMESTAMP) if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) > sdkddkver.NTDDI_WS08 else ptype.undefined, 'TimeStamp'),
+        (pbinary.littleendian(MMPTE_TRANSITION), 'Trans'),
+        (pbinary.littleendian(MMPTE_SUBSECTION), 'Subsect'),
+        (pbinary.littleendian(MMPTE_LIST), 'List'),
     ]
 
 class SUBSECTION(pstruct.type):
