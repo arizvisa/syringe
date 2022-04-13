@@ -45,7 +45,7 @@ def Resolve(result, path):
             pass
         elif p == '..':
             result = result.p
-        elif p == '!' and hasattr(result, 'd'):
+        elif p in {'!', '*'} and hasattr(result, 'd'):
             result = result.d.li
         elif p == '@' and hasattr(result, 'o'):
             result = result.o.li
@@ -362,7 +362,7 @@ def list_debugpogo(t, outformat, F=None, output=None):
 def args():
     p = argparse.ArgumentParser(prog="pe.py", description='Display some information about a portable executable file', add_help=True)
     p.add_argument('infile', type=argparse.FileType('rb'), help='a portable executable file')
-    p.add_argument('-o', '--outfile', dest='output', type=argparse.FileType('wb'), default='-', help='a file to write the output to')
+    p.add_argument('-o', '--outfile', dest='output', type=argparse.FileType('wb' if sys.version_info.major < 3 else 'w'), default='-', help='a file to write the output to')
     p.add_argument('-O', '--format', action='store', dest='format', type=operator.methodcaller('lower'), choices=['raw', 'print', 'hex', 'list'], default='', help='specify the output format to emit the requested fields as')
     p.add_argument('--path', action='store', dest='location', metavar='PATH', default='', help='navigate to a specific field described by a \':\' separated path.')
 
