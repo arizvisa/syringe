@@ -255,7 +255,7 @@ def extract_resource(t, path, outformat, F=None, output=None):
         return Extract(F(result), outformat, file=output)
 
     if outformat in {'hex', 'raw'}:
-        res = result['Data'].d.li if 'Data' in result.keys() else result
+        res = result['OffsetToData'].d.li if isinstance(result, pecoff.portable.resources.IMAGE_RESOURCE_DATA_ENTRY) else result
         return Extract(res, outformat, file=output)
     return Extract(result, outformat or 'print', file=output)
 
