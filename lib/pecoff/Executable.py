@@ -189,6 +189,11 @@ class IMAGE_NT_HEADERS(pstruct.type, Header):
         res += 2
         return dyn.block(opt['SizeOfHeaders'].int() - res - sz)
 
+    def __OptionalHeaderPadding(self):
+        hdr, res = (self[fld].li for fld in ['FileHeader', 'OptionalHeader'])
+        expected = hdr['SizeOfOptionalHeader'].int()
+        return dyn.block(max(0, expected - res.size()))
+
     def __DataDirectory(self):
         cls = self.__class__
         length = self['OptionalHeader'].li['NumberOfRvaAndSizes'].int()
@@ -206,6 +211,7 @@ class IMAGE_NT_HEADERS(pstruct.type, Header):
         (uint16, 'SignaturePadding'),
         (portable.IMAGE_FILE_HEADER, 'FileHeader'),
         (portable.IMAGE_OPTIONAL_HEADER, 'OptionalHeader'),
+        (__OptionalHeaderPadding, 'Padding(OptionalHeader)'),
         (__DataDirectory, 'DataDirectory'),
         (__Sections, 'Sections'),
         (__Padding, 'Padding'),
