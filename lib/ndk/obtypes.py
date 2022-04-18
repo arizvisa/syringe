@@ -124,7 +124,62 @@ class OB_OPERATION(pint.enum, ULONG):
     _values_ = [('HANDLE_CREATE', 1), ('HANDLE_DUPLICATE', 2)]
 
 class OBJECT_TYPE(pstruct.type): pass
-class OBJECT_HEADER(pstruct.type): pass     # FIXME
+class OBJECT_HEADER(pstruct.type):
+    # from https://github.com/Exploitables/ExFreePool-Vulnerability/blob/main/ExFreePoolVulnExpl/exploit.h
+    class u_1(dynamic.union):
+        _fields_ = [
+            (ULONGLONG, 'HandleCount'),
+            (PVOID, 'NextToFree'),
+        ]
+    class u_2(dynamic.union):
+        _fields_ = [
+            (ULONGLONG, 'DbgRefTrace'),
+            (ULONGLONG, 'DbgRefTrace'),
+            (UCHAR, 'TraceFlags'),
+        ]
+    class u_3(dynamic.union):
+        _fields_ = [
+		    (UCHAR, 'Flags'),
+		    (ULONG, 'NewObject'),
+		    (ULONG, 'KernelObject'),
+		    (ULONG, 'KernelOnlyAccess'),
+		    (ULONG, 'ExclusiveObject'),
+		    (ULONG, 'PermanentObject'),
+		    (ULONG, 'DefaultSecurityQuota'),
+		    (ULONG, 'SingleHandleEntry'),
+		    (ULONG, 'DeletedInline'),
+        ]
+    class u_4(dynamic.union):
+        _fields_ = [
+            (P(ULONGLONG), 'ObjectCreateInfo'),
+            (P(ULONGLONG), 'QuotaBlockCharged'),
+        ]
+    # FIXME: alignment and pointer targets
+    _fields_ = [
+        (ULONGLONG, 'PointerCount'),
+        (u_1, 'u_1'),
+        (PVOID, 'Lock'),
+        (UCHAR, 'TypeIndex'),
+        (u_2, 'u_2'),
+        (UCHAR, 'InfoMask'),
+        (u_3, 'u_3'),
+        (ULONG, 'Reserved'),
+        (u_4, 'u_4'),
+        (P(ULONGLONG), 'SecurityDescriptor'),
+        (PVOID, 'Body'),
+    ]
+
+class OBJECT_HEADER_QUOTA(pstruct.type):
+    # from https://github.com/Exploitables/ExFreePool-Vulnerability/blob/main/ExFreePoolVulnExpl/exploit.h
+    _fields_ = [
+	    (ULONG, 'PagedPoolCharge'),
+	    (ULONG, 'NonPagedPoolCharge'),
+	    (ULONG, 'SecurityDescriptorCharge'),
+	    (ULONG, 'Reserved1'),
+	    (ULONGLONG, 'SecurityDescriptorQuotaBlock'),
+	    (ULONG, 'Reserved2'),
+    ]
+
 class OB_OPERATION_REGISTRATION(pstruct.type): pass
 class CALLBACK_ENTRY_ITEM(pstruct.type): pass
 class CALLBACK_ENTRY(pstruct.type): pass

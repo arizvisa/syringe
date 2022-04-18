@@ -356,7 +356,6 @@ class KTHREAD(pstruct.type, versioned):
         return
 
 class KGDTENTRY(pstruct.type):
-    @pbinary.bigendian
     class _Bits(pbinary.flags):
         _fields_ = [
             (8, 'BaseMid'),
@@ -373,11 +372,10 @@ class KGDTENTRY(pstruct.type):
     _fields_ = [
         (USHORT, 'LimitLow'),
         (USHORT, 'BaseLow'),
-        (_Bits, 'Bits'),
+        (pbinary.bigendian(_Bits), 'Bits'),
     ]
 
 class KGDTENTRY64(pstruct.type):
-    @pbinary.bigendian
     class _Bits(pbinary.flags):
         _fields_ = [
             (8, 'BaseMiddle'),
@@ -394,7 +392,7 @@ class KGDTENTRY64(pstruct.type):
     _fields_ = [
         (USHORT, 'LimitLow'),
         (USHORT, 'BaseLow'),
-        (_Bits, 'Bits'),
+        (pbinary.bigendian(_Bits), 'Bits'),
         (ULONG, 'BaseUpper'),
         (ULONG, 'MustBeZero'),
     ]
