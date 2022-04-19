@@ -124,50 +124,6 @@ class OB_OPERATION(pint.enum, ULONG):
     _values_ = [('HANDLE_CREATE', 1), ('HANDLE_DUPLICATE', 2)]
 
 class OBJECT_TYPE(pstruct.type): pass
-class OBJECT_HEADER(pstruct.type):
-    # from https://github.com/Exploitables/ExFreePool-Vulnerability/blob/main/ExFreePoolVulnExpl/exploit.h
-    class u_1(dynamic.union):
-        _fields_ = [
-            (ULONGLONG, 'HandleCount'),
-            (PVOID, 'NextToFree'),
-        ]
-    class u_2(dynamic.union):
-        _fields_ = [
-            (ULONGLONG, 'DbgRefTrace'),
-            (ULONGLONG, 'DbgRefTrace'),
-            (UCHAR, 'TraceFlags'),
-        ]
-    class u_3(dynamic.union):
-        _fields_ = [
-		    (UCHAR, 'Flags'),
-		    (ULONG, 'NewObject'),
-		    (ULONG, 'KernelObject'),
-		    (ULONG, 'KernelOnlyAccess'),
-		    (ULONG, 'ExclusiveObject'),
-		    (ULONG, 'PermanentObject'),
-		    (ULONG, 'DefaultSecurityQuota'),
-		    (ULONG, 'SingleHandleEntry'),
-		    (ULONG, 'DeletedInline'),
-        ]
-    class u_4(dynamic.union):
-        _fields_ = [
-            (P(ULONGLONG), 'ObjectCreateInfo'),
-            (P(ULONGLONG), 'QuotaBlockCharged'),
-        ]
-    # FIXME: alignment and pointer targets
-    _fields_ = [
-        (ULONGLONG, 'PointerCount'),
-        (u_1, 'u_1'),
-        (PVOID, 'Lock'),
-        (UCHAR, 'TypeIndex'),
-        (u_2, 'u_2'),
-        (UCHAR, 'InfoMask'),
-        (u_3, 'u_3'),
-        (ULONG, 'Reserved'),
-        (u_4, 'u_4'),
-        (P(ULONGLONG), 'SecurityDescriptor'),
-        (PVOID, 'Body'),
-    ]
 
 class OBJECT_HEADER_QUOTA(pstruct.type):
     # from https://github.com/Exploitables/ExFreePool-Vulnerability/blob/main/ExFreePoolVulnExpl/exploit.h
@@ -179,6 +135,91 @@ class OBJECT_HEADER_QUOTA(pstruct.type):
 	    (ULONGLONG, 'SecurityDescriptorQuotaBlock'),
 	    (ULONG, 'Reserved2'),
     ]
+
+class OBJECT_HEADER(pstruct.type, versioned):
+    # from https://github.com/Exploitables/ExFreePool-Vulnerability/blob/main/ExFreePoolVulnExpl/exploit.h
+    class u_0(dynamic.union):
+        class s_0(pstruct.type):
+            _fields_ = [
+                (LONG_PTR, 'PointerCount'),
+                (LONG_PTR, 'HandleCount'),
+            ]
+        _fields_ = [
+            (s_0, 's_0'),
+            (LIST_ENTRY, 'Entry'),
+        ]
+    class u1_2K(dynamic.union):
+        _fields_ = [
+            (LONG_PTR, 'HandleCount'),
+            (P(SINGLE_LIST_ENTRY), 'SEntry'),
+        ]
+    class u1_XP(dynamic.union):
+        _fields_ = [
+            (LONG_PTR, 'HandleCount'),
+            (PVOID, 'NextToFree'),
+        ]
+    class _TraceFlags(pbinary.flags):
+        _fields_ = [
+            (1, 'DbgRefTrace'),
+            (1, 'DbgTracePermanent'),
+            (6, 'Reserved'),
+        ]
+    class _InfoMask(pbinary.flags):
+        _fields_ = [
+            (1, 'Reserved'),
+            (1, 'OBJECT_HEADER_HANDLE_REVOCATION_INFO'),
+            (1, 'OBJECT_HEADER_AUDIT_INFO'),
+            (1, 'OBJECT_HEADER_PROCESS_INFO'),
+            (1, 'OBJECT_HEADER_QUOTA_INFO'),
+            (1, 'OBJECT_HEADER_HANDLE_INFO'),
+            (1, 'OBJECT_HEADER_NAME_INFO'),
+            (1, 'OBJECT_HEADER_CREATOR_INFO'),
+        ]
+    class _Flags(pbinary.flags):
+        _fields_ = [item for item in reversed([
+		    (1, 'NewObject'),
+		    (1, 'KernelObject'),
+		    (1, 'KernelOnlyAccess'),
+		    (1, 'ExclusiveObject'),
+		    (1, 'PermanentObject'),
+		    (1, 'DefaultSecurityQuota'),
+		    (1, 'SingleHandleEntry'),
+		    (1, 'DeletedInline'),
+        ])]
+    #class u_4(dynamic.union):
+    #    _fields_ = [
+    #        (P(OBJECT_CREATE_INFORMATION), 'ObjectCreateInfo'),
+    #        (PVOID, 'QuotaBlockCharged'),
+    #    ]
+    def __init__(self, **attrs):
+        super(OBJECT_HEADER, self).__init__(**attrs)
+        self._fields_ = F = []
+
+        # all of the random variations...because geoff is fucking crazy...but more like crazy awesome.
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN2K:
+            F.append((self.u_0, 'u_0'))
+        else:
+            F.append((LONG_PTR, 'PointerCount'))
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WINXP:
+            F.append((self.u1_2K, 'u_1'))
+        else:
+            F.append((self.u1_XP, 'u_1'))
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN7:
+            F.append((P(OBJECT_TYPE), 'Type'))
+        else:
+            F.append((umtypes.EX_PUSH_LOCK, 'Lock'))
+
+        # >= NTDDI_WIN7
+        F.extend([
+            (UCHAR, 'TypeIndex'),
+            (self._TraceFlags, 'TraceFlags'),
+            (self._InfoMask, 'InfoMask'),
+            (self._Flags, 'Flags'),
+            (ULONG if getattr(self, 'WIN64', False) else ptype.undefined, 'Reserved'),
+            (PVOID, 'QuotaBlockChanged'),   # FIXME this is u_4, but might not be necessary
+            (PVOID, 'SecurityDescriptor'),
+            (QUAD, 'Body'),
+        ])
 
 class OB_OPERATION_REGISTRATION(pstruct.type): pass
 class CALLBACK_ENTRY_ITEM(pstruct.type): pass
