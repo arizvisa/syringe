@@ -1499,7 +1499,9 @@ class __structure_interface__(container):
             # If we were given a value, then we need to first check that it
             # has the right number of elements before updating our index.
             if value:
-                if len(result._fields_) != len(value):
+                if isinstance(value, integer_types):
+                    raise error.ImplementationError(result, 'struct.set', message="Unable to assign the integer ({:d}) to the specified instance.".format(value))
+                elif len(result._fields_) != len(value):
                     raise error.UserError(result, 'struct.set', message="Unable to assign iterable to instance due to iterator length ({:d}) being different from instance ({:d})".format(len(value), len(result._fields_)))
                 for index, value in enumerate(value):
                     indices[index] = value
