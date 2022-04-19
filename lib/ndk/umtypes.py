@@ -131,13 +131,14 @@ class PANSI_STRING(PSTRING): pass
 class OEM_STRING(STRING): pass
 class POEM_STRING(PSTRING): pass
 
-class EX_PUSH_LOCK(pbinary.struct):
+class EX_PUSH_LOCK(pbinary.struct, versioned):
+    # https://github.com/mic101/windows/blob/master/WRK-v1.2/base/ntos/ex/pushlock.c
     _fields_ = [
         (1, 'Locked'),
         (1, 'Waiting'),
         (1, 'Waking'),
         (1, 'MultipleShared'),
-        (28, 'Shared'),
+        (lambda self: 60 if getattr(self, 'WIN64', False) else 28, 'Shared'),
     ]
 
 class OBJECT_ATTRIBUTES(pstruct.type, versioned):

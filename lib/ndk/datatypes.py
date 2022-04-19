@@ -488,6 +488,7 @@ class WINBOOL(BOOL): pass
 #class ULONGLONG(uint64_t): pass
 class FLOAT(float): pass
 class DOUBLE(double): pass
+class QUAD(__int64): pass
 
 class HANDLE(PVOID): pass
 class HKEY(HANDLE): pass
