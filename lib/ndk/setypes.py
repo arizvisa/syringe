@@ -21,9 +21,26 @@ class GENERIC_(pbinary.flags):
         (1, 'ALL'),
     ]
 
+class TOKEN_(pbinary.flags):
+    '''SPECIFIC_RIGHTS'''
+    _fields_ = [
+        (7, 'Unused'),
+        (1, 'ADJUST_SESSIONID'),    # 0x0100
+        (1, 'ADJUST_DEFAULT'),      # 0x0080
+        (1, 'ADJUST_GROUPS'),       # 0x0040
+        (1, 'ADJUST_PRIVILEGES'),   # 0x0020
+        (1, 'QUERY_SOURCE'),        # 0x0010
+        (1, 'QUERY'),               # 0x0008
+        (1, 'IMPERSONATE'),         # 0x0004
+        (1, 'DUPLICATE'),           # 0x0002
+        (1, 'ASSIGN_PRIMARY'),      # 0x0001
+    ]
+TOKEN_SPECIFIC_RIGHTS = TOKEN_
+
 class ACCESS_MASK(pbinary.flags):
-    def _SPECIFIC_RIGHTS(self):
-        return 16
+    _object_ = 16
+    def __SPECIFIC_RIGHTS(self):
+        return self._object_
 
     _fields_ = [
         (GENERIC_, 'GENERIC_RIGHTS'),
@@ -32,7 +49,7 @@ class ACCESS_MASK(pbinary.flags):
         (1, 'ACCESS_SYSTEM_SECURITY'),
         (3, 'RESERVED2'),
         (STANDARD_RIGHTS_, 'STANDARD_RIGHTS'),
-        (lambda self: self._SPECIFIC_RIGHTS(), 'SPECIFIC_RIGHTS'),
+        (__SPECIFIC_RIGHTS, 'SPECIFIC_RIGHTS'),
     ]
 
 ### Security Descriptor Related Things
