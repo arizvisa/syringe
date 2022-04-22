@@ -387,7 +387,8 @@ class ShdrEntries(XhdrEntries):
         return next(iterable)
 
     def by_name(self, name):
-        Fpredicate = functools.partial(operator.eq, name)
+        Fcompose = lambda *Fa: functools.reduce(lambda F1, F2: lambda *a: F1(F2(*a)), builtins.reversed(Fa))
+        Fpredicate = Fcompose(operator.methodcaller('str'), functools.partial(operator.eq, name))
         return self.by_field('sh_name', Fpredicate)
 
     def by_type(self, type):
