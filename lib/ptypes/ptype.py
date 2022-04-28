@@ -228,7 +228,7 @@ Example pointer_t usage:
             return number + 0x100
 """
 import sys, builtins, functools, operator, itertools, types
-import inspect, time, traceback
+import time, traceback
 
 from . import bitmap, provider, utils, error
 
@@ -324,9 +324,9 @@ def force(t, self, chain=[]):
     elif builtins.isinstance(t, types.MethodType):
         return force(t(), self, chain)
 
-    # generators
-    elif inspect.isgenerator(t):
-        return force(next(t), self, chain)
+    # disabling generators for compatibility with micropython
+    #elif inspect.isgenerator(t):
+    #    return force(next(t), self, chain)
 
     # and lastly iterators (unsupported)
     if False:

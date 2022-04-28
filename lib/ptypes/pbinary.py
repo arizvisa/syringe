@@ -113,7 +113,7 @@ Example usage:
     instance = pbinary.new(type)
     instance.load()
 """
-import sys, math, types, inspect
+import sys, math, types
 import itertools, operator, functools
 
 try:
@@ -210,8 +210,9 @@ def force(t, self, chain=[]):
     if isinstance(t, types.MethodType):
         return force(t(), self, chain)
 
-    if inspect.isgenerator(t):
-        return force(next(t), self, chain)
+    # disabling generators for compatibility with micropython
+    #if inspect.isgenerator(t):
+    #    return force(next(t), self, chain)
 
     path = str().join(map("<{:s}>".format, self.backtrace()))
     chain_s = "{!s}".format(chain)
