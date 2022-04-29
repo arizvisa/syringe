@@ -130,7 +130,7 @@ def namespace(cls):
                 fmt = "{!s}".format(value)
             else:
                 raise ValueError(name)
-            doc = value.__doc__.split('\n')[0] if value.__doc__ else None
+            doc = value.__doc__.split('\n')[0] if getattr(value, '__doc__', '') else None
             result.append((name, fmt, doc))
         return result
 
@@ -145,13 +145,13 @@ def namespace(cls):
         return result
 
     def __repr__(self):
-        formatdescription = ("{{{!s}}} # {}\n" if cls.__doc__ else "{{{!s}}}\n").format
+        formatdescription = ("{{{!s}}} # {}\n" if getattr(cls, '__doc__', '') else "{{{!s}}}\n").format
 
         items = collectproperties(properties)
         props = formatproperties(items)
 
         subclasses = ["{{{:s}}}\n...".format('.'.join([cls.__name__, name])) for name in subclass.keys()]
-        res = formatdescription(cls.__name__, cls.__doc__) + '\n'.join(props)
+        res = formatdescription(cls.__name__, *([cls.__doc__] if getattr(cls, '__doc__', '') else [])) + '\n'.join(props)
         if subclasses:
             return res + '\n' + '\n'.join(subclasses) + '\n'
         return res + '\n'
@@ -214,12 +214,12 @@ def configuration(cls):
         return result
 
     def __repr__(self):
-        formatdescription = ('[{!s}] # {}\n' if cls.__doc__ else '[{!s}]\n').format
+        formatdescription = ('[{!s}] # {}\n' if getattr(cls, '__doc__', '') else '[{!s}]\n').format
 
         values = {name : getattr(self, name, None) for name in properties}
         items = collectproperties(properties, values)
 
-        res = formatdescription(cls.__name__, cls.__doc__.split('\n')[0] if cls.__doc__ else None) + '\n'.join(formatproperties(items))
+        res = formatdescription(cls.__name__, *([cls.__doc__.split('\n')[0]] if getattr(cls, '__doc__', '') else [])) + '\n'.join(formatproperties(items))
         subclasses = ["[{:s}]\n...".format('.'.join([cls.__name__, name])) for name in subclass.keys()]
         if subclasses:
             return res + '\n' + '\n'.join(subclasses) + '\n'
