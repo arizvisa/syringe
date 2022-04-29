@@ -2,10 +2,39 @@ import sys, math, random
 import functools, operator, itertools, types
 
 # Setup some version-agnostic types that we can perform checks with
-izip_longest = itertools.izip_longest if sys.version_info[0] < 3 else itertools.zip_longest
 string_types = (str, unicode) if sys.version_info[0] < 3 else (str,)
 text_types = (unicode,) if sys.version_info[0] < 3 else (str,)
 iterbytes = functools.partial(itertools.imap, ord) if sys.version_info[0] < 3 else iter
+
+def zip_longest(*args, **kargs):
+    '''
+    Return a zip_longest object whose .__next__() method returns a tuple where
+    the i-th element comes from the i-th iterable argument.  The .__next__()
+    method continues until the longest iterable in the argument sequence
+    is exhausted and then it raises StopIteration.  When the shorter iterables
+    are exhausted, the fillvalue is substituted in their place.  The fillvalue
+    defaults to None or can be specified by a keyword argument.
+    '''
+    fillvalue = kargs.pop('fillvalue', None)
+    if kargs:
+        raise TypeError('zip_longest() got an unexpected keyword argument')
+    def stopiteration(leftover):
+        yield leftover.pop(0)
+    filling, available = itertools.repeat(fillvalue), len(args) * [fillvalue]
+    available.pop(0)
+    iterables = [itertools.chain(arg, stopiteration(available), filling) for arg in args]
+    try:
+        while True:
+            yield tuple(map(next, iterables))
+    except IndexError:
+        pass
+    return
+
+# If izip_longest exists, then use it...otherwise we need to use the above definition (micropython).
+try:
+    izip_longest = itertools.izip_longest if sys.version_info[0] < 3 else itertools.zip_longest
+except AttributeError:
+    izip_longest = zip_longest
 
 ## byteorder calculations.
 def byteorder_calculator(length):
