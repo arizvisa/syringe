@@ -255,7 +255,7 @@ def iscallable(t):
 def isinstance(t):
     return builtins.isinstance(t, generic)
 
-if sys.version_info.major < 3:
+if sys.version_info[0] < 3:
     @utils.memoize('t')
     def istype(t):
         """True if type ``t`` inherits from ptype.type"""
@@ -1789,7 +1789,7 @@ class definition(object):
     @classmethod
     def add(cls, key, object, **kwargs):
         """Add ``object`` to cache using the key that is specified by ``key``."""
-        DictType = types.DictType if sys.version_info.major < 3 else builtins.dict
+        DictType = types.DictType if sys.version_info[0] < 3 else builtins.dict
         if not builtins.isinstance(cls.cache, DictType):
             raise error.TypeError(cls, 'definition.add', message="{:s} has an invalid type for the .cache attribute ({!r})".format(cls.__name__, cls.cache.__class__))
         return cls.__set__(key, object, **kwargs) or object
@@ -2524,7 +2524,7 @@ if __name__ == '__main__':
     @TestCase
     def test_encoded_b64():
         import base64
-        b64encode, b64decode = (base64.encodestring, base64.decodestring) if sys.version_info.major < 3 else (base64.encodebytes, base64.decodebytes)
+        b64encode, b64decode = (base64.encodestring, base64.decodestring) if sys.version_info[0] < 3 else (base64.encodebytes, base64.decodebytes)
 
         s = b64encode(b'AAAABBBBCCCCDDDD').strip() + b'\0' + b'A'*20
         class b64(ptype.encoded_t):
@@ -2549,7 +2549,7 @@ if __name__ == '__main__':
     @TestCase
     def test_decoded_b64():
         import base64
-        b64encode, b64decode = (base64.encodestring, base64.decodestring) if sys.version_info.major < 3 else (base64.encodebytes, base64.decodebytes)
+        b64encode, b64decode = (base64.encodestring, base64.decodestring) if sys.version_info[0] < 3 else (base64.encodebytes, base64.decodebytes)
 
         input = b'AAAABBBBCCCCDDDD'
         result = b64encode(input)
@@ -2660,7 +2660,7 @@ if __name__ == '__main__':
     @TestCase
     def test_pointer_dereference():
         import math
-        count = math.log(sys.maxint if sys.version_info.major < 3 else sys.maxsize) / math.log(0x100)
+        count = math.log(sys.maxint if sys.version_info[0] < 3 else sys.maxsize) / math.log(0x100)
         prefix = bytes(bytearray([math.trunc(math.ceil(count))] + [0] * math.trunc(count)))
 
         data = prefix + b'AAAA'
@@ -2674,7 +2674,7 @@ if __name__ == '__main__':
     @TestCase
     def test_pointer_ref():
         import math
-        count = math.log(sys.maxint if sys.version_info.major < 3 else sys.maxsize) / math.log(0x100)
+        count = math.log(sys.maxint if sys.version_info[0] < 3 else sys.maxsize) / math.log(0x100)
         prefix = bytes(bytearray([math.trunc(math.ceil(count))] + [0] * math.trunc(count)))
 
         src = prov.bytes(bytearray(prefix + b'AAAA' + b'AAAA'))

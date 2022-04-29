@@ -4,7 +4,7 @@ import builtins, sys, math
 import functools, operator, itertools, types
 
 # Setup some version-agnostic types that we can perform checks with
-integer_types = (int, long) if sys.version_info.major < 3 else (int,)
+integer_types = (int, long) if sys.version_info[0] < 3 else (int,)
 
 ## start somewhere
 def new(value, size):
@@ -301,7 +301,7 @@ def shift(bitmap, bits):
 class consumer(object):
     '''Given an iterable of an ascii string, provide an interface that supplies bits'''
 
-    if sys.version_info.major < 3:
+    if sys.version_info[0] < 3:
         @classmethod
         def __make_interator__(cls, iterable):
             # XXX: in python2, byte-iterators always return bytes
@@ -504,7 +504,7 @@ def riterate(bitmap):
 
 def shannon(bitmap):
     '''Calculate the entropy for the bits in a bitmap.'''
-    Flog2 = (lambda x: math.log(x, 2)) if sys.version_info.major < 3 else math.log2
+    Flog2 = (lambda x: math.log(x, 2)) if sys.version_info[0] < 3 else math.log2
     Fx = lambda probability: -probability * Flog2(probability)
     count, weight = size(bitmap), hamming(bitmap)
     collection = [weight, count - weight]
@@ -685,7 +685,7 @@ if __name__ == '__main__':
     from ptypes import bitmap
 
     import sys, operator
-    tohex = operator.methodcaller('encode', 'hex') if sys.version_info.major < 3 else operator.methodcaller('hex')
+    tohex = operator.methodcaller('encode', 'hex') if sys.version_info[0] < 3 else operator.methodcaller('hex')
 
     ### set
     @TestCase

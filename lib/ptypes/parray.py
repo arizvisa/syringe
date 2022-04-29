@@ -719,7 +719,7 @@ if __name__ == '__main__':
     import ptypes, sys, operator, array, string, random, functools
     from ptypes import pstruct, parray, pint, provider, utils, dynamic, ptype
 
-    arraytobytes = operator.methodcaller('tostring' if sys.version_info.major < 3 else 'tobytes')
+    arraytobytes = operator.methodcaller('tostring' if sys.version_info[0] < 3 else 'tobytes')
     class RecordGeneral(pstruct.type):
         _fields_ = [
             (pint.uint8_t, 'start'),

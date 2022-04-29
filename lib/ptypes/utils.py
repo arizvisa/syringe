@@ -2,10 +2,10 @@ import sys, math, random
 import functools, operator, itertools, types
 
 # Setup some version-agnostic types that we can perform checks with
-izip_longest = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
-string_types = (str, unicode) if sys.version_info.major < 3 else (str,)
-text_types = (unicode,) if sys.version_info.major < 3 else (str,)
-iterbytes = functools.partial(itertools.imap, ord) if sys.version_info.major < 3 else iter
+izip_longest = itertools.izip_longest if sys.version_info[0] < 3 else itertools.zip_longest
+string_types = (str, unicode) if sys.version_info[0] < 3 else (str,)
+text_types = (unicode,) if sys.version_info[0] < 3 else (str,)
+iterbytes = functools.partial(itertools.imap, ord) if sys.version_info[0] < 3 else iter
 
 ## byteorder calculations.
 def byteorder_calculator(length):
@@ -97,7 +97,7 @@ class padding:
             def closure(*args, **kwargs):
                 iterable = method(*args, **kwargs)
                 return (bytes(bytearray([item])) for item in iterable)
-            return closure if sys.version_info.major < 3 else method
+            return closure if sys.version_info[0] < 3 else method
 
         @classmethod
         @__bytesdecorator__
@@ -154,7 +154,7 @@ def mapexception(map={}, any=None, ignored=()):
             except Exception:
                 type, value, traceback = sys.exc_info()
 
-            with_traceback = (lambda item: item) if sys.version_info.major < 3 else operator.methodcaller('with_traceback', traceback)
+            with_traceback = (lambda item: item) if sys.version_info[0] < 3 else operator.methodcaller('with_traceback', traceback)
 
             for src, dst in map.items():
                 if type is src or (hasattr(src, '__contains__') and type in src):
@@ -343,8 +343,8 @@ def memoize(*kargs, **kattrs):
     kattrs = tuple((o, a) for o, a in sorted(kattrs.items()))
 
     # Define some utility functions for interacting with a function object in a portable manner
-    has_function = lambda F, attribute='im_func' if sys.version_info.major < 3 else '__func__': hasattr(F, attribute)
-    get_function = lambda F, attribute='im_func' if sys.version_info.major < 3 else '__func__': getattr(F, attribute)
+    has_function = lambda F, attribute='im_func' if sys.version_info[0] < 3 else '__func__': hasattr(F, attribute)
+    get_function = lambda F, attribute='im_func' if sys.version_info[0] < 3 else '__func__': getattr(F, attribute)
 
     def prepare_callable(fn, kargs=kargs, kattrs=kattrs):
         if has_function(fn):
@@ -544,7 +544,7 @@ def callable_eq3(a, b):
     b_ = b.__func__ if isinstance(b, types.MethodType) else b
     return a_ is b_
 
-callable_eq = callable_eq2 if sys.version_info.major < 3 else callable_eq3
+callable_eq = callable_eq2 if sys.version_info[0] < 3 else callable_eq3
 
 if __name__ == '__main__':
     class Result(Exception): pass

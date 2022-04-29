@@ -3,8 +3,8 @@ import sys, math, logging
 __all__ = 'defaults,byteorder,partial'.split(',')
 
 # Setup some version-agnostic types that we can perform checks with
-integer_types = (int, long) if sys.version_info.major < 3 else (int,)
-string_types = (str, unicode) if sys.version_info.major < 3 else (str,)
+integer_types = (int, long) if sys.version_info[0] < 3 else (int,)
+string_types = (str, unicode) if sys.version_info[0] < 3 else (str,)
 
 class field:
     class descriptor(object):
@@ -42,10 +42,10 @@ class field:
             return
         def __set__(self, instance, value):
             res = self.__getattribute__('set')
-            return res.im_func(value) if sys.version_info.major < 3 else res.__func__(value)
+            return res.im_func(value) if sys.version_info[0] < 3 else res.__func__(value)
         def __get__(self, instance, type=None):
             res = self.__getattribute__('get')
-            return res.im_func() if sys.version_info.major < 3 else res.__func__()
+            return res.im_func() if sys.version_info[0] < 3 else res.__func__()
 
     class __bool_descriptor(descriptor):
         def __set__(self, instance, value):

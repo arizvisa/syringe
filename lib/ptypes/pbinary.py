@@ -176,7 +176,7 @@ def setbyteorder(order, **length):
     raise TypeError("An unknown type ({!s}) with the value ({!r}) was specified as the byteorder for new partial types.".format(order.__class__, order))
 
 ## instance tests
-if sys.version_info.major < 3:
+if sys.version_info[0] < 3:
     @utils.memoize('t')
     def istype(t):
         return t.__class__ is t.__class__.__class__ and not ptype.isresolveable(t) and (isinstance(t, types.ClassType) or hasattr(object, '__bases__')) and issubclass(t, type)
