@@ -194,6 +194,14 @@ def configuration(cls):
             subclass[name] = configuration(value)
         elif hasattr(object, '__sizeof__') and object.__sizeof__(value) == object.__sizeof__(type):
             subclass[name] = configuration(value)
+
+        # we should never be here if we're running in cpython (py2 or py3)
+        elif getattr(sys, 'implementation', ['cpython'])[0] in {'cpython'}:
+            raise TypeError(name, value)
+
+        # if we fallthrough, then we should be micropython or something else
+        else:
+            subclass[name] = configuration(value)
         continue
 
     def collectproperties(object, values):
