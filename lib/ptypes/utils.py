@@ -141,7 +141,7 @@ def mapexception(map={}, any=None, ignored=()):
     """
     if not isinstance(map, dict):
         raise AssertionError("The type of the exception map ({!s}) is expected to be of a mappable type".format(type(map)))
-    if not hasattr(ignored, '__contains__'):
+    if not isinstance(ignored, (tuple, list)):
         raise AssertionError("The type of the ignored list ({!s}) is expected to contain of exceptions".format(type(ignored)))
     if any is not None and not issubclass(any, BaseException):
         raise AssertionError("The type of the exception to raise ({!s}) is expected to inherit from the {!s} type".format(any, BaseException))
@@ -157,7 +157,7 @@ def mapexception(map={}, any=None, ignored=()):
             with_traceback = (lambda item: item) if sys.version_info[0] < 3 else operator.methodcaller('with_traceback', traceback)
 
             for src, dst in map.items():
-                if type is src or (hasattr(src, '__contains__') and type in src):
+                if type is src or (isinstance(src, (tuple, list)) and type in src):
                     E = dst(type, value)
                     raise with_traceback(E)
                 continue
