@@ -707,7 +707,10 @@ if __name__ == '__main__':
     from ptypes.utils import operator
 
     import sys
-    tohex = operator.methodcaller('encode', 'hex') if sys.version_info[0] < 3 else operator.methodcaller('hex')
+    if hasattr(b'', 'hex'):
+        tohex = operator.methodcaller('encode', 'hex') if sys.version_info[0] < 3 else operator.methodcaller('hex')
+    else:
+        tohex = lambda bytes: ''.join(map("{:02x}".format, bytearray(bytes)))
 
     ### set
     @TestCase

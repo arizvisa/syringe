@@ -585,7 +585,10 @@ if __name__ == '__main__':
     string1 = b'\x0a\xbc\xde\xf0'
     string2 = b'\xf0\xde\xbc\x0a'
 
-    tohex = operator.methodcaller('encode', 'hex') if sys.version_info[0] < 3 else operator.methodcaller('hex')
+    if hasattr(b'', 'hex'):
+        tohex = operator.methodcaller('encode', 'hex') if sys.version_info[0] < 3 else operator.methodcaller('hex')
+    else:
+        tohex = lambda bytes: ''.join(map("{:02x}".format, bytearray(bytes)))
 
     @TestCase
     def test_int_bigendian_uint32_load():
