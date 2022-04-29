@@ -240,7 +240,7 @@ def repr_position(pos, hex=True, precision=0):
 ## hexdumping capability
 def printable(data, nonprintable=u'.'):
     """Return a string of only printable characters"""
-    return functools.reduce(lambda agg, item: agg + (bytearray([item]).decode(sys.getdefaultencoding()) if item >= 0x20 and item < 0x7f else nonprintable), bytearray(data), u'')
+    return functools.reduce(lambda agg, item: agg + (bytearray([item]).decode(sys.getdefaultencoding() if hasattr(sys, 'getdefaultencoding') else 'latin1') if item >= 0x20 and item < 0x7f else nonprintable), bytearray(data), u'')
 
 def hexrow(value, offset=0, width=16, breaks=[8]):
     """Returns ``value as a formatted hexadecimal str"""
@@ -620,7 +620,10 @@ def callable_micro(ca, a, cb, b):
     fa, fb = nsa.get(aname, ta.__dict__[aname] if ta else a), nsb.get(bname, tb.__dict__[bname] if tb else b)
     return fa is fb
 
-callable_eq = callable_eq2 if sys.version_info[0] < 3 else callable_eq3
+if any(hasattr(callable_micro, __attribute__) for __attribute__ in ['__code__', 'func_code']):
+    callable_eq = callable_eq2 if sys.version_info[0] < 3 else callable_eq3
+else:
+    callable_eq = callable_micro
 
 # operator implementations
 class fakeoperator(object):
