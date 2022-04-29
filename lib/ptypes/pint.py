@@ -191,7 +191,7 @@ def bigendian(integral, **attrs):
     if any(integral in state for state in [be, le]):
         integral = be.get(integral, le.get(integral, type))
         class newintegral(integral):
-            __doc__ = integral.__doc__
+            __doc__ = getattr(integral, '__doc__', '')
             byteorder = config.byteorder.bigendian
 
         if hasattr(integral, '__module__'):
@@ -215,7 +215,7 @@ def littleendian(integral, **attrs):
     if any(integral in state for state in [be, le]):
         integral = le.get(integral, be.get(integral, type))
         class newintegral(integral):
-            __doc__ = integral.__doc__
+            __doc__ = getattr(integral, '__doc__', '')
             byteorder = config.byteorder.littleendian
 
         if hasattr(integral, '__module__'):

@@ -1661,7 +1661,7 @@ def clone(cls, **newattrs):
     intended to aid with single-line coding.
     '''
     class _clone(cls):
-        __doc__ = cls.__doc__
+        __doc__ = getattr(cls, '__doc__', '')
         def classname(self):
             cn = super(_clone, self).classname()
             return Config.ptype.clone_name.format(cn, **(utils.attributes(self) if Config.display.mangle_with_attributes else {}))
