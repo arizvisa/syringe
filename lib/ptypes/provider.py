@@ -55,7 +55,7 @@ import importlib, pkgutil, random as _random
 
 from . import config, utils, error
 Config = config.defaults
-Log = Config.log.getChild('provider')
+Log = config.logging.getLogger('.'.join([Config.log.name, 'provider']))
 
 class base(object):
     '''

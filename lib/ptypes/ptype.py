@@ -236,7 +236,7 @@ __all__ = 'istype,iscontainer,isrelated,type,container,undefined,block,definitio
 
 from . import config
 Config = config.defaults
-Log = Config.log.getChild('ptype')
+Log = config.logging.getLogger('.'.join([Config.log.name, 'ptype']))
 
 # Setup some version-agnostic utilities that we can perform checks with
 __izip_longest__ = utils.izip_longest

@@ -72,7 +72,7 @@ from . import ptype, parray, pint, bitmap, utils, error, pstruct, provider
 
 from . import config
 Config = config.defaults
-Log = Config.log.getChild('pstr')
+Log = config.logging.getLogger('.'.join([Config.log.name, 'pstr']))
 
 # Setup some version-agnostic types that we can perform checks with
 __izip_longest__ = utils.izip_longest

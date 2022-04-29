@@ -86,7 +86,7 @@ __all__ = 'block,blockarray,align,array,clone,pointer,rpointer,opointer,union'.s
 
 from . import config
 Config = config.defaults
-Log = Config.log.getChild('dynamic')
+Log = config.logging.getLogger('.'.join([Config.log.name, 'dynamic']))
 
 # Setup some version-agnostic types and utilities that we can perform checks with
 __izip_longest__ = utils.izip_longest

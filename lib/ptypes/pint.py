@@ -140,7 +140,7 @@ from . import ptype, bitmap, error, utils
 
 from . import config
 Config = config.defaults
-Log = Config.log.getChild('pint')
+Log = config.logging.getLogger('.'.join([Config.log.name, 'pint']))
 
 # Setup some version-agnostic types that we can perform checks with
 integer_types, string_types = bitmap.integer_types, utils.string_types

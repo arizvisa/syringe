@@ -129,7 +129,7 @@ __all__ = 'setbyteorder,istype,iscontainer,new,bigendian,littleendian,align,type
 
 from . import config
 Config = config.defaults
-Log = Config.log.getChild('pbinary')
+Log = config.logging.getLogger('.'.join([Config.log.name, 'pbinary']))
 
 # Setup some version-agnostic types and utilities that we can perform checks with
 __izip_longest__ = utils.izip_longest

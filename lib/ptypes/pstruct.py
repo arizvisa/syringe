@@ -52,7 +52,7 @@ __all__ = ['type', 'make']
 
 from . import config
 Config = config.defaults
-Log = Config.log.getChild('pstruct')
+Log = config.logging.getLogger('.'.join([Config.log.name, 'pstruct']))
 
 # Setup some version-agnostic types and utilities that we can perform checks with
 __izip_longest__ = utils.izip_longest

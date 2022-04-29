@@ -89,7 +89,7 @@ __all__ = 'type,terminated,infinite,block'.split(',')
 
 from . import config
 Config = config.defaults
-Log = Config.log.getChild('parray')
+Log = config.logging.getLogger('.'.join([Config.log.name, 'parray']))
 
 class __array_interface__(ptype.container):
     '''provides the generic features expected out of an array'''

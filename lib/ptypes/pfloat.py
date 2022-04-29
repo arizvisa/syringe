@@ -96,7 +96,7 @@ from . import ptype, pint, bitmap, error
 
 from . import config
 Config = config.defaults
-Log = Config.log.getChild('pfloat')
+Log = config.logging.getLogger('.'.join([Config.log.name, 'pfloat']))
 
 def setbyteorder(endianness):
     if endianness in [config.byteorder.bigendian, config.byteorder.littleendian]:
