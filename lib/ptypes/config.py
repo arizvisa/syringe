@@ -307,22 +307,15 @@ class defaults:
         littleendian_name = field.type('littleendian_name', string_types, 'The formatspec to use for elements which are read least-significant to most-significant.')
 
     def __getsource():
-        global ptype
-        return ptype.source
+        import ptypes.ptype
+        return ptypes.ptype.source
     def __setsource(value):
-        global ptype
+        import ptypes.ptype
         if all(hasattr(value, method) for method in ('seek','store','consume')) or isinstance(value, provider.base):
-            ptype.source = value
+            ptypes.ptype.source = value
             return
         raise ValueError("Invalid source object")
     source = field.set('default-source', __getsource, __setsource, 'Default source used that data will be load from or committed to in new instances.')
-
-try:
-    from . import ptype
-
-except ImportError:
-    # XXX: recursive
-    import ptype
 
 ### defaults
 # logging
