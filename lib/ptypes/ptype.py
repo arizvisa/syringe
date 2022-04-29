@@ -365,10 +365,10 @@ class __interface__(object):
     __slots__['ignored'] = {'source', 'parent', 'attributes', 'value', '__name__', 'position', 'offset'}
 
     __slots__['parent'] = None       # ptype.base
-    p = property(fget=lambda self: self.parent)   # abbr to get to .parent
+    p = property(lambda self: self.parent)   # abbr to get to .parent
 
     __slots__['value'] = None        # _
-    v = property(fget=lambda self: self.value)   # abbr to get to .value
+    v = property(lambda self: self.value)   # abbr to get to .value
 
     def __init__(self, **attrs):
         """Create a new instance of object. Will assign provided named arguments to self.attributes"""
@@ -391,7 +391,7 @@ class __interface__(object):
         raise error.ImplementationError(self, 'generic.setoffset')
     def getoffset(self, **_):
         raise error.ImplementationError(self, 'generic.setoffset')
-    offset = property(fget=lambda self: self.getoffset(), fset=lambda self, value: self.setoffset(value))
+    offset = property((lambda self: self.getoffset()), (lambda self, value: self.setoffset(value)))
 
     ## position
     def setposition(self, position, **_):
@@ -735,10 +735,10 @@ class generic(__interface__):
         return self.load(**attrs)
 
     # abbreviations
-    a = property(fget=lambda self: self.alloc())  # alloc
-    c = property(fget=lambda self: self.commit()) # commit
-    l = property(fget=lambda self: self.load())   # load
-    li = property(fget=lambda self: self.load() if self.value is None else self) # load if uninitialized
+    a = property(lambda self: self.alloc())  # alloc
+    c = property(lambda self: self.commit()) # commit
+    l = property(lambda self: self.load())   # load
+    li = property(lambda self: self.load() if self.value is None else self) # load if uninitialized
 
     def get(self):
         """Return a representation of a type.
@@ -2155,7 +2155,7 @@ class encoded_t(wrapper_t):
     _value_ = None      # source type
     _object_ = None     # new type
 
-    d = property(fget=lambda s, **a: s.dereference(**a), fset=lambda s, *x, **a:s.reference(*x, **a))
+    d = property((lambda s, **a: s.dereference(**a)), (lambda s, *x, **a:s.reference(*x, **a)))
     ref = lambda s, *x, **a: s.reference(*x, **a)
 
     def decode(self, object, **attrs):
@@ -2301,7 +2301,7 @@ def setbyteorder(endianness):
 class pointer_t(encoded_t):
     _object_ = None
 
-    d = property(fget=lambda s, **a: s.dereference(**a), fset=lambda s, *x, **a:s.reference(*x, **a))
+    d = property((lambda s, **a: s.dereference(**a)), (lambda s, *x, **a:s.reference(*x, **a)))
     ref = lambda s, *x, **a: s.reference(*x, **a)
 
     class _value_(block):

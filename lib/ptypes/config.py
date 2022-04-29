@@ -164,8 +164,8 @@ def namespace(cls):
 
     attributes['__repr__'] = __repr__
     attributes['__setattr__'] = __setattr__
-    attributes.update((name, property(fget=lambda _, name=name: properties[name])) for name in properties)
-    attributes.update((name, property(fget=lambda _, name=name: subclass[name])) for name in subclass)
+    attributes.update((name, property(lambda _, name=name: properties[name])) for name in properties)
+    attributes.update((name, property(lambda _, name=name: subclass[name])) for name in subclass)
     cons = type(cls.__name__, cls.__bases__, attributes)
     result = cons()
 
@@ -231,7 +231,7 @@ def configuration(cls):
 
     attributes['__repr__'] = __repr__
     attributes['__setattr__'] = __setattr__
-    attributes.update({name : property(fget=lambda _, name=name: subclass[name]) for name in subclass})
+    attributes.update({name : property(lambda _, name=name: subclass[name]) for name in subclass})
     result = type(cls.__name__, cls.__bases__, attributes)
     return result()
 
