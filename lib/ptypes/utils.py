@@ -565,6 +565,54 @@ def callable_eq3(a, b):
 
 callable_eq = callable_eq2 if sys.version_info[0] < 3 else callable_eq3
 
+# operator implementations
+class fakeoperator(object):
+    @staticmethod
+    def itemgetter(item, *args):
+        '''
+        Return a callable object that fetches the given item(s) from its operand.
+        After f = itemgetter(2), the call f(r) returns r[2].
+        After g = itemgetter(2, 5, 3), the call g(r) returns (r[2], r[5], r[3])
+        '''
+        def getter(object):
+            if not args:
+                return object[item]
+            iterable = (object[n] for n in [item] + [arg for arg in args])
+            return tuple(iterable)
+        if hasattr(getter, '__name__'):
+            getter.__name__ = "itemgetter({:s})".format(', '.join(map("{!s}".format, [item] + [arg for arg in args]))) if args else "itemgetter({!s})".format(item)
+        return getter
+
+    @staticmethod
+    def methodcaller(name, *args, **kargs):
+        '''
+        Return a callable object that calls the given method on its operand.
+        After f = methodcaller('name'), the call f(r) returns r.name().
+        After g = methodcaller('name', 'date', foo=1), the call g(r) returns
+        r.name('date', foo=1).
+        '''
+        def getter(object):
+            callable = getattr(object, name)
+            return callable(*args, **kargs)
+        if not isinstance(name, str):
+            raise TypeError('method name must be a string')
+        if hasattr(getter, '__name__'):
+            getter.__name__ = "methodcaller({:s}{:s})".format(', '.join(map("{!r}".format, [name] + [arg for arg in args])), ", {:s}".format(', '.join("{:s}={!r}".format(*karg) for karg in kargs.items())) if kargs else '')
+        return getter
+
+    @staticmethod
+    def setitem(a, b, c):
+        '''Same as a[b] = c.'''
+        a[b] = c
+    @staticmethod
+    def getitem(a, b):
+        '''Same as a[b].'''
+        return a[b]
+    @staticmethod
+    def add(a, b):
+        '''Same as a + b.'''
+        return a + b
+
 if __name__ == '__main__':
     class Result(Exception): pass
     class Success(Result): pass
