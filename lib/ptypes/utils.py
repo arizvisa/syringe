@@ -326,6 +326,13 @@ def attributes(instance):
         continue
     return result
 
+def fakedecorator(*args, **kattrs):
+    '''This is a placeholder in case we are unable to tamper with the code belonging to a function type.'''
+    kargs = list(args)
+    def prepare(decoratee, **ignored):
+        return decoratee
+    return prepare(kargs.pop(0)) if not kattrs and len(kargs) == 1 and callable(kargs[0]) else prepare
+
 def memoize(*kargs, **kattrs):
     '''Converts a function into a memoized callable
     kargs = a list of positional arguments to use as a key
@@ -402,6 +409,12 @@ def memoize(*kargs, **kattrs):
         callee.callable = fn
         return callee if isinstance(callee, types.FunctionType) else types.FunctionType(callee)
     return prepare_callable(kargs.pop(0)) if not kattrs and len(kargs) == 1 and callable(kargs[0]) else prepare_callable
+
+if not any(hasattr(memoize, __attribute__) for __attribute__ in ['func_code', '__code__']):
+    import logging
+    Log = logging.getLogger(__name__)
+    Log.warning("{:s} : Memoization will be disabled due to the current implementation of python{:s} not allowing access of a function's code attributes (performance will be affected).".format(__name__, " ({:s})".format(sys.implementation.name) if hasattr(sys, 'implementation') else ''))
+    memoize = fakedecorator
 
 def memoize_method(*karguments, **kattributes):
     instancemethod = types.MethodType
@@ -532,6 +545,12 @@ def memoize_method(*karguments, **kattributes):
     # Otherwise our parameters are the arguments that we use to make a key,
     # and we need to need to return a closure to receive the callable to decorate.
     return prepare
+
+if not any(hasattr(memoize_method, __attribute__) for __attribute__ in ['func_code', '__code__']):
+    import logging
+    Log = logging.getLogger(__name__)
+    Log.warning("{:s} : Memoization (method) will be disabled due to the current implementation of python{:s} not allowing access of a function's code attributes (performance will be affected).".format(__name__, " ({:s})".format(sys.implementation.name) if hasattr(sys, 'implementation') else ''))
+    memoize_method = fakedecorator
 
 # check equivalency of two callables
 def callable_eq2(a, b):
