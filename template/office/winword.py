@@ -2947,7 +2947,7 @@ class File(pstruct.type):
 
     _fields_ = [
         (Fib, 'fib'),
-        (lambda self: dyn.block(self['fib'].li['fibRgLw']['95']['cbMac'].int() - self['fib'].size()), 'content'),
+        (lambda self: dyn.block(self['fib'].li['fibRgLw']['95']['cbMac'].int() - self['fib'].li.size()), 'content'),
     ]
 
 if __name__ == '__main__':
