@@ -6,6 +6,13 @@ string_types = (str, unicode) if sys.version_info[0] < 3 else (str,)
 text_types = (unicode,) if sys.version_info[0] < 3 else (str,)
 iterbytes = functools.partial(itertools.imap, ord) if sys.version_info[0] < 3 else iter
 
+def iconsume(iterable, amount):
+    '''this is just like itertools.islice but only implement the 2-parameter version.'''
+    for _, item in zip(range(amount), iterable):
+        yield item
+    return
+islice = itertools.islice if not hasattr(sys, 'implementation') else itertools.islice if sys.implementation.name in {'cpython'} else iconsume
+
 def zip_longest(*args, **kargs):
     '''
     Return a zip_longest object whose .__next__() method returns a tuple where
@@ -178,7 +185,7 @@ class padding:
     @classmethod
     def fill(cls, amount, source):
         """Returns a bytearray of ``amount`` elements, from the specified ``source``"""
-        iterable = itertools.islice(source, amount)
+        iterable = islice(source, amount)
         return bytes(bytearray(iterable))
 
 ## exception remapping
@@ -244,7 +251,7 @@ def printable(data, nonprintable=u'.'):
 
 def hexrow(value, offset=0, width=16, breaks=[8]):
     """Returns ``value as a formatted hexadecimal str"""
-    value = bytearray(value)[:width]
+    value = bytearray(islice(value, width))
     extra = width - len(value)
 
     ## left
@@ -264,7 +271,7 @@ def hexrow(value, offset=0, width=16, breaks=[8]):
     ## right
     right = printable(value) + ' ' * extra
 
-    return '  '.join((left, middle, right))
+    return '  '.join([left, middle, right])
 
 def hexdump(value, offset=0, width=16, rows=None, **kwds):
     """Returns ``value`` as a formatted hexdump
@@ -280,10 +287,10 @@ def hexdump(value, offset=0, width=16, rows=None, **kwds):
     getRow = lambda o: hexrow(data, offset=o, **kwds)
 
     res = []
-    (ofs, data) = offset, bytearray(itertools.islice(value, width))
+    (ofs, data) = offset, bytearray(islice(value, width))
     for i in (itertools.count(1) if rows is None else range(1, rows)):
         res.append( getRow(ofs) )
-        ofs, data = ofs + width, bytearray(itertools.islice(value, width))
+        ofs, data = ofs + width, bytearray(islice(value, width))
         if len(data) < width:
             break
         continue
@@ -413,7 +420,7 @@ def memoize(*kargs, **kattrs):
         flags, varnames = co.co_flags, iter(co.co_varnames)
         if (flags & F_VARGEN) != 0:
             raise AssertionEerror("Not able to memoize {!r} generator function".format(fn))
-        argnames = itertools.islice(varnames, co.co_argcount)
+        argnames = islice(varnames, co.co_argcount)
         c_positional = tuple(argnames)
         c_attribute = kattrs
         c_var = (next(varnames) if flags & F_VARARG else None, next(varnames) if flags & F_VARKWD else None)
@@ -487,7 +494,7 @@ def memoize_method(*karguments, **kattributes):
             raise TypeError("Unable to memoize a callable ({!s}) that is a generator type.".format(F))
 
         # Extract the positional argument names including any variable argument names
-        items = itertools.islice(varnames, co.co_argcount)
+        items = islice(varnames, co.co_argcount)
         positional_arguments = tuple(items)
         variable_arguments = (next(varnames) if flags & F_VARARG else None, next(varnames) if flags & F_VARKWD else None)
 
@@ -1011,8 +1018,8 @@ if __name__ == '__main__':
         right_iterable = iter(right_items)
 
         res = []
-        res.append('  '.join([next(left_iterable), ' '.join(next(center_iterable)), ' '.join(next(center_iterable)), str().join(itertools.islice(right_iterable, 16))]))
-        res.append('  '.join([next(left_iterable), ' '.join(next(center_iterable)), ' '.join(next(center_iterable)), str().join(itertools.islice(right_iterable, 16))]))
+        res.append('  '.join([next(left_iterable), ' '.join(next(center_iterable)), ' '.join(next(center_iterable)), str().join(utils.islice(right_iterable, 16))]))
+        res.append('  '.join([next(left_iterable), ' '.join(next(center_iterable)), ' '.join(next(center_iterable)), str().join(utils.islice(right_iterable, 16))]))
 
         if utils.hexdump(data, offset=offset, width=16) == '\n'.join(res):
             raise Success
