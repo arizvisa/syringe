@@ -182,17 +182,17 @@ class padding:
         return bytes(bytearray(iterable))
 
 ## exception remapping
-def mapexception(map={}, any=None, ignored=()):
+def mapexception(mapping={}, any=None, ignored=()):
     """Decorator for a function that maps exceptions from one type into another.
 
-    ``map`` is a dictionary describing how to map exceptions. Each key can be a single item or a tuple which will then be mapped to the exception type specified in the value.
+    ``mapping`` is a dictionary describing how to map exceptions. Each key can be a single item or a tuple which will then be mapped to the exception type specified in the value.
     ``any`` describes the exception to raise if any exception is raised. None can be used to use the raised exception.
     ``ignored`` specifies a list of exceptions to pass through unmodified
     """
-    if not isinstance(map, dict):
-        raise AssertionError("The type of the exception map ({!s}) is expected to be of a mappable type".format(type(map)))
+    if not isinstance(mapping, dict):
+        raise AssertionError("The type of the exception map ({!s}) is expected to be of a mappable type".format(mapping.__class__()))
     if not isinstance(ignored, (tuple, list)):
-        raise AssertionError("The type of the ignored list ({!s}) is expected to contain of exceptions".format(type(ignored)))
+        raise AssertionError("The type of the ignored list ({!s}) is expected to contain of exceptions".format(ignored.__class__()))
     if any is not None and not issubclass(any, BaseException):
         raise AssertionError("The type of the exception to raise ({!s}) is expected to inherit from the {!s} type".format(any, BaseException))
 
@@ -204,9 +204,9 @@ def mapexception(map={}, any=None, ignored=()):
             except Exception:
                 type, value, traceback = sys.exc_info()
 
-            with_traceback = (lambda item: item) if sys.version_info[0] < 3 else operator.methodcaller('with_traceback', traceback)
+            with_traceback = (lambda E: E) if not hasattr(sys, 'implementation') else operator.methodcaller('with_traceback', traceback) if sys.implementation.name in {'cpython'} else (lambda E: E)
 
-            for src, dst in map.items():
+            for src, dst in mapping.items():
                 if type is src or (isinstance(src, (tuple, list)) and type in src):
                     E = dst(type, value)
                     raise with_traceback(E)
