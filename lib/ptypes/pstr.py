@@ -88,14 +88,14 @@ def __ensure_text__(input, encoding='utf-8', errors='strict'):
     raise TypeError("not expecting type '{!s}'".format(input.__class__))
 
 class _char_t(pint.type):
-    encoding = codecs.lookup('latin1')
+    encoding = codecs.lookup('latin1') if hasattr(codecs, 'lookup') else 'latin1'
 
     def __init__(self, **attrs):
         super(_char_t, self).__init__(**attrs)
 
         # calculate the size of .length based on .encoding
         null = b'\0'.decode('latin1')
-        res = null.encode(self.encoding.name)
+        res = null.encode(getattr(self.encoding, 'name', self.encoding))
         self.length = len(res)
 
     def __setvalue__(self, *values, **attrs):
@@ -112,7 +112,7 @@ class _char_t(pint.type):
             return super(pint.type, self).__setvalue__(bytes(value) if isinstance(value, bytearray) else value)
 
         elif isinstance(value, string_types):
-            res = value.encode(self.encoding.name)
+            res = value.encode(getattr(self.encoding, 'name', self.encoding))
             return super(pint.type, self).__setvalue__(res, **attrs)
 
         raise ValueError(self, '_char_t.set', 'User tried to set a value with an incorrect type : {:s}'.format(value.__class__))
@@ -121,19 +121,19 @@ class _char_t(pint.type):
         '''Try to decode the _char_t to a character.'''
         data = self.serialize()
         try:
-            res = data.decode(self.encoding.name)
+            res = data.decode(getattr(self.encoding, 'name', self.encoding))
         except UnicodeDecodeError as E:
-            raise UnicodeDecodeError(E.encoding, E.object, E.start, E.end, 'Unable to decode string {!r} to requested encoding : {:s}'.format(data, self.encoding.name))
+            raise UnicodeDecodeError(E.encoding, E.object, E.start, E.end, 'Unable to decode string {!r} to requested encoding : {:s}'.format(data, getattr(self.encoding, 'name', self.encoding)))
         return res
 
     def __getvalue__(self):
         '''Decode the _char_t to a character replacing any invalid characters if they don't decode.'''
         data = self.serialize()
         try:
-            res = data.decode(self.encoding.name)
+            res = data.decode(getattr(self.encoding, 'name', self.encoding))
         except UnicodeDecodeError:
-            Log.warning('{:s}.get : {:s} : Unable to decode to {:s}. Replacing invalid characters. : {!r}'.format(self.classname(), self.instance(), self.encoding.name, data))
-            res = data.decode(self.encoding.name, 'replace')
+            Log.warning('{:s}.get : {:s} : Unable to decode to {:s}. Replacing invalid characters. : {!r}'.format(self.classname(), self.instance(), getattr(self.encoding, 'name', self.encoding), data))
+            res = data.decode(getattr(self.encoding, 'name', self.encoding), 'replace')
         return res
 
     def int(self):
@@ -148,7 +148,7 @@ class _char_t(pint.type):
 
     @classmethod
     def typename(cls):
-        return '{:s}<{:s}>'.format(cls.__name__, cls.encoding.name)
+        return '{:s}<{:s}>'.format(cls.__name__, getattr(cls.encoding, 'name', cls.encoding))
 
 class char_t(_char_t):
     '''Single character type'''
@@ -168,9 +168,9 @@ class wchar_t(_char_t):
 
     # try and figure out what type
     if Config.integer.order == config.byteorder.littleendian:
-        encoding = codecs.lookup('utf-16-le')
+        encoding = codecs.lookup('utf-16-le') if hasattr(codecs, 'lookup') else 'utf-16-le'
     elif Config.integer.order == config.byteorder.bigendian:
-        encoding = codecs.lookup('utf-16-be')
+        encoding = codecs.lookup('utf-16-be') if hasattr(codecs, 'lookup') else 'utf-16-be'
     else:
         raise SystemError('wchar_t', 'Unable to determine default encoding type based on platform byteorder : {!r}'.format(Config.integer.order))
 
@@ -187,10 +187,10 @@ class string(ptype.type):
         _object_ = self._object_
 
         # encode 3 types of strings and ensure that their lengths scale up with their string sizes
-        res, single, double = ( __ensure_text__(item, 'ascii').encode(_object_.encoding.name) for item in ('\0', 'A', 'AA') )
+        res, single, double = ( __ensure_text__(item, 'ascii').encode(getattr(_object_.encoding, 'name', _object_.encoding)) for item in ('\0', 'A', 'AA') )
         if len(res) * 2 == len(single) * 2 == len(double):
             return
-        raise ValueError(self.classname(), 'string.__init__', 'User tried to specify a variable-width character encoding : {:s}'.format(_object_.encoding.name))
+        raise ValueError(self.classname(), 'string.__init__', 'User tried to specify a variable-width character encoding : {:s}'.format(getattr(_object_.encoding, 'name', _object_.encoding)))
 
     def at(self, offset, **kwds):
         ofs = offset - self.getoffset()
@@ -348,10 +348,10 @@ class string(ptype.type):
         t = ptype.clone(parray.type, _object_=self._object_, length=len(self))
         data = self.cast(t).serialize()
         try:
-            res = data.decode(t._object_.encoding.name)
+            res = data.decode(getattr(t._object_.encoding, 'name', t._object_.encoding))
         except UnicodeDecodeError:
-            Log.warning('{:s}.str : {:s} : Unable to decode {:s} to {:s}. Defaulting to unencoded string.'.format(self.classname(), self.instance(), self._object_.typename(), t._object_.encoding.name))
-            res = data.decode(t._object_.encoding.name, 'ignore')
+            Log.warning('{:s}.str : {:s} : Unable to decode {:s} to {:s}. Defaulting to unencoded string.'.format(self.classname(), self.instance(), self._object_.typename(), getattr(t._object_.encoding, 'name', t._object_.encoding)))
+            res = data.decode(getattr(t._object_.encoding, 'name', t._object_.encoding), 'ignore')
         return res
 
     def get(self):
@@ -554,7 +554,7 @@ if __name__ == '__main__':
         x.length = len(string) // 2
         x.source = provider.bytes(string)
         x.load()
-        if x.str() == string[:len(string) // 2].decode(x[0].encoding.name):
+        if x.str() == string[:len(string) // 2].decode(getattr(x[0].encoding, 'name', x[0].encoding)):
             raise Success
 
     @TestCase
