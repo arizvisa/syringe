@@ -187,7 +187,7 @@ class ELFCLASS32(object):
             dt_strtab = p.by_tag('DT_STRTAB')
             res = dt_strtab.d.li
             return res.read(self.get())
-        d = property(fget=dereference)
+        d = property(dereference)
         def str(self):
             res = self.dereference()
             return res.str()
@@ -504,7 +504,7 @@ class ELFCLASS64(object):
             dt_strtab = p.by_tag('DT_STRTAB')
             res = dt_strtab.d.li
             return res.read(self.get())
-        d = property(fget=dereference)
+        d = property(dereference)
         def str(self):
             res = self.dereference()
             return res.str()

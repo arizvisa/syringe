@@ -2,7 +2,7 @@ import sys, itertools
 import ptypes
 from .base import *
 
-izip_longest = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
+izip_longest = ptypes.utils.izip_longest
 
 ### generic
 class _sh_name(pint.type):
