@@ -613,6 +613,12 @@ class fakeoperator(object):
         '''Same as a + b.'''
         return a + b
 
+if not all(hasattr(operator, __attribute__) for __attribute__ in ['itemgetter', 'methodcaller', 'setitem', 'getitem', 'add']):
+    import logging
+    Log = logging.getLogger(__name__)
+    Log.info("{:s} : Using custom implementation of `{:s}` module due to the current implementation of python{:s} not defining required callables (performance will be affected).".format(__name__, 'operator', " ({:s})".format(sys.implementation.name) if hasattr(sys, 'implementation') else ''))
+    operator = fakeoperator
+
 if __name__ == '__main__':
     class Result(Exception): pass
     class Success(Result): pass
