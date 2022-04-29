@@ -51,7 +51,7 @@ Example usage:
     print( repr(instance) )
 """
 import sys, os, builtins, itertools, functools
-import importlib, pkgutil, random as _random
+import random as _random
 
 from . import config, utils, error
 Config = config.defaults
@@ -766,9 +766,6 @@ class file(fileobj):
         return builtins.open(filename, access, 0)
 
 try:
-    if not pkgutil.find_loader('tempfile'):
-        raise ImportError
-
     import tempfile as __tempfile__
 
     class filecopy(fileobj):
@@ -841,9 +838,6 @@ except OSError as E:
     Log.info("{:s} : Skipping defining any linux-based providers (`LinuxProcessId`) due to being on a non-linux platform ({:s}).".format(__name__, sys.platform))
 
 try:
-    if not pkgutil.find_loader('ctypes'):
-        raise ImportError
-
     import ctypes
 
     try:
@@ -1205,9 +1199,6 @@ except ImportError:
     Log.info("{:s} : Unable to import the 'idaapi' module (not running IDA?). Failed to define the `Ida` provider.".format(__name__))
 
 try:
-    if not pkgutil.find_loader('binaryninja'):
-        raise ImportError
-
     _ = 'binaryninja' in sys.modules
 
     import binaryninja as __binaryninja__
@@ -1250,8 +1241,6 @@ except ImportError:
     Log.info("{:s} : Unable to import the 'binaryninja' module (not running Binja?). Failed to define the `Binja` provider.".format(__name__))
 
 try:
-    if not pkgutil.find_loader('_PyDbgEng'):
-        raise ImportError
     _ = '_PyDbgEng' in sys.modules
 
     import _PyDbgEng as __PyDbgEng__
@@ -1318,9 +1307,6 @@ except ImportError:
     Log.info("{:s} : Unable to import the '_PyDbgEng' module. Failed to define the `PyDbgEng` provider.".format(__name__))
 
 try:
-    if not pkgutil.find_loader('pykd'):
-        raise ImportError
-
     _ = 'pykd' in sys.modules
     import pykd as __pykd__
     class Pykd(debuggerbase):
@@ -1370,9 +1356,6 @@ except ImportError:
     Log.info("{:s} : Unable to import the 'pykd' module. Failed to define the `Pykd` provider.".format(__name__))
 
 try:
-    if not pkgutil.find_loader('lldb'):
-        raise ImportError
-
     _ = 'lldb' in sys.modules
 
     import lldb as __lldb__
@@ -1416,9 +1399,6 @@ except ImportError:
     Log.info("{:s} : Unable to import the 'lldb' module. Failed to define the `lldb` provider.".format(__name__))
 
 try:
-    if not pkgutil.find_loader('gdb'):
-        raise ImportError
-
     _ = 'gdb' in sys.modules
 
     import gdb as __gdb__
@@ -1473,9 +1453,6 @@ except ImportError:
     Log.info("{:s} : Unable to import the 'gdb' module. Failed to define the `gdb` provider.".format(__name__))
 
 try:
-    if not pkgutil.find_loader('ctypes'):
-        raise ImportError
-
     import ctypes
 
     ## TODO: figure out an elegant way to catch exceptions we might cause
