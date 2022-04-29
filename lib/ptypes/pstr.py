@@ -199,7 +199,7 @@ class string(ptype.type):
     def __blocksize_originalQ__(self):
         '''Return whether the instance's blocksize has been rewritten by a definition.'''
         cls = self.__class__
-        return utils.callable_eq(self.blocksize, cls.blocksize) and utils.callable_eq(cls.blocksize, string.blocksize)
+        return utils.callable_eq(self, self.blocksize, cls, cls.blocksize) and utils.callable_eq(cls, cls.blocksize, string, string.blocksize)
     def blocksize(self):
         length = self.length or 0
         return self._object_().blocksize() * length
@@ -476,7 +476,7 @@ class szstring(string):
     def __blocksize_originalQ__(self):
         '''Return whether the instance's blocksize has been rewritten by a definition.'''
         cls = self.__class__
-        return utils.callable_eq(self.blocksize, cls.blocksize) and utils.callable_eq(cls.blocksize, szstring.blocksize)
+        return utils.callable_eq(self, self.blocksize, cls, cls.blocksize) and utils.callable_eq(cls, cls.blocksize, szstring, szstring.blocksize)
     def blocksize(self):
         return self.size() if self.initializedQ() else self.load().size()
 

@@ -371,7 +371,7 @@ class union(__union_interface__):
             return res
 
         # if the blocksize method is not modified, then allocate all fields and choose the largest
-        if utils.callable_eq(self.blocksize, union.blocksize):
+        if utils.callable_eq(self, self.blocksize, union, union.blocksize):
             iterable = (self.new(t) for t in objects)
             size = max(item.a.blocksize() for item in iterable)
             return clone(ptype.block, length=size)
@@ -488,7 +488,7 @@ class union(__union_interface__):
     def __blocksize_originalQ__(self):
         '''Return whether the instance's blocksize has been rewritten by a definition.'''
         cls = self.__class__
-        return utils.callable_eq(self.blocksize, cls.blocksize) and utils.callable_eq(cls.blocksize, union.blocksize)
+        return utils.callable_eq(self, self.blocksize, cls, cls.blocksize) and utils.callable_eq(cls, cls.blocksize, union, union.blocksize)
     def blocksize(self):
         return self.object.blocksize()
     def size(self):

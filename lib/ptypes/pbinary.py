@@ -446,7 +446,7 @@ class integer(type):
     def __blockbits_originalQ__(self):
         '''Return whether the instance's blockbits have been rewritten by a definition.'''
         cls = self.__class__
-        return utils.callable_eq(self.blockbits, cls.blockbits) and utils.callable_eq(cls.blockbits, integer.blockbits)
+        return utils.callable_eq(self, self.blockbits, cls, cls.blockbits) and utils.callable_eq(cls, cls.blockbits, integer, integer.blockbits)
     def blockbits(self):
         if self.value is None:
             return 0
@@ -556,7 +556,7 @@ class enum(integer):
         # if the enum.length property was assigned or the user provided a custom
         # implementation of enum.blockbits, then we have no work to do.
         properties = ['_width_', 'width']
-        if hasattr(self, 'length') or not utils.callable_eq(self.blockbits, enum.blockbits):
+        if hasattr(self, 'length') or not utils.callable_eq(self, self.blockbits, enum, enum.blockbits):
             candidate = None
 
         # if all the properties were assigned, then we filter them for values
@@ -614,7 +614,7 @@ class enum(integer):
     def __blockbits_originalQ__(self):
         '''Return whether the instance's blockbits have been rewritten by a definition.'''
         cls = self.__class__
-        return utils.callable_eq(self.blockbits, cls.blockbits) and utils.callable_eq(cls.blockbits, enum.blockbits)
+        return utils.callable_eq(self, self.blockbits, cls, cls.blockbits) and utils.callable_eq(cls, cls.blockbits, enum, enum.blockbits)
     def blockbits(self):
         if self.value is None:
             return getattr(self, 'length', 0)
@@ -830,7 +830,7 @@ class container(type):
     def __blockbits_originalQ__(self):
         '''Return whether the instance's blockbits have been rewritten by a definition.'''
         cls = self.__class__
-        return utils.callable_eq(self.blockbits, cls.blockbits) and utils.callable_eq(cls.blockbits, container.blockbits)
+        return utils.callable_eq(self, self.blockbits, cls, cls.blockbits) and utils.callable_eq(cls, cls.blockbits, container, container.blockbits)
     def blockbits(self):
         if self.value is None:
             raise error.InitializationError(self, 'container.blockbits')
@@ -1120,14 +1120,14 @@ class __array_interface__(container):
         result, element = self.repr(), self.__element__()
 
         # multiline (includes element description)
-        if result.count('\n') > 0 or utils.callable_eq(self.repr, __array_interface__.details):
+        if result.count('\n') > 0 or utils.callable_eq(self, self.repr, __array_interface__, __array_interface__.details):
             result = result.rstrip('\n') # remove trailing newlines
             if prop:
                 return "{:s} '{:s}' {{{:s}}} {:s}\n{:s}".format(utils.repr_class(self.classname()), self.name(), prop, element, result)
             return "{:s} '{:s}' {:s}\n{:s}".format(utils.repr_class(self.classname()), self.name(), element, result)
 
         # if the user chose to not use the default summary, then prefix the element description.
-        if all(not utils.callable_eq(self.repr, item) for item in [__array_interface__.repr, __array_interface__.summary, __array_interface__.details]):
+        if all(not utils.callable_eq(self, self.repr, __array_interface__, item) for item in [__array_interface__.repr, __array_interface__.summary, __array_interface__.details]):
             result = ' '.join([element, result])
 
         _hex, _precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
@@ -1591,7 +1591,7 @@ class array(__array_interface__):
     def __blockbits_originalQ__(self):
         '''Return whether the instance's blockbits have been rewritten by a definition.'''
         cls = self.__class__
-        return utils.callable_eq(self.blockbits, cls.blockbits) and utils.callable_eq(cls.blockbits, array.blockbits)
+        return utils.callable_eq(self, self.blockbits, cls, cls.blockbits) and utils.callable_eq(cls, cls.blockbits, array, array.blockbits)
     def blockbits(self):
         if self.initializedQ():
             return super(array, self).blockbits()
@@ -1643,7 +1643,7 @@ class struct(__structure_interface__):
     def __blockbits_originalQ__(self):
         '''Return whether the instance's blockbits have been rewritten by a definition.'''
         cls = self.__class__
-        return utils.callable_eq(self.blockbits, cls.blockbits) and utils.callable_eq(cls.blockbits, struct.blockbits)
+        return utils.callable_eq(self, self.blockbits, cls, cls.blockbits) and utils.callable_eq(cls, cls.blockbits, struct, struct.blockbits)
     def blockbits(self):
         if self.initializedQ():
             return super(struct, self).blockbits()
@@ -1711,12 +1711,12 @@ class terminatedarray(__array_interface__):
     def __blockbits_originalQ__(self):
         '''Return whether the instance's blockbits have been rewritten by a definition.'''
         cls = self.__class__
-        return utils.callable_eq(self.blockbits, cls.blockbits) and utils.callable_eq(cls.blockbits, terminatedarray.blockbits)
+        return utils.callable_eq(self, self.blockbits, cls, cls.blockbits) and utils.callable_eq(cls, cls.blockbits, terminatedarray, terminatedarray.blockbits)
     def blockbits(self):
 
         # If the user implement a custom .blocksize() method, then use that to
         # calculate the number of bits.
-        if not utils.callable_eq(self.blocksize, container.blocksize):
+        if not utils.callable_eq(self, self.blocksize, container, container.blocksize):
             return 8 * self.blocksize()
 
         # If we're initialized, we can figure out how many bits we are by
@@ -1810,7 +1810,7 @@ class partial(ptype.container):
         list(itertools.starmap(res.__setitem__, (('position', (offset, 0)), ('parent', self))))
 
         # if the user added a custom blocksize, then propagate that too
-        if not utils.callable_eq(self.blocksize, partial.blocksize):
+        if not utils.callable_eq(self, self.blocksize, partial, partial.blocksize):
             res.setdefault('blocksize', self.blocksize)
 
         # if we're named either by a field or explicitly, then propagate this
@@ -1864,7 +1864,7 @@ class partial(ptype.container):
         list(itertools.starmap(res.__setitem__, (('position', (self.getoffset(), 0)), ('parent', self))))
 
         # if the user added a custom blocksize, then propagate that too
-        if not utils.callable_eq(self.blocksize, partial.blocksize):
+        if not utils.callable_eq(self, self.blocksize, partial, partial.blocksize):
             res.setdefault('blocksize', self.blocksize)
 
         # if we're named either by a field or explicitly, then propagate this
@@ -2009,7 +2009,7 @@ class partial(ptype.container):
     def __blocksize_originalQ__(self):
         '''Return whether the instance's blocksize has been rewritten by a definition.'''
         cls = self.__class__
-        return utils.callable_eq(self.blocksize, cls.blocksize) and utils.callable_eq(cls.blocksize, partial.blocksize)
+        return utils.callable_eq(self, self.blocksize, cls, cls.blocksize) and utils.callable_eq(cls, cls.blocksize, partial, partial.blocksize)
     def blocksize(self):
         value = self.value[0] if self.initializedQ() else self.__object__()
         size = value.blockbits()

@@ -1104,7 +1104,7 @@ class type(base):
     def __blocksize_originalQ__(self):
         '''Return whether the instance's blocksize has been rewritten by a definition.'''
         cls = self.__class__
-        return utils.callable_eq(self.blocksize, cls.blocksize) and utils.callable_eq(cls.blocksize, type.blocksize)
+        return utils.callable_eq(self, self.blocksize, cls, cls.blocksize) and utils.callable_eq(cls, cls.blocksize, type, type.blocksize)
     def blocksize(self):
         """Returns the expected size of the type
 
@@ -1145,7 +1145,7 @@ class container(base):
         if self.value is None:
             return super(container, self).instance()
         try:
-            if not utils.callable_eq(self.blocksize, cls.blocksize) or self.initializedQ():
+            if not utils.callable_eq(self, self.blocksize, cls, cls.blocksize) or self.initializedQ():
                 bs = self.blocksize()
         except Exception:
             pass
@@ -1166,7 +1166,7 @@ class container(base):
     def __blocksize_originalQ__(self):
         '''Return whether the instance's blocksize has been rewritten by a definition.'''
         cls = self.__class__
-        return utils.callable_eq(self.blocksize, cls.blocksize) and utils.callable_eq(cls.blocksize, container.blocksize)
+        return utils.callable_eq(self, self.blocksize, cls, cls.blocksize) and utils.callable_eq(cls, cls.blocksize, container, container.blocksize)
     def blocksize(self):
         """Returns a sum of the bytes that are expected to be read"""
         if self.value is None:
@@ -2069,7 +2069,7 @@ class wrapper_t(type):
     def __blocksize_originalQ__(self):
         '''Return whether the instance's blocksize has been rewritten by a definition.'''
         cls = self.__class__
-        return utils.callable_eq(self.blocksize, cls.blocksize) and utils.callable_eq(cls.blocksize, wrapper_t.blocksize)
+        return utils.callable_eq(self, self.blocksize, cls, cls.blocksize) and utils.callable_eq(cls, cls.blocksize, wrapper_t, wrapper_t.blocksize)
     def blocksize(self):
         if self.__object__ is not None:
             try:

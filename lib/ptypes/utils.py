@@ -582,15 +582,22 @@ if not any(hasattr(memoize_method, __attribute__) for __attribute__ in ['func_co
     memoize_method = fakedecorator
 
 # check equivalency of two callables
-def callable_eq2(a, b):
+def callable_eq2(ca, a, cb, b):
     a_ = a.im_func if isinstance(a, types.MethodType) else a
     b_ = b.im_func if isinstance(b, types.MethodType) else b
     return a_ is b_
 
-def callable_eq3(a, b):
+def callable_eq3(ca, a, cb, b):
     a_ = a.__func__ if isinstance(a, types.MethodType) else a
     b_ = b.__func__ if isinstance(b, types.MethodType) else b
     return a_ is b_
+
+def callable_micro(ca, a, cb, b):
+    aname, bname = a.__name__, b.__name__
+    nsa, nsb = {} if ca is None else ca.__dict__, {} if cb is None else cb.__dict__
+    ta, tb = None if ca is None else ca.__class__, None if cb is None else cb.__class__
+    fa, fb = nsa.get(aname, ta.__dict__[aname] if ta else a), nsb.get(bname, tb.__dict__[bname] if tb else b)
+    return fa is fb
 
 callable_eq = callable_eq2 if sys.version_info[0] < 3 else callable_eq3
 
@@ -860,7 +867,7 @@ if __name__ == '__main__':
         A.method = method
 
         x, y = A(), A()
-        if callable_eq(x.method, y.method) and all(item() for item in [x.method, y.method]):
+        if callable_eq(x, x.method, y, y.method) and all(item() for item in [x.method, y.method]):
             raise Success
 
     @TestCase
@@ -872,7 +879,7 @@ if __name__ == '__main__':
         A.method = method
 
         x = A()
-        if callable_eq(x.method, method) and all(item() for item in [x.method, method]):
+        if callable_eq(x, x.method, None, method) and all(item() for item in [x.method, method]):
             raise Success
 
     @TestCase

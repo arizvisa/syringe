@@ -227,14 +227,14 @@ class __array_interface__(ptype.container):
         result, element = self.repr(), self.__element__()
 
         # multiline (includes element description)
-        if result.count('\n') > 0 or utils.callable_eq(self.repr, __array_interface__.details):
+        if result.count('\n') > 0 or utils.callable_eq(self, self.repr, __array_interface__, __array_interface__.details):
             result = result.rstrip('\n')
             if prop:
                 return u"{:s} '{:s}' {{{:s}}} {:s}\n{:s}".format(utils.repr_class(self.classname()), self.name(), prop, element, result)
             return u"{:s} '{:s}' {:s}\n{:s}".format(utils.repr_class(self.classname()), self.name(), element, result)
 
         # if the user chose to not use the default summary, then prefix the element description.
-        if all(not utils.callable_eq(self.repr, item) for item in [__array_interface__.repr, __array_interface__.summary]):
+        if all(not utils.callable_eq(self, self.repr, __array_interface__, item) for item in [__array_interface__.repr, __array_interface__.summary]):
             result = ' '.join([element, result])
 
         _hex, _precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0

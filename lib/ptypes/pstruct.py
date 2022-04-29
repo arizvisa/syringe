@@ -111,7 +111,7 @@ class __structure_interface__(ptype.container):
 
     ## informational methods
     def initializedQ(self):
-        if utils.callable_eq(self.blocksize, ptype.container.blocksize):
+        if utils.callable_eq(self, self.blocksize, ptype.container, ptype.container.blocksize):
             return super(__structure_interface__, self).initializedQ()
 
         # if there's no value, we're uninitialized.. plain and simple
@@ -294,7 +294,7 @@ class type(__structure_interface__):
             # anything
 
             # XXX: it might be safer to call .blocksize() and check for InitializationError
-            current = None if utils.callable_eq(self.blocksize, type.blocksize) else 0
+            current = None if utils.callable_eq(self, self.blocksize, type, type.blocksize) else 0
             if current is not None and self.blocksize() <= 0:
                 offset = self.getoffset()
 
