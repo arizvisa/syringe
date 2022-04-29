@@ -329,9 +329,9 @@ def force(t, self, chain=[]):
     #    return force(next(t), self, chain)
 
     # and lastly iterators (unsupported)
-    if False:
-        if isiterator(t):
-            return force(next(t), self, chain)
+    #if False:
+    #    if isiterator(t):
+    #        return force(next(t), self, chain)
 
     path = str().join(map("<{:s}>".format, self.backtrace()))
     raise error.TypeError(self, "force<ptype>', message='chain={!r} : Refusing request to resolve {!r} to a type that does not inherit from ptype.type : {{{:s}}}".format(chain, t, path))

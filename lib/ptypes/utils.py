@@ -1,4 +1,4 @@
-import sys, math, random
+import builtins, sys, math, random
 import functools, operator, itertools, types
 
 # Setup some version-agnostic types that we can perform checks with
@@ -35,6 +35,27 @@ try:
     izip_longest = itertools.izip_longest if sys.version_info[0] < 3 else itertools.zip_longest
 except AttributeError:
     izip_longest = zip_longest
+
+# We need this because micropython doesn't implement a multi-parameter next().
+def builtins_next(iterable, *args):
+    '''
+    next(iterator[, default])
+
+    Return the next item from the iterator. If default is given and the iterator
+    '''
+    if len(args) > 1:
+        raise TypeError("next expected at most {:d} arguments, got {:d}".format(2, 1 + len(args)))
+    try:
+        result = builtins.next(iterable)
+    except StopIteration as E:
+        if args:
+            default, = args
+            return default
+        raise E
+    return result
+
+# py2 and micropython
+next = builtins.next if not hasattr(sys, 'implementation') else builtins.next if sys.implementation.name in {'cpython'} else builtins_next
 
 ## byteorder calculations.
 def byteorder_calculator(length):

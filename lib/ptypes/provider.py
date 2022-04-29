@@ -1150,7 +1150,7 @@ try:
         def expr(cls, string):
             index = (i for i in range(cls.__api__.get_nlist_size()) if string == cls.__api__.get_nlist_name(i))
             try:
-                res = cls.__api__.get_nlist_ea(next(index))
+                res = cls.__api__.get_nlist_ea(utils.next(index))
 
             except StopIteration:
                 raise NameError("{:s}.expr : Unable to resolve symbol : {!r}".format('.'.join((__name__, cls.__name__)), string))

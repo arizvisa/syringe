@@ -412,7 +412,7 @@ def make(fields, **attrs):
     fields = [item for item in fields]
     items = sorted(fields, key=utils.operator.methodcaller('getoffset'))
     grouped = [(offset, [item for item in items]) for offset, items in itertools.groupby(items, key=utils.operator.methodcaller('getoffset'))]
-    baseoffset = next(position for position, _ in grouped)
+    baseoffset = utils.next(position for position, _ in grouped)
 
     # FIXME: we need to build a segment tree of all of our items that are grouped
     #        so that we can figure out what elements are overlapped and how we

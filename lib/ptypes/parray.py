@@ -176,7 +176,7 @@ class __array_interface__(ptype.container):
             res = self.value[:]
             for idx in range(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)):
                 i = self.__getindex__(idx)
-                self.value[i] = next(ivalue)
+                self.value[i] = utils.next(ivalue)
             return res.__getitem__(index)
 
         idx = self.__getindex__(index)

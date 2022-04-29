@@ -445,7 +445,7 @@ class enum(type):
 
         iterable = (name for name, item in self._values_ if item == value)
         try:
-            res = next(iterable, *default)
+            res = utils.next(iterable, *default)
 
         except StopIteration:
             raise KeyError(value)
@@ -458,7 +458,7 @@ class enum(type):
 
         iterable = (value for item, value in self._values_ if item == name)
         try:
-            res = next(iterable, *default)
+            res = utils.next(iterable, *default)
 
         except StopIteration:
             raise KeyError(name)
@@ -524,10 +524,10 @@ class enum(type):
             raise TypeError("{:s}.byvalue expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
 
         try:
-            return next(name for name, item in cls._values_ if item == value)
+            return utils.next(name for name, item in cls._values_ if item == value)
 
         except StopIteration:
-            if default: return next(iter(default))
+            if default: return utils.next(iter(default))
 
         raise KeyError(cls, 'enum.byvalue', value)
 
@@ -538,10 +538,10 @@ class enum(type):
             raise TypeError("{:s}.byname expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
 
         try:
-            return next(value for item, value in cls._values_ if item == name)
+            return utils.next(value for item, value in cls._values_ if item == name)
 
         except StopIteration:
-            if default: return next(iter(default))
+            if default: return utils.next(iter(default))
 
         raise KeyError(cls, 'enum.byname', name)
 

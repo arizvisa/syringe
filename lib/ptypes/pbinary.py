@@ -563,13 +563,13 @@ class enum(integer):
         # that aren't callable and assume the user meant that length.
         elif all(hasattr(self, fld) for fld in properties):
             candidates = (fld for fld in properties if not callable(getattr(self, fld)))
-            candidate = next(candidates, '_width_')
+            candidate = utils.next(candidates, '_width_')
 
         # otherwise, we just grab the first property that was assigned and
         # use that one to warn the user about.
         elif any(hasattr(self, fld) for fld in properties):
             iterable = (fld for fld in properties if hasattr(self, fld))
-            candidate = next(iterable, None)
+            candidate = utils.next(iterable, None)
 
         # anything else means the user hasn't assigned any property.
         else:
@@ -644,7 +644,7 @@ class enum(integer):
 
         iterable = (name for name, item in self._values_ if item == value)
         try:
-            res = next(iterable, *default)
+            res = utils.next(iterable, *default)
 
         except StopIteration:
             raise KeyError(value)
@@ -657,7 +657,7 @@ class enum(integer):
 
         iterable = (value for item, value in self._values_ if item == name)
         try:
-            res = next(iterable, *default)
+            res = utils.next(iterable, *default)
 
         except StopIteration:
             raise KeyError(name)
@@ -728,10 +728,10 @@ class enum(integer):
             raise TypeError("{:s}.byvalue expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
 
         try:
-            return next(name for name, item in cls._values_ if item == value)
+            return utils.next(name for name, item in cls._values_ if item == value)
 
         except StopIteration:
-            if default: return next(iter(default))
+            if default: return utils.next(iter(default))
 
         raise KeyError(cls, 'enum.byvalue', value)
 
@@ -742,10 +742,10 @@ class enum(integer):
             raise TypeError("{:s}.byname expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
 
         try:
-            return next(value for item, value in cls._values_ if item == name)
+            return utils.next(value for item, value in cls._values_ if item == name)
 
         except StopIteration:
-            if default: return next(iter(default))
+            if default: return utils.next(iter(default))
 
         raise KeyError(cls, 'enum.byname', name)
 
@@ -798,7 +798,7 @@ class container(type):
 
             # Now that we have our partial calculator, check what position
             # that we're actually at for the very first member.
-            current = next(calculator)
+            current = utils.next(calculator)
 
             # Iterate through all of our members using the calculator to
             # figure out the correct position they should be at.
@@ -992,7 +992,7 @@ class container(type):
             # of everything that exists after our value.
             if res.bits() != value.bits():
                 calculator = recurse(value.getposition())
-                position = next(calculator)
+                position = utils.next(calculator)
                 for item in self.value[index:]:
                     item.setposition(position, recurse=recurse)
                     position = calculator.send(bitmap.size(item) if bitmap.isinstance(item) else item.bits())
@@ -1004,7 +1004,7 @@ class container(type):
         item = self.value[index]
         if not isinstance(item, type):
             raise error.AssertionError(self, 'container.__setitem__', message="Unknown `{!s}` at index {:d} while trying to assign to it".format(item.__class__, index))
-        calculator = recurse(self.value[0].getposition()); next(calculator)
+        calculator = recurse(self.value[0].getposition()); utils.next(calculator)
 
         # if value is a bitmap, then we need to compare the bits in order to
         # figure out whether its size is changed.
@@ -1030,7 +1030,7 @@ class container(type):
         # the current index and then process the item at the current index.
         [ calculator.send(bitmap.size(item) if bitmap.isinstance(item) else item.bits()) for _, item in zip(range(index), items) ]
 
-        item = next(items)
+        item = utils.next(items)
         position = calculator.send(bitmap.size(item) if bitmap.isinstance(item) else item.bits())
 
         # now we can adjust the rest of the members using the current position.
@@ -1063,7 +1063,7 @@ class __array_interface__(container):
         # create our calculator seeded at the position of the very first member.
         position = self.value[0].getposition() if len(self.value or []) > 0 else result.getposition()
         calculator = Fcalculate(position)
-        position = next(calculator)
+        position = utils.next(calculator)
 
         # Nowe we need to go through our members, and figure out what needs to change.
         for index, item in enumerate(self.value):
@@ -1202,7 +1202,7 @@ class __array_interface__(container):
         if isinstance(index, slice):
             val = itertools.repeat(value) if (isinstance(value, (integer_types, type)) or bitmap.isinstance(value)) else iter(value)
             for idx in range(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)):
-                super(__array_interface__, self).__setitem__(idx, next(val))
+                super(__array_interface__, self).__setitem__(idx, utils.next(val))
             return
 
         value = super(__array_interface__, self).__setitem__(index, value)
@@ -1237,7 +1237,7 @@ class __array_interface__(container):
         Fcalculate = (lambda _: utils.byteorder_calculator(1)) if p is None else p.__calculate__
         position = self.value[0].getposition() if len(self.value or []) > 0 else self.getposition()
         calculator = Fcalculate(position)
-        position = next(calculator)
+        position = utils.next(calculator)
 
         # now we just need to iterate through our items, and keep track of the position.
         self.value = result = []
@@ -1274,7 +1274,7 @@ class __structure_interface__(container):
 
             position = self.value[0].getposition() if len(self.value or []) > 0 else result.getposition()
             calculator = Fcalculate(position)
-            position = next(calculator)
+            position = utils.next(calculator)
 
             # now we can iterate through our structure fields to allocate them using
             # the fields that were actually given to us by the caller.
@@ -1517,7 +1517,7 @@ class __structure_interface__(container):
             # member, and only then will we actually update things.
             position = self.value[0].getposition() if len(self.value or []) > 0 else result.getposition()
             calculator = Fcalculate(position)
-            position = next(calculator)
+            position = utils.next(calculator)
 
             for index, item in enumerate(self.value):
                 if index in indices:
@@ -1766,7 +1766,7 @@ class blockarray(terminatedarray):
         # be partially loaded and thus we need to ensure it's still in the array.
         try:
             while total > 0:
-                item = next(generator, None)
+                item = utils.next(generator, None)
                 if item is None:
                     break
 
@@ -1912,7 +1912,7 @@ class partial(ptype.container):
             def transform(iterable, size=size):
                 while size > 0:
                     left = min(length, size)
-                    result = bytearray(bytes().join(map(lambda items: next(*items), zip(left * [iter(iterable)], left * [b'\0']))))
+                    result = bytearray(bytes().join(map(lambda items: utils.next(*items), zip(left * [iter(iterable)], left * [b'\0']))))
                     for index in reversed(range(0, len(result))):
                         yield result[index : index + 1]
                     size = Faggregate(size, len(result))
@@ -1930,7 +1930,7 @@ class partial(ptype.container):
         # If the word length is larger than a byte, then we're being
         # asked to flip the byte order making us little-endian.
         if self.length > 1:
-            Ftake = lambda length: lambda iterable: bytearray(map(lambda items: next(*items), zip(length * [iter(iterable)], length * [0])))
+            Ftake = lambda length: lambda iterable: bytearray(map(lambda items: utils.next(*items), zip(length * [iter(iterable)], length * [0])))
 
             # Grab from our data a block at a time using Config.integer.size for our block size
             iterable = iter(data)
@@ -2299,7 +2299,7 @@ if __name__ == '__main__':
 if __name__ == '__main__':
     import ptypes, struct
     from ptypes import pbinary, provider, pstruct, pint, bitmap
-    from ptypes.utils import operator
+    from ptypes.utils import operator, next
     prov = provider
 
     TESTDATA = b'ABCDIEAHFLSDFDLKADSJFLASKDJFALKDSFJ'

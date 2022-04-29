@@ -6,6 +6,27 @@ import functools, operator, itertools, types
 # Setup some version-agnostic types that we can perform checks with
 integer_types = (int, long) if sys.version_info[0] < 3 else (int,)
 
+# We need this because micropython doesn't implement a multi-parameter next().
+def builtins_next(iterable, *args):
+    '''
+    next(iterator[, default])
+
+    Return the next item from the iterator. If default is given and the iterator
+    '''
+    if len(args) > 1:
+        raise TypeError("next expected at most {:d} arguments, got {:d}".format(2, 1 + len(args)))
+    try:
+        result = builtins.next(iterable)
+    except StopIteration as E:
+        if args:
+            default, = args
+            return default
+        raise E
+    return result
+
+# py2 and micropython
+next = builtins.next if not hasattr(sys, 'implementation') else builtins.next if sys.implementation.name in {'cpython'} else builtins_next
+
 ## start somewhere
 def new(value, size):
     '''creates a new bitmap object. Bitmaps "grow" to the left.'''
@@ -41,7 +62,7 @@ def fit(integer):
 
 def string(bitmap, **kwargs):
     '''Returns bitmap as a formatted binary string starting with the most-significant-bits first'''
-    reverse = builtins.next((kwargs[k] for k in ['reverse', 'reversed'] if k in kwargs), False)
+    reverse = next((kwargs[k] for k in ['reverse', 'reversed'] if k in kwargs), False)
     integer, size = bitmap
     res = "{:0{:d}b}".format(integer, abs(size))
     return str().join(reversed(res)) if reverse else res
@@ -369,7 +390,7 @@ def repr(object):
 
 def data(bitmap, **kwargs):
     '''Convert a bitmap to a string left-aligned to 8-bits. Defaults to big-endian.'''
-    reverse = builtins.next((kwargs[k] for k in ['reverse', 'reversed'] if k in kwargs), False)
+    reverse = next((kwargs[k] for k in ['reverse', 'reversed'] if k in kwargs), False)
     integer, size = bitmap
 
     # align to 8-bits
