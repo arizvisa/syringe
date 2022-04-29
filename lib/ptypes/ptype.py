@@ -228,11 +228,11 @@ Example pointer_t usage:
             return number + 0x100
 """
 import sys, builtins, functools, operator, itertools, types
-import time, traceback
+import time
 
 from . import bitmap, provider, utils, error
 
-__all__ = 'istype,iscontainer,isrelated,type,container,undefined,block,definition,encoded_t,pointer_t,rpointer_t,opointer_t,boundary,debug,debugrecurse,clone,setbyteorder'.split(',')
+__all__ = 'istype,iscontainer,isrelated,type,container,undefined,block,definition,encoded_t,pointer_t,rpointer_t,opointer_t,boundary,clone,setbyteorder'.split(',')
 
 from . import config
 Config = config.defaults
@@ -335,92 +335,6 @@ def force(t, self, chain=[]):
 
     path = str().join(map("<{:s}>".format, self.backtrace()))
     raise error.TypeError(self, "force<ptype>', message='chain={!r} : Refusing request to resolve {!r} to a type that does not inherit from ptype.type : {{{:s}}}".format(chain, t, path))
-
-def debug(ptype, **attributes):
-    """``rethrow`` all exceptions that occur during initialization of ``ptype``"""
-    if not istype(ptype):
-        raise error.UserError(ptype, 'debug', message="{!r} is not a ptype".format(ptype))
-
-    def logentry(string, *args):
-        return (time.time(), traceback.extract_stack(), string.format(*args))
-
-    if any((hasattr(item) for item in ('_debug_', '_dump_'))):
-        raise error.UserError(ptype, 'debug', message="{!r} has a private method name that clashes".format(ptype))
-
-    class decorated_ptype(ptype):
-        __doc__ = ptype.__doc__
-        _debug_ = {}
-
-        def __init__(self, *args, **kwds):
-            self._debug_['creation'] = time.time(), traceback.extract_stack(), self.backtrace(lambda self: self)
-            return super(decorated_ptype, self).__init__(*args, **kwds)
-
-        def _dump_(self, file):
-            dbg = self._debug_
-            if 'constructed' in dbg:
-                t, c = dbg['constructed']
-                _, st, bt = dbg['creation']
-                file.write(u"[{!r}] {:s} -> {:s} -> {:s}\n".format(t, c, self.instance(), getattr(self, '__name__', u"")))
-            else:
-                t, st, bt = dbg['creation']
-                file.write(u"[{!r}] {:s} -> {:s} -> {:s}\n".format(t, self.typename(), self.instance(), getattr(self, '__name__', u"")))
-
-            file.write(u"\nCreated by:\n")
-            file.write(format_stack(st))
-            file.write(u"\nLocated at:\n")
-            file.write('\n'.join(u"{:s} : {:s}".format(x.instance(), x.name()) for x in bt))
-            file.write(u"\nLoads from store\n")
-            file.write('\n'.join("[:d] [{:f}] {:s}".format(i, t, string) for i, (t, _, string) in enumerate(dbg['load'])))
-            file.write(u"\nWrites to store\n")
-            file.write('\n'.join(u"[:d] [{:f}] {:s}".format(i, t, string) for i, (t, _, string) in enumerate(dbg['commit'])))
-            file.write(u"\nSerialized to a string:\n")
-            file.write('\n'.join(u"[:d] [{:f}] {:s}".format(i, t, string) for i, (t, _, string) in enumerate(dbg['serialize'])))
-            return
-
-        def serialize(self):
-            result = super(decorated, self).serialize()
-            size = len(result)
-            _ = logentry(u"serialize() -> __len__() -> {:#x}", self.instance(), len(size))
-            Log.debug(" : ".join(self.instance(), _[-1]))
-            self._debug_.setdefault('serialize', []).append(_)
-            return result
-
-        def load(self, **kwds):
-            start = time.time()
-            result = super(decorated, self).load(**kwds)
-            end = time.time()
-
-            offset, size, source = self.getoffset(), self.blocksize(), self.source
-            _ = logentry(u"load({:s}) {:f} seconds -> (offset={:#x},size={:#x}) -> source={!r}", ','.join(u"{:s}={!r}".format(k, v) for k, v in attrs.items()), end-start, offset, size, source)
-            Log.debug(" : ".join(self.instance(), _[-1]))
-            self._debug_.setdefault('load', []).append(_)
-            return result
-
-        def commit(self, **kwds):
-            start = time.time()
-            result = super(decorated, self).commit(**kwds)
-            end = time.time()
-
-            _ = logentry(u"commit({:s}) {:f} seconds -> (offset={:#x},size={:#x}) -> source={!r}", ','.join(u"{:s}={!r}".format(k, v) for k, v in attrs.items()), end-start, offset, size, source)
-            Log.debug(" : ".join(self.instance(), _[-1]))
-            self._debug_.setdefault('commit', []).append(_)
-            return result
-
-    decorated.__name__ = "debug({:s})".format(ptype.__name__)
-    decorated._debug_.update(attributes)
-    return decorated
-
-def debugrecurse(ptype):
-    """``rethrow`` all exceptions that occur during initialization of ``ptype`` and any sub-elements"""
-    class decorated(debug(ptype)):
-        __doc__ = ptype.__doc__
-        def new(self, t, **attrs):
-            res = force(t, self)
-            Log.debug("constructed : {!r} -> {:s} {:s}".format(t, self.classname(), self.name()))
-            debugres = debug(res, constructed=(time.time(), t))
-            return super(decorated, self).new(debugres, **attrs)
-    decorated.__name__ = "debug({:s},recurse=True)".format(ptype.__name__)
-    return decorated
 
 source = provider.default()
 class __interface__(object):
