@@ -190,7 +190,9 @@ def configuration(cls):
             continue
         elif isinstance(value, field.descriptor):
             properties[name] = value
-        elif not hasattr(value, '__class__') or (object.__sizeof__(value) == object.__sizeof__(type)):
+        elif not hasattr(value, '__class__'):
+            subclass[name] = configuration(value)
+        elif hasattr(object, '__sizeof__') and object.__sizeof__(value) == object.__sizeof__(type):
             subclass[name] = configuration(value)
         continue
 
@@ -251,7 +253,7 @@ class partial:
 ### new-config
 @configuration
 class defaults:
-    log = field.type('default-logger', logging.Filterer, 'Default logging facility and level.')
+    log = field.type('default-logger', logging.Logger, 'Default logging facility and level.')
 
     class integer:
         size = field.type('integersize', integer_types, 'The word-size of the architecture.')
@@ -317,12 +319,15 @@ except ImportError:
 ### defaults
 # logging
 defaults.log = log = logging.getLogger('ptypes')
-log.setLevel(logging.root.level)
+log.setLevel(log.level)
 log.propagate = 1
-res = logging.StreamHandler(None)
-res.setFormatter(logging.Formatter("[%(created).3f] <%(process)x.%(thread)x> [%(levelname)s:%(name)s] %(message)s", None))
-log.addHandler(res)
-del(res, log)
+
+if 'micropython' and hasattr(logging, 'StreamHandler'):
+    res = logging.StreamHandler(None)
+    res.setFormatter(logging.Formatter("[%(created).3f] <%(process)x.%(thread)x> [%(levelname)s:%(name)s] %(message)s", None))
+    log.addHandler(res)
+    del(res)
+del(log)
 
 # general integers
 defaults.integer.size = math.trunc(math.log(2 * (sys.maxsize + 1), 2) // 8)
