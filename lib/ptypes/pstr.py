@@ -462,7 +462,7 @@ class szstring(string):
         # deserializing any input and checking for a terminator.
         item = self.new(self._object_, offset=self.getoffset())
         while True:
-            res = itertools.islice(stream, item.blocksize())
+            res = utils.islice(stream, item.blocksize())
             item.__deserialize_block__(bytes().join(res))
 
             # we now have a character to deserialize into our value

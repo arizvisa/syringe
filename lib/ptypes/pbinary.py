@@ -2299,7 +2299,7 @@ if __name__ == '__main__':
 if __name__ == '__main__':
     import ptypes, struct
     from ptypes import pbinary, provider, pstruct, pint, bitmap
-    from ptypes.utils import operator, next
+    from ptypes.utils import operator, next, islice
     prov = provider
 
     TESTDATA = b'ABCDIEAHFLSDFDLKADSJFLASKDJFALKDSFJ'
@@ -2396,7 +2396,7 @@ if __name__ == '__main__':
         t = pbinary.littleendian(blah)
         res = t()
 
-        data = itertools.islice(data, res.a.size())
+        data = islice(data, res.a.size())
         res.source = provider.bytes(bytes(bytearray(data)))
         res.l
 

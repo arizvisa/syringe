@@ -677,8 +677,19 @@ class stream(base):
 
 class iterable(stream):
     '''Provider that caches data read from a generator/iterable in order to provide random-access reading.'''
-    def _read(self, amount):
-        return b''.join(itertools.islice(self.source, amount))
+
+    @staticmethod
+    def __iconsume__(iterable, amount):
+        '''this is just like itertools.islice but only implement the 2-parameter version.'''
+        for _, item in zip(range(amount), iterable):
+            yield item
+        return
+
+    def _itertools_read(self, amount):
+        return bytes(bytearray(itertools.islice(self.source, amount)))
+    def _iconsume_read(self, amount):
+        return bytes(bytearray(self.__iconsume__(self.source, amount)))
+    _read = _itertools_read if not hasattr(sys, 'implementation') else _itertools_read if sys.implementation.name in {'cpython'} else _iconsume_read
 
     def _write(self, data):
         Log.info("iter._write : Tried to write {:+x} bytes to an iterator".format(len(data)))
