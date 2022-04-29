@@ -542,13 +542,7 @@ class __interface__(object):
         return name
     def instance(self):
         """Returns a minimal string describing the type and it's location"""
-        cls, name, ofs = self.__class__, self.classname(), self.getoffset()
-        try:
-            if self.initializedQ() or not utils.callable_eq(self.blocksize, cls.blocksize):
-                bs = self.blocksize()
-                return "{:s}[{:x}:{:+x}]".format(name, ofs, bs)
-        except Exception:
-            pass
+        name, ofs = self.classname(), self.getoffset()
         return "{:s}[{:x}:+???]".format(name, ofs)
 
     def hexdump(self, **options):
@@ -1000,6 +994,14 @@ class type(base):
             result.length = self.length
         return result
 
+    def instance(self):
+        """Returns a minimal string describing the type and it's location"""
+        name, ofs = self.classname(), self.getoffset()
+        if self.value is None:
+            return super(type, self).instance()
+        bs = self.blocksize()
+        return "{:s}[{:x}:{:+x}]".format(name, ofs, bs)
+
     def initializedQ(self):
         return True if self.value is not None and len(self.value) >= self.blocksize() else False
 
@@ -1136,6 +1138,20 @@ class container(base):
 
     def __hash__(self):
         return super(container, self).__hash__() ^ hash(None if self.value is None else tuple(self.value))
+
+    def instance(self):
+        """Returns a minimal string describing the type and it's location"""
+        cls, name, ofs = self.__class__, self.classname(), self.getoffset()
+        if self.value is None:
+            return super(container, self).instance()
+        try:
+            if not utils.callable_eq(self.blocksize, cls.blocksize) or self.initializedQ():
+                bs = self.blocksize()
+        except Exception:
+            pass
+        else:
+            return "{:s}[{:x}:{:+x}]".format(name, ofs, self.size())
+        return super(container, self).instance()
 
     def initializedQ(self):
         """True if the type is fully initialized"""
