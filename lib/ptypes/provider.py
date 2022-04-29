@@ -388,7 +388,7 @@ class fileobj(bounded):
         if amount < 0:
             raise error.UserError(self, 'consume', message="Tried to consume a negative number of bytes ({:x}:{:+x}) from {!s}".format(offset, amount, self))
 
-        result = ''
+        result = b''
         try:
             result = self.file.read(amount)
 
@@ -396,7 +396,7 @@ class fileobj(bounded):
             self.file.seek(offset)
             raise error.ConsumeError(self, offset, amount, len(result), exception=E)
 
-        if result == '' and amount > 0:
+        if result == b'' and amount > 0:
             raise error.ConsumeError(self, offset, amount, len(result))
 
         if len(result) != amount:
