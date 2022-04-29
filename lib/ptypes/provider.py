@@ -769,15 +769,14 @@ try:
     if not pkgutil.find_loader('tempfile'):
         raise ImportError
 
+    import tempfile as __tempfile__
+
     class filecopy(fileobj):
         """A provider that reads/writes from a temporary copy of the specified file.
 
         If the user wishes to save the file to another location, a .save method is provided.
         """
         def __init__(self, *args, **kwds):
-            import tempfile
-            self.__tempfile__ = tempfile
-
             res = self.open(*args, **kwds)
             return super(filecopy, self).__init__(res)
 
@@ -786,7 +785,7 @@ try:
             '''Open the specified file as a temporary file.'''
             with open(filename, 'rb') as input:
                 input.seek(0)
-                output = self.__tempfile__.TemporaryFile(mode='w+b')
+                output = __tempfile__.TemporaryFile(mode='w+b')
                 for data in input:
                     output.write(data)
                 output.seek(0)
@@ -1060,6 +1059,8 @@ except OSError as E:
 
 try:
     _ = 'idaapi' in sys.modules
+
+    import idaapi as __idaapi__
     class Ida(debuggerbase):
         '''A provider that uses IDA Pro's API for reading/writing to the database.'''
 
@@ -1068,56 +1069,70 @@ try:
             Static class for abstracting around IDA's API prior to 7.0,
             and 7.0 or later.
             """
-            module = importlib.import_module('idaapi')
-            BADADDR = module.BADADDR
+            BADADDR = __idaapi__.BADADDR
 
-            if hasattr(module, 'get_many_bytes'):
-                get_bytes = staticmethod(module.get_many_bytes)
-            elif hasattr(module, 'get_bytes'):
-                get_bytes = staticmethod(module.get_bytes)
+            if hasattr(__idaapi__, 'get_many_bytes'):
+                get_bytes = staticmethod(__idaapi__.get_many_bytes)
+            elif hasattr(__idaapi__, 'get_bytes'):
+                get_bytes = staticmethod(__idaapi__.get_bytes)
             else:
                 raise ImportError('get_bytes')
 
-            if hasattr(module, 'get_nlist_ea'):
-                get_nlist_ea = staticmethod(module.get_nlist_ea)
+            if hasattr(__idaapi__, 'get_nlist_ea'):
+                get_nlist_ea = staticmethod(__idaapi__.get_nlist_ea)
             else:
                 raise ImportError('get_nlist_ea')
 
-            if hasattr(module, 'get_nlist_size'):
-                get_nlist_size = staticmethod(module.get_nlist_size)
+            if hasattr(__idaapi__, 'get_nlist_size'):
+                get_nlist_size = staticmethod(__idaapi__.get_nlist_size)
             else:
                 raise ImportError('get_nlist_size')
 
-            if hasattr(module, 'getseg'):
-                getseg = staticmethod(module.getseg)
+            if hasattr(__idaapi__, 'getseg'):
+                getseg = staticmethod(__idaapi__.getseg)
             else:
                 raise ImportError('getseg')
 
-            if hasattr(module, 'patch_many_bytes'):
-                patch_bytes = staticmethod(module.patch_many_bytes)
-            elif hasattr(module, 'patch_bytes'):
-                patch_bytes = staticmethod(module.patch_bytes)
+            if hasattr(__idaapi__, 'patch_many_bytes'):
+                patch_bytes = staticmethod(__idaapi__.patch_many_bytes)
+            elif hasattr(__idaapi__, 'patch_bytes'):
+                patch_bytes = staticmethod(__idaapi__.patch_bytes)
             else:
                 raise ImportError('patch_bytes')
 
-            if hasattr(module, 'put_many_bytes'):
-                put_bytes = staticmethod(module.put_many_bytes)
-            elif hasattr(module, 'put_bytes'):
-                put_bytes = staticmethod(module.put_bytes)
+            if hasattr(__idaapi__, 'put_many_bytes'):
+                put_bytes = staticmethod(__idaapi__.put_many_bytes)
+            elif hasattr(__idaapi__, 'put_bytes'):
+                put_bytes = staticmethod(__idaapi__.put_bytes)
             else:
                 raise ImportError('put_bytes')
 
-            if hasattr(module, 'isEnabled'):
-                is_mapped = staticmethod(module.isEnabled)
-            elif hasattr(module, 'is_mapped'):
-                is_mapped = staticmethod(module.is_mapped)
+            if hasattr(__idaapi__, 'isEnabled'):
+                is_mapped = staticmethod(__idaapi__.isEnabled)
+            elif hasattr(__idaapi__, 'is_mapped'):
+                is_mapped = staticmethod(__idaapi__.is_mapped)
             else:
                 raise ImportError('is_mapped')
 
-            if hasattr(module, 'get_imagebase'):
-                get_imagebase = staticmethod(module.get_imagebase)
+            if hasattr(__idaapi__, 'get_imagebase'):
+                get_imagebase = staticmethod(__idaapi__.get_imagebase)
             else:
                 raise ImportError('get_imagebase')
+
+            if hasattr(__idaapi__, 'get_flags'):
+                get_flags = staticmethod(__idaapi__.get_flags)
+            else:
+                raise ImportError('get_flags')
+
+            if hasattr(__idaapi__, 'FF_IVL'):
+                FF_IVL = staticmethod(__idaapi__.FF_IVL)
+            else:
+                raise ImportError('FF_IVL')
+
+            if hasattr(__idaapi__, 'get_nlist_name'):
+                get_nlist_name = staticmethod(__idaapi__.get_nlist_name)
+            else:
+                raise ImportError('get_nlist_name')
 
         offset = __api__.BADADDR
         def __new__(cls):
@@ -1134,12 +1149,12 @@ try:
             if half > 0:
                 return b''.join([cls.read(offset, half, padding=padding), cls.read(offset + half, half + size % 2, padding=padding)])
             if cls.__api__.is_mapped(offset):
-                return b'' if size == 0 else (padding * size) if (cls.module.getFlags(offset) & cls.module.FF_IVL) == 0 else cls.module.get_many_bytes(offset, size)
+                return b'' if size == 0 else (padding * size) if (cls.__api__.getFlags(offset) & cls.__api__.FF_IVL) == 0 else cls.__api__.get_many_bytes(offset, size)
             raise Exception((offset, size))
 
         @classmethod
         def expr(cls, string):
-            index = (i for i in range(cls.__api__.get_nlist_size()) if string == cls.module.get_nlist_name(i))
+            index = (i for i in range(cls.__api__.get_nlist_size()) if string == cls.__api__.get_nlist_name(i))
             try:
                 res = cls.__api__.get_nlist_ea(next(index))
 
@@ -1194,6 +1209,8 @@ try:
         raise ImportError
 
     _ = 'binaryninja' in sys.modules
+
+    import binaryninja as __binaryninja__
     class Binja(debuggerbase):
         '''A provider that uses Binary Ninja's BinaryViewType API for reading/writing from an address space.'''
         def __init__(self, bv):
@@ -1235,11 +1252,11 @@ except ImportError:
 try:
     if not pkgutil.find_loader('_PyDbgEng'):
         raise ImportError
-
     _ = '_PyDbgEng' in sys.modules
+
+    import _PyDbgEng as __PyDbgEng__
     class PyDbgEng(debuggerbase):
         '''A provider that uses the PyDbgEng.pyd module to interact with the memory of the current debugged process.'''
-        import _PyDbgEng as __PyDbgEng__
 
         offset = 0
         def __init__(self, client=None):
@@ -1248,31 +1265,31 @@ try:
         @classmethod
         def connect(cls, remote):
             if remote is None:
-                result = cls.__PyDbgEng__.Create()
+                result = __PyDbgEng__.Create()
             elif isinstance(remote, tuple):
                 host, port = client
-                result = cls.__PyDbgEng__.Connect("tcp:port={}, server={}".format(port, host))
+                result = __PyDbgEng__.Connect("tcp:port={}, server={}".format(port, host))
             elif isinstance(remote, dict):
-                result = cls.__PyDbgEng__.Connect("tcp:port={port}, server={host}".format(**client))
+                result = __PyDbgEng__.Connect("tcp:port={port}, server={host}".format(**client))
             elif isinstance(remote, utils.string_types):
-                result = cls.__PyDbgEng__.Connect(client)
+                result = __PyDbgEng__.Connect(client)
             return cls(result)
 
         @classmethod
         def connectprocessserver(cls, remote):
-            result = cls.__PyDbgEng__.ConnectProcessServer(remoteOptions=remote)
+            result = __PyDbgEng__.ConnectProcessServer(remoteOptions=remote)
             return cls(result)
 
         def connectkernel(self, remote):
             if remote is None:
-                result = cls.__PyDbgEng__.AttachKernel(flags=cls.__PyDbgEng__.ATTACH_LOCAL_KERNEL)
+                result = __PyDbgEng__.AttachKernel(flags=__PyDbgEng__.ATTACH_LOCAL_KERNEL)
             else:
-                result = cls.__PyDbgEng__.AttachKernel(flags=0, connectOptions=remote)
+                result = __PyDbgEng__.AttachKernel(flags=0, connectOptions=remote)
             return cls(result)
 
         @classmethod
         def expr(cls, string):
-            control = cls.__PyDbgEng__.IDebugControl
+            control = __PyDbgEng__.IDebugControl
             dtype = DEBUG_VALUE_INT32
             return control.Evaluate(string, dtype)
 
@@ -1305,15 +1322,15 @@ try:
         raise ImportError
 
     _ = 'pykd' in sys.modules
+    import pykd as __pykd__
     class Pykd(debuggerbase):
         '''A provider that uses the Pykd library to interact with the memory of a debugged process.'''
-        import pykd as __pykd__
         def __init__(self):
             self.address = 0
 
         @classmethod
         def expr(cls, string):
-            return cls.__pykd__.expr(string)
+            return __pykd__.expr(string)
 
         def seek(self, offset):
             '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
@@ -1326,7 +1343,7 @@ try:
             if amount == 0:
                 return b''
             try:
-                data = self.__pykd__.loadBytes(self.address, amount)
+                data = __pykd__.loadBytes(self.address, amount)
                 res = bytearray(data)
             except Exception:
                 raise error.ConsumeError(self, self.address, amount, 0)
@@ -1340,7 +1357,7 @@ try:
             amount, argh = len(data), bytearray(data)
             items = [octet for octet in argh]
             try:
-                self.__pykd__.writeBytes(self.address, items)
+                __pykd__.writeBytes(self.address, items)
             except Exception:
                 raise error.StoreError(self, self.address, len(data))
             self.address += amount
@@ -1357,10 +1374,11 @@ try:
         raise ImportError
 
     _ = 'lldb' in sys.modules
+
+    import lldb as __lldb__
     class lldb(debuggerbase):
-        module = importlib.import_module('lldb')
         def __init__(self, sbprocess=None):
-            self.__process = sbprocess or self.module.process
+            self.__process = sbprocess or __lldb__.process
             self.address = 0
 
         @classmethod
@@ -1374,7 +1392,7 @@ try:
         def consume(self, amount):
             if amount < 0:
                 raise error.ConsumeError(self, self.address, amount)
-            process, err = self.__process, self.module.SBError()
+            process, err = self.__process, __lldb__.SBError()
             if amount > 0:
                 data = process.ReadMemory(self.address, amount, err)
                 if err.Fail() or len(data) != amount:
@@ -1384,7 +1402,7 @@ try:
             return b''
 
         def store(self, data):
-            process, err = self.__process, self.module.SBError()
+            process, err = self.__process, __lldb__.SBError()
             amount = process.WriteMemory(self.address, builtins.bytes(data), err)
             if err.Fail() or len(data) != amount:
                 raise error.StoreError(self, self.address, len(data))
@@ -1402,16 +1420,17 @@ try:
         raise ImportError
 
     _ = 'gdb' in sys.modules
+
+    import gdb as __gdb__
     class gdb(debuggerbase):
-        module = importlib.import_module('gdb')
         def __init__(self, inferior=None):
-            gdb = self.module
+            gdb = __gdb__
             self.inferior = inferior or gdb.selected_inferior()
             self.address = 0
 
         @classmethod
         def expr(cls, expression):
-            gdb = cls.module
+            gdb = __gdb__
 
             try:
                 type = gdb.lookup_type('intptr_t')
@@ -1428,7 +1447,7 @@ try:
             return res
 
         def consume(self, amount):
-            gdb, process = self.module, self.inferior
+            gdb, process = __gdb__, self.inferior
             try:
                 mem = process.read_memory(self.address, amount)
             except gdb.MemoryError:
@@ -1439,7 +1458,7 @@ try:
             return mem.tobytes()
 
         def store(self, data):
-            gdb, process = self.module, self.inferior
+            gdb, process = __gdb__, self.inferior
             try:
                 process.write_memory(self.address, data)
             except gdb.MemoryError:
