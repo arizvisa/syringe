@@ -135,7 +135,7 @@ Example usage of pint.enum:
     # return the instance as a name or an integer in string form
     print(instance.str())
 """
-import functools, operator, itertools, math, builtins
+import functools, itertools, math, builtins
 from . import ptype, bitmap, error, utils
 
 from . import config
@@ -416,8 +416,8 @@ class enum(type):
 
         # collect duplicate values and give a warning if there are any found for a name
         res = {}
-        for value, items in itertools.groupby(self._values_, operator.itemgetter(0)):
-            res.setdefault(value, set()).update(map(operator.itemgetter(1), items))
+        for value, items in itertools.groupby(self._values_, utils.operator.itemgetter(0)):
+            res.setdefault(value, set()).update(map(utils.operator.itemgetter(1), items))
 
         for value, items in res.items():
             if len(items) > 1:
@@ -580,6 +580,7 @@ if __name__ == '__main__':
 if __name__ == '__main__':
     import ptypes, sys, struct
     from ptypes import provider, utils, pint
+    from ptypes.utils import operator
 
     string1 = b'\x0a\xbc\xde\xf0'
     string2 = b'\xf0\xde\xbc\x0a'

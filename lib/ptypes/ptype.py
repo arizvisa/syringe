@@ -227,7 +227,7 @@ Example pointer_t usage:
         def _calculate_(self, number):
             return number + 0x100
 """
-import sys, builtins, functools, operator, itertools, types
+import sys, builtins, functools, itertools, types
 import time
 
 from . import bitmap, provider, utils, error
@@ -637,7 +637,7 @@ class __interface__(object):
         chain = str().join("<{:s}>".format(node.instance()) for node in self.traverse(edges=parents))
         res = (q.typename() if istype(q) else str(q) for q in query)
         raise error.ItemNotFoundError(self, 'base.getparent', message="The requested match ({:s}) was not found while traversing from {:s} : {:s}".format(', '.join(res), self.instance(), chain))
-    def backtrace(self, fn=operator.methodcaller('instance')):
+    def backtrace(self, fn=utils.operator.methodcaller('instance')):
         """
         Return a backtrace to the root element applying ``fn`` to each parent
 
@@ -1190,7 +1190,7 @@ class container(base):
             return self[name].getoffset(res) if len(res) > 0 else self.getoffset(name)
 
         index = self.__getindex__(field)
-        return self.getoffset() + sum(map(operator.methodcaller('size'), self.value[:index]))
+        return self.getoffset() + sum(map(utils.operator.methodcaller('size'), self.value[:index]))
 
     def __getindex__(self, name):
         """Searches the .value attribute for an element with the provided ``name``
@@ -1316,13 +1316,13 @@ class container(base):
         try:
             res = self.blocksize()
         except Exception:
-            return b''.join(map(operator.methodcaller('serialize'), iter(self.value)))
+            return b''.join(map(utils.operator.methodcaller('serialize'), iter(self.value)))
 
         # if there's no blocksize, then this field is empty
         if res <= 0: return b''
 
         # serialize all the elements that we currently have
-        data = b''.join(map(operator.methodcaller('serialize'), iter(self.value)))
+        data = b''.join(map(utils.operator.methodcaller('serialize'), iter(self.value)))
 
         try:
             parent = self.getparent(encoded_t)
@@ -1784,13 +1784,13 @@ class definition(object):
         if cls.has(key, **kwargs):
             original, new = cls.cache[key], object
             Log.warning("definition.__set__ : {:s} : Overwriting definition ({:s}) for key {!r} with new definition ({:s})".format('.'.join([cls.__module__, cls.__name__]), '.'.join([original.__module__, original.__name__]), key, '.'.join([new.__module__, new.__name__])))
-        return operator.setitem(cls.cache, key, object)
+        return utils.operator.setitem(cls.cache, key, object)
 
     @classmethod
     def __get__(cls, key, default, **kwargs):
         '''Overloadable: Return the object for a specified ``key``. If not found, then return ``default``.'''
         try:
-            result = operator.getitem(cls.cache, key)
+            result = utils.operator.getitem(cls.cache, key)
 
         except KeyError:
             result = default
@@ -1799,7 +1799,7 @@ class definition(object):
     @classmethod
     def __del__(cls, key, **kwargs):
         '''Overloadable: Remove the object for the specified ``key``, and return it.'''
-        res, _ = operator.getitem(cls.cache, key), operator.delitem(cls.cache, key)
+        res, _ = utils.operator.getitem(cls.cache, key), utils.operator.delitem(cls.cache, key)
         return res
 
     @classmethod

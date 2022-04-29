@@ -114,7 +114,7 @@ Example usage:
     instance.load()
 """
 import sys, math, types
-import itertools, operator, functools
+import itertools, functools
 
 try:
     from . import ptype
@@ -599,8 +599,8 @@ class enum(integer):
 
         # collect duplicate values and give a warning if there are any found for a name
         res = {}
-        for value, items in itertools.groupby(self._values_, operator.itemgetter(0)):
-            res.setdefault(value, set()).update(map(operator.itemgetter(1), items))
+        for value, items in itertools.groupby(self._values_, utils.operator.itemgetter(0)):
+            res.setdefault(value, set()).update(map(utils.operator.itemgetter(1), items))
 
         for value, items in res.items():
             if len(items) > 1:
@@ -812,7 +812,7 @@ class container(type):
         """Performs a deep-copy of self repopulating the new instance if self is initialized"""
         # create an instance of self and update with requested attributes
         result = super(container, self).copy(**attrs)
-        result.value = map(operator.methodcaller('copy', **attrs), self.value)
+        result.value = map(utils.operator.methodcaller('copy', **attrs), self.value)
         result.value = [item.copy(**attrs) for item in self.value]
         return result
 
@@ -856,7 +856,7 @@ class container(type):
     def bitmap(self):
         if self.value is None:
             raise error.InitializationError(self, 'container.bitmap')
-        iterable = map(operator.methodcaller('bitmap'), self.value)
+        iterable = map(utils.operator.methodcaller('bitmap'), self.value)
         filtered = (item for item in iterable if item)
         return functools.reduce(bitmap.push, filtered, bitmap.zero)
 
@@ -1653,7 +1653,7 @@ class struct(__structure_interface__):
 
     def __and__(self, field):
         '''Used to test the value of the specified field'''
-        return operator.getitem(self, field)
+        return utils.operator.getitem(self, field)
 
     #def __getstate__(self):
     #    return super(struct, self).__getstate__(), self._fields_,
@@ -2207,7 +2207,7 @@ class flags(struct):
 
     def __and__(self, field):
         '''Used to test the value of the specified field'''
-        res = operator.getitem(self, field)
+        res = utils.operator.getitem(self, field)
         return bool(res > 0)
 
 ## binary type conversion/generation
@@ -2299,6 +2299,7 @@ if __name__ == '__main__':
 if __name__ == '__main__':
     import ptypes, struct
     from ptypes import pbinary, provider, pstruct, pint, bitmap
+    from ptypes.utils import operator
     prov = provider
 
     TESTDATA = b'ABCDIEAHFLSDFDLKADSJFLASKDJFALKDSFJ'

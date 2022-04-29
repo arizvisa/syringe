@@ -82,7 +82,7 @@ Example usage:
     # print the length of the array
     print(len(instance))
 """
-import itertools, operator
+import itertools
 from . import ptype, utils, error
 
 __all__ = 'type,terminated,infinite,block'.split(',')
@@ -469,7 +469,7 @@ class uninitialized(terminated):
             return False
 
         # Grab all initialized elements near the beginning
-        res = list(itertools.takewhile(operator.methodcaller('initializedQ'), self.value))
+        res = list(itertools.takewhile(utils.operator.methodcaller('initializedQ'), self.value))
 
         # Return True if the whole thing is initialized or just the tail is uninitialized
         return len(res) == len(self.value) or all(not item.initializedQ() for item in self.value[len(res):])
@@ -716,8 +716,9 @@ if __name__ == '__main__':
         return fn
 
 if __name__ == '__main__':
-    import ptypes, sys, operator, array, string, random, functools
+    import ptypes, sys, array, string, random, functools
     from ptypes import pstruct, parray, pint, provider, utils, dynamic, ptype
+    from ptypes.utils import operator
 
     arraytobytes = operator.methodcaller('tostring' if sys.version_info[0] < 3 else 'tobytes')
     class RecordGeneral(pstruct.type):

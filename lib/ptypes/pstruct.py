@@ -45,7 +45,7 @@ Example usage:
     # remove an alias
     instance.unalias('alternative-name')
 """
-import functools, operator, itertools
+import functools, itertools
 from . import ptype, utils, pbinary, error
 
 __all__ = ['type', 'make']
@@ -410,8 +410,8 @@ def make(fields, **attrs):
     This will automatically create padding in the structure for any holes that were found.
     """
     fields = [item for item in fields]
-    items = sorted(fields, key=operator.methodcaller('getoffset'))
-    grouped = [(offset, [item for item in items]) for offset, items in itertools.groupby(items, key=operator.methodcaller('getoffset'))]
+    items = sorted(fields, key=utils.operator.methodcaller('getoffset'))
+    grouped = [(offset, [item for item in items]) for offset, items in itertools.groupby(items, key=utils.operator.methodcaller('getoffset'))]
     baseoffset = next(position for position, _ in grouped)
 
     # FIXME: we need to build a segment tree of all of our items that are grouped

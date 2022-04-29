@@ -577,8 +577,9 @@ if __name__ == '__main__':
         return fn
 
 if __name__ == '__main__':
-    import ptypes, functools, zlib, operator
-    from ptypes import dynamic, pint, parray, pstruct, config
+    import ptypes, functools, zlib
+    from ptypes import dynamic, pint, parray, pstruct, config, utils
+    from ptypes.utils import operator
 
     ptypes.setsource(ptypes.provider.bytes(b'A'*50000))
 

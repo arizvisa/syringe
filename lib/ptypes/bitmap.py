@@ -459,8 +459,8 @@ def groupby(sequence, count):
         (index, value) = item
         return index // count
 
-    for key, res in itertools.groupby(idata, fkey):
-        yield builtins.map(operator.itemgetter(1), res)
+    for key, iterable in itertools.groupby(idata, fkey):
+        yield builtins.map(operator.itemgetter(1), iterable)
     return
 
 # jspelman. he's everywhere.
@@ -683,8 +683,9 @@ if __name__ == '__main__':
 if __name__ == '__main__':
     import ptypes
     from ptypes import bitmap
+    from ptypes.utils import operator
 
-    import sys, operator
+    import sys
     tohex = operator.methodcaller('encode', 'hex') if sys.version_info[0] < 3 else operator.methodcaller('hex')
 
     ### set
