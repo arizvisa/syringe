@@ -4,11 +4,20 @@ class Base(exceptions.Exception):
     """Root exception type in ptypes"""
     def __init__(self, *args):
         return super(Base, self).__init__(*args)
-
     def name(self):
         cls, module = self.__class__, self.__module__
         return '.'.join([module, cls.__name__])
+    def __str__(self):
 
+        # micropython's implementation of Exception doesn't seem to
+        # include Exception.__str__ yet, so we check to see if it
+        # seems to exist and use it if so.
+        if hasattr(exceptions.Exception, '__str__'):
+            return super(Base, self).__str__()
+
+        # otherwise, it seems the default python implements this as
+        # an empty string...so, is this a specification problem?
+        return ''
     def __repr__(self):
         return self.__str__()
 
