@@ -620,17 +620,31 @@ def callable_eq3(ca, a, cb, b):
     b_ = b.__func__ if isinstance(b, types.MethodType) else b
     return a_ is b_
 
-def callable_micro(ca, a, cb, b):
-    aname, bname = a.__name__, b.__name__
-    nsa, nsb = {} if ca is None else ca.__dict__, {} if cb is None else cb.__dict__
-    ta, tb = None if ca is None else ca.__class__, None if cb is None else cb.__class__
-    fa, fb = nsa.get(aname, ta.__dict__[aname] if ta else a), nsb.get(bname, tb.__dict__[bname] if tb else b)
+def callable_equ(ca, a, cb, b):
+    '''µpython'''
+    if ca is cb is None:
+        return a is b
+
+    # if everything is defined (not None), then we need both namespaces.
+    elif all((ca, cb)):
+        nsa, nsb = ca.__dict__, cb.__dict__
+        ta, tb = ca.__class__.__dict__, cb.__class__.__dict__
+
+        aname, bname = a.__name__, b.__name__
+        fa, fb = nsa.get(aname, ta.get(aname, 1)), nsb.get(bname, tb.get(bname, 2))
+
+    # otherwise one of them is None and the other is not...so put them
+    # in the exact same variable so we can use the same logic.
+    else:
+        c, name, other = (ca, a.__name__, b) if cb is None else (cb, b.__name__, a)
+        ns, t = c.__dict__, c.__class__.__dict__
+        fa, fb = ns.get(name, t.get(name, 1)), other
     return fa is fb
 
-if any(hasattr(callable_micro, __attribute__) for __attribute__ in ['__code__', 'func_code']):
+if any(hasattr(callable_equ, __attribute__) for __attribute__ in ['__code__', 'func_code']):
     callable_eq = callable_eq2 if sys.version_info[0] < 3 else callable_eq3
 else:
-    callable_eq = callable_micro
+    callable_eq = callable_equ
 
 # operator implementations
 class fakeoperator(object):
@@ -890,7 +904,89 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_method_eq():
+    def test_callableeq_function_same():
+        def callable(*args):
+            return True
+        if callable_eq(None, callable, None, callable) and callable():
+            raise Success
+
+    @TestCase
+    def test_callableeq_function_diff():
+        def callable1(*args):
+            return True
+        def callable2(*args):
+            return True
+        if not callable_eq(None, callable1, None, callable2) and all(item() for item in [callable1, callable2]):
+            raise Success
+
+    @TestCase
+    def test_callableeq_methodclass_same_1():
+        def method(*self):
+            return True
+        class A(object):
+            pass
+        A.method = method
+
+        x, y = A(), A
+        if callable_eq(x, x.method, y, method if y is None else y.method) and all(item() for item in [x.method, method if y is None else y.method]):
+            raise Success
+
+    @TestCase
+    def test_callableeq_methodclass_same_2():
+        def method(*self):
+            return True
+        class A(object):
+            pass
+        A.method = method
+
+        x, y = A, None
+        if callable_eq(x, x.method, y, method if y is None else y.method) and all(item() for item in [x.method, method if y is None else y.method]):
+            raise Success
+
+    @TestCase
+    def test_callableeq_methodclass_same_3():
+        def method(*self):
+            return True
+        class A(object):
+            pass
+        A.method = method
+
+        x, y = A(), None
+        if callable_eq(x, x.method, y, method if y is None else y.method) and all(item() for item in [x.method, method if y is None else y.method]):
+            raise Success
+
+    @TestCase
+    def test_callableeq_methodclass_diff_1():
+        def method(*self):
+            return True
+        class A(object):
+            pass
+        A.method = method
+        class B(A):
+            def method(*self):
+                return True
+
+        x, y = A(), B
+        if not callable_eq(x, x.method, y, method if y is None else y.method) and all(item() for item in [x.method, method if y is None else y.method]):
+            raise Success
+
+    @TestCase
+    def test_callableeq_methodclass_diff_2():
+        def method(*self):
+            return True
+        class A(object):
+            pass
+        A.method = method
+        class B(A):
+            def method(*self):
+                return True
+
+        x, y = A(), B()
+        if not callable_eq(x, x.method, y, method if y is None else y.method) and all(item() for item in [x.method, method if y is None else y.method]):
+            raise Success
+
+    @TestCase
+    def test_callableeq_methodmethod_same_1():
         def method(*self):
             return True
         class A(object):
@@ -898,19 +994,209 @@ if __name__ == '__main__':
         A.method = method
 
         x, y = A(), A()
-        if callable_eq(x, x.method, y, y.method) and all(item() for item in [x.method, y.method]):
+        if callable_eq(x, x.method, y, method if y is None else y.method) and all(item() for item in [x.method, method if y is None else y.method]):
             raise Success
 
     @TestCase
-    def test_method_eq_callable():
+    def test_callableeq_methodmethod_same_2():
+        def method(*self):
+            return True
+        class A(object):
+            pass
+        class B(object):
+            pass
+        A.method = method
+        B.method = method
+
+        x, y = A, B
+        if callable_eq(x, x.method, y, method if y is None else y.method) and all(item() for item in [x.method, method if y is None else y.method]):
+            raise Success
+
+    @TestCase
+    def test_callableeq_methodmethod_same_3():
+        def method(*self):
+            return True
+        class A(object):
+            pass
+        class B(object):
+            pass
+        A.method = method
+        B.method = method
+
+        x, y = A(), B()
+        if callable_eq(x, x.method, y, method if y is None else y.method) and all(item() for item in [x.method, method if y is None else y.method]):
+            raise Success
+
+    @TestCase
+    def test_callableeq_methodmethod_diff_1():
+        def method(*self):
+            return True
+        class A(object):
+            def method(*self):
+                return True
+        class B(object):
+            pass
+        B.method = method
+
+        x, y = A, B
+        if not callable_eq(x, x.method, y, method if y is None else y.method) and all(item() for item in [x.method, method if y is None else y.method]):
+            raise Success
+
+    @TestCase
+    def test_callableeq_methodmethod_diff_2():
+        def method(*self):
+            return True
+        class A(object):
+            def method(*self):
+                return True
+        class B(object):
+            pass
+        B.method = method
+
+        x, y = A(), B()
+        if not callable_eq(x, x.method, y, method if y is None else y.method) and all(item() for item in [x.method, method if y is None else y.method]):
+            raise Success
+
+    @TestCase
+    def test_callableeq_methodmethod_diff_3():
+        def method(*self):
+            return True
+        class A(object):
+            def method(*self):
+                return True
+        class B(object):
+            pass
+        B.method = method
+
+        x, y = A(), B
+        if not callable_eq(x, x.method, y, method if y is None else y.method) and all(item() for item in [x.method, method if y is None else y.method]):
+            raise Success
+
+    @TestCase
+    def test_callableeq_methodmethod_diff_4():
+        def method(*self):
+            return True
+        class A(object):
+            def method(*self):
+                return True
+        class B(object):
+            pass
+        B.method = method
+
+        x, y = A(), None
+        if not callable_eq(x, x.method, y, method if y is None else y.method) and all(item() for item in [x.method, method if y is None else y.method]):
+            raise Success
+
+    @TestCase
+    def test_callableeq_methodfunc_same():
         def method(*self):
             return True
         class A(object):
             pass
         A.method = method
 
-        x = A()
-        if callable_eq(x, x.method, None, method) and all(item() for item in [x.method, method]):
+        x, y = A(), None
+        if callable_eq(x, x.method, y, method if y is None else y.method) and all(item() for item in [x.method, method if y is None else y.method]):
+            raise Success
+
+    @TestCase
+    def test_callableeq_inheritance_same_1():
+        def method(*self):
+            return True
+        class A(object):
+            pass
+        A.method = method
+        class B(A): pass
+
+        x, y = A(), B()
+        if callable_eq(x, x.method, y, method if y is None else y.method) and all(item() for item in [x.method, method if y is None else y.method]):
+            raise Success
+
+    @TestCase
+    def test_callableeq_inheritance_same_2():
+        class X(object):
+            pass
+        def method(*self):
+            return True
+        X.method = method
+        class A(X): pass
+        class B(X): pass
+
+        x, y = A, B
+        if callable_eq(x, x.method, y, method if y is None else y.method) and all(item() for item in [x.method, method if y is None else y.method]):
+            raise Success
+
+    @TestCase
+    def test_callableeq_inheritance_same_3():
+        class X(object):
+            pass
+        def method(*self):
+            return True
+        X.method = method
+        class A(X): pass
+        class B(X): pass
+
+        x, y = A(), B()
+        if callable_eq(x, x.method, y, method if y is None else y.method) and all(item() for item in [x.method, method if y is None else y.method]):
+            raise Success
+
+    @TestCase
+    def test_callableeq_inheritance_same_4():
+        class X(object):
+            pass
+        def method(*self):
+            return True
+        X.method = method
+        class A(X): pass
+        class B(X): pass
+
+        x, y = A(), B
+        if callable_eq(x, x.method, y, method if y is None else y.method) and all(item() for item in [x.method, method if y is None else y.method]):
+            raise Success
+
+    @TestCase
+    def test_callableeq_inheritance_diff_1():
+        class X(object): pass
+        def method(*self):
+            return True
+        X.method = method
+        class A(X): pass
+        class B(X):
+            def method(*self):
+                return True
+
+        x, y = A, B
+        if not callable_eq(x, x.method, y, method if y is None else y.method) and all(item() for item in [x.method, method if y is None else y.method]):
+            raise Success
+
+    @TestCase
+    def test_callableeq_inheritance_diff_2():
+        class X(object): pass
+        def method(*self):
+            return True
+        X.method = method
+        class A(X): pass
+        class B(X):
+            def method(*self):
+                return True
+
+        x, y = A(), B()
+        if not callable_eq(x, x.method, y, method if y is None else y.method) and all(item() for item in [x.method, method if y is None else y.method]):
+            raise Success
+
+    @TestCase
+    def test_callableeq_inheritance_diff_3():
+        class X(object): pass
+        def method(*self):
+            return True
+        X.method = method
+        class A(X): pass
+        class B(X):
+            def method(*self):
+                return True
+
+        x, y = A(), B()
+        if not callable_eq(x, x.method, y, method if y is None else y.method) and all(item() for item in [x.method, method if y is None else y.method]):
             raise Success
 
     @TestCase
