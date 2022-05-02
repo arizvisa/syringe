@@ -621,7 +621,7 @@ def callable_eq3(ca, a, cb, b):
     return a_ is b_
 
 def callable_equ(ca, a, cb, b):
-    '''µpython'''
+    '''micropython'''
     if ca is cb is None:
         return a is b
 
