@@ -84,14 +84,27 @@ class IMAGE_SECTION_HEADER(pstruct.type):
             (3, 'reserved_0'),
         ]
 
+    def __VirtualAddress(target):
+        parent = target.parent
+        expected = parent.getloadedsize()
+        if not issubclass(parent.source.__class__, ptypes.provider.memorybase):
+            corrected = parent.getreadsize()
+            logging.warning("{:s} : Refusing to decode field \"{:s}\" using the in-memory size ({:+#x}) due to the source being file-backed. Using on-disk size ({:+#x}) instead.".format(parent.instance(), 'VirtualAddress', expected, corrected))
+            return dyn.block(corrected)
+        return dyn.block(expected)
+
+    def __PointerToRawData(target):
+        res = target.parent.getreadsize()
+        return dyn.block(res)
+
     # FIXME: we can store a longer than 8 byte Name if we want to implement code that navigates to the string table
     #      apparently executables don't care though...
     _fields_ = [
         (dyn.clone(pstr.string, length=8), 'Name'),
         (uint32, 'VirtualSize'),
-        (virtualaddress(lambda target: dyn.block(target.parent.getloadedsize()), type=uint32), 'VirtualAddress'),
+        (virtualaddress(__VirtualAddress, type=uint32), 'VirtualAddress'),
         (uint32, 'SizeOfRawData'),
-        (fileoffset(lambda target: dyn.block(target.parent.getreadsize()), type=uint32), 'PointerToRawData'),
+        (fileoffset(__PointerToRawData, type=uint32), 'PointerToRawData'),
         (fileoffset(lambda target: dyn.clone(relocations.RelocationTable, length=target.parent['NumberOfRelocations'].li.int()), type=uint32), 'PointerToRelocations'),
         (fileoffset(lambda target: dyn.clone(linenumbers.LineNumberTable, length=target.parent['NumberOfLinenumbers'].li.int()), type=uint32), 'PointerToLinenumbers'),
         (uint16, 'NumberOfRelocations'),
