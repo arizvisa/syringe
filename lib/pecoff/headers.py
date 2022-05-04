@@ -60,7 +60,7 @@ def CalculateRelativeAddress(self, address):
     base = LocateBaseAddress(self)
 
     # file
-    if issubclass(self.source.__class__, ptypes.provider.fileobj):
+    if not issubclass(self.source.__class__, ptypes.provider.memorybase):
         pe = LocateHeader(self)
         section = pe['Sections'].getsectionbyaddress(address)
         return base + section.getoffsetbyaddress(address)
@@ -73,7 +73,7 @@ def CalculateRelativeOffset(self, offset):
     base = LocateBaseAddress(self)
 
     # file
-    if issubclass(self.source.__class__, ptypes.provider.fileobj):
+    if not issubclass(self.source.__class__, ptypes.provider.memorybase):
         return base + offset
 
     # memory
@@ -90,7 +90,7 @@ def CalculateRealAddress(self, address):
     base = LocateBaseAddress(header)
 
     # file
-    if issubclass(self.source.__class__, ptypes.provider.fileobj):
+    if not issubclass(self.source.__class__, ptypes.provider.memorybase):
         pe = LocateHeader(self)
         section = pe['Sections'].getsectionbyaddress(offset)
         return base + section.getoffsetbyaddress(offset)
