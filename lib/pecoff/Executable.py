@@ -189,18 +189,29 @@ class IMAGE_NT_HEADERS(pstruct.type, Header):
         res += 2
         return dyn.block(opt['SizeOfHeaders'].int() - res - sz)
 
-    def __OptionalHeaderPadding(self):
-        hdr, res = (self[fld].li for fld in ['FileHeader', 'OptionalHeader'])
-        expected = hdr['SizeOfOptionalHeader'].int()
-        return dyn.block(max(0, expected - res.size()))
-
     def __DataDirectory(self):
         cls = self.__class__
-        length = self['OptionalHeader'].li['NumberOfRvaAndSizes'].int()
-        if length > 0x10:   # XXX
-            logging.warning("{:s} : OptionalHeader.NumberOfRvaAndSizes specified >0x10 entries ({:#x}) for the DataDirectory. Assuming the maximum of 0x10.".format('.'.join((cls.__module__, cls.__name__)), length))
-            length = 0x10
-        return dyn.clone(portable.DataDirectory, length=length)
+        hdr, optional = (self[fld].li for fld in ['FileHeader', 'OptionalHeader'])
+        length, directory = optional['NumberOfRvaAndSizes'].int(), 8
+
+        if hdr['SizeOfOptionalHeader'].int() < optional.size():
+            logging.warning("{:s} : FileHeader.SizeOfOptionalHeader ({:+#x}) is smaller than the OptionalHeader ({:+#x}). Ignoring the OptionalHeader.NumberOfRvaAndSizes ({:d}) and thus the DataDirectory.".format('.'.join([cls.__module__, cls.__name__]), hdr['SizeOfOptionalHeader'].size(), optional.size(), length))
+            length = 0
+
+        elif length * directory != hdr['SizeOfOptionalHeader'].int() - optional.size():
+            available = hdr['SizeOfOptionalHeader'].int() - optional.size()
+            logging.warning("{:s} : OptionalHeader.NumberOfRvaAndSizes ({:d}) does not correspond to FileHeader.SizeOfOptionalHeader ({:+#x}). Available space ({:+#x}) results in only {:d} entries.".format('.'.join([cls.__module__, cls.__name__]), length, optional.size(), available, available // directory))
+            length = available // directory
+
+        elif length > 0x10:
+            logging.warning("{:s} : OptionalHeader.NumberOfRvaAndSizes ({:d}) is larger than {:d}. Assuming the maximum number of DataDirectory entries ({:d}).".format('.'.join([cls.__module__, cls.__name__]), length, 0x10, 0x10))
+
+        return dyn.clone(portable.DataDirectory, length=min(0x10, length))
+
+    def __OptionalHeaderPadding(self):
+        hdr, fields = self['FileHeader'].li, ['OptionalHeader', 'DataDirectory']
+        expected = hdr['SizeOfOptionalHeader'].int()
+        return dyn.block(max(0, expected - sum(self[fld].li.size() for fld in fields)))
 
     def __Sections(self):
         header = self['FileHeader'].li
@@ -211,8 +222,8 @@ class IMAGE_NT_HEADERS(pstruct.type, Header):
         (uint16, 'SignaturePadding'),
         (portable.IMAGE_FILE_HEADER, 'FileHeader'),
         (portable.IMAGE_OPTIONAL_HEADER, 'OptionalHeader'),
-        (__OptionalHeaderPadding, 'Padding(OptionalHeader)'),
         (__DataDirectory, 'DataDirectory'),
+        (__OptionalHeaderPadding, 'Padding(OptionalHeader,DataDirectory)'),
         (__Sections, 'Sections'),
         (__Padding, 'Padding'),
     ]
