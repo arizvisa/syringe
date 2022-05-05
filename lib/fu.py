@@ -155,10 +155,13 @@ class package:
             except (KeyError, TypeError):
                 pass
 
-            # builtins for known-modules that can be copied from
+            # builtins that might be a known module or something else that we'll have to hack away at to get.
             if t == builtin_.getclass():
                 if instance.__module__ is None:
-                    raise KeyError(instance, 'Unable to determine module name from builtin method')
+                    qualname = instance.__qualname__.rsplit('.',1)[0] if hasattr(instance, '__qualname__') else None
+                    if qualname is None:
+                        raise KeyError(instance, 'Unable to determine module name from builtin method')
+                    return builtinmethod_
                 return builtin_
 
             # catch-all object
@@ -1213,6 +1216,26 @@ if 'immutable':
         def u_instance(cls, instance, data, **attributes):
             return instance
 
+    @package.cache.register_type
+    class frozenset_(__type__):
+        '''a frozenset'''
+        @classmethod
+        def getclass(cls):
+            return frozenset.getclass()
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            '''return attributes of type that will be used to update'''
+            return ().__class__(object)
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            return cls.getclass()(data)
+        @classmethod
+        def p_instance(cls, object, **attributes):
+            return ()
+        @classmethod
+        def u_instance(cls, instance, data, **attributes):
+            return instance
+
 if 'mutable':
     class __mutable(__type__):
         @classmethod
@@ -1274,17 +1297,6 @@ if 'mutable':
             instance.update(data)
             return instance
 
-    @package.cache.register_type
-    class frozenset_(__mutable):
-        '''a frozenset'''
-        @classmethod
-        def getclass(cls):
-            return frozenset.getclass()
-        @classmethod
-        def p_instance(cls, object, **attributes):
-            '''return attributes of type that will be used to update'''
-            return ().__class__(object)
-
 if 'special':
     class __special(__type__):
         attributes = None
@@ -1305,6 +1317,22 @@ if 'special':
         @classmethod
         def p_instance(cls, object, **attributes):
             return ()
+
+    @package.cache.register_type
+    class builtinmethod_(__constant):
+        '''copy from a method belonging to a builtin type'''
+        @classmethod
+        def getclass(cls):
+            return builtins.frozenset().__contains__.__class__
+
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            return (object.__self__, object.__name__)
+
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            self, name = data
+            return getattr(self, name)
 
     @package.cache.register_type
     class instancemethod_(__special):
@@ -2516,6 +2544,14 @@ if __name__ == '__main__':
         a = fu.pack(meh)
         b = fu.unpack(a)
         if meh()() == b()():
+            raise Success
+
+    @TestCase
+    def test_frozenset():
+        import keyword
+        a = fu.package.pack(keyword.iskeyword)
+        f = iskeyword = fu.package.unpack(a)
+        if iskeyword('False') is True and iskeyword('true') is False:
             raise Success
 
 if __name__ == '__main__':
