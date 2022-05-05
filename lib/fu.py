@@ -1337,7 +1337,7 @@ if 'special':
     @package.cache.register_type
     class instancemethod_(__special):
         '''a python class method'''
-        attributes = ['im_func', 'im_self', 'im_class']
+        attributes = ['im_func', 'im_self', 'im_class'] if sys.version_info.major < 3 else ['__func__', '__self__', '__class__']
 
         @classmethod
         def getclass(cls):
@@ -1345,7 +1345,7 @@ if 'special':
 
         @classmethod
         def u_constructor(cls, data, **attributes):
-            return cls.new(data['im_func'], data['im_self'], data['im_class'])
+            return cls.new(*(data[attribute] for attribute in cls.attributes))
 
     @package.cache.register_type
     class property_(__special):
