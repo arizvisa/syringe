@@ -720,6 +720,12 @@ if 'constants':
         def getclass(cls):
             return _thread.LockType
 
+    @package.cache.register_const
+    class version_info(__constant):
+        @classmethod
+        def getclass(cls):
+            return sys.version_info
+
 if 'core':
     @package.cache.register_type
     class type_(__type__):
