@@ -1410,7 +1410,11 @@ if 'special':
             # so...it turns out that only the closure property is immutable
             if object.__module__ is None:
                 raise AssertionError('FIXME: Unable to pack an unbound function')
-            return object.__module__, func_code, func_name, ().__class__(cell.cell_contents for cell in (func_closure or ()))
+            items = [].__class__(cell.cell_contents for cell in (func_closure or ()))
+            return object.__module__, func_code, func_name, ().__class__(items)
+
+            # XXX: because py3 is fucking garbage, this following line does not work consistently and the one in use actually does.
+            #return object.__module__, func_code, func_name, ().__class__(cell.cell_contents for cell in (func_closure or ()))
 
         @classmethod
         def u_constructor(cls, data, **attributes):
@@ -2553,6 +2557,28 @@ if __name__ == '__main__':
         f = iskeyword = fu.package.unpack(a)
         if iskeyword('False') is True and iskeyword('true') is False:
             raise Success
+
+    @TestCase
+    def test_closure2():
+        wtf = [0]
+        def meh():
+            hi = wtf
+            def fuck(y=hi):
+                return 2 * y
+            return fuck
+        heh = meh()
+        a = fu.pack(heh)
+        b = fu.unpack(a)
+        if heh() == b():
+            raise Success
+
+    @TestCase
+    def test_check_name_wrapper():
+        import importlib._bootstrap_external as M
+        a = fu.package.pack(M.FileLoader)
+        b = fu.package.unpack(a)
+        # i dunno how to test this other than serializing/deserializing it
+        raise Success
 
 if __name__ == '__main__':
     results = []
