@@ -2378,6 +2378,8 @@ class pointer_t(encoded_t):
         return "{:s}<{:s}>".format(self.typename(), targetname)
 
     def summary(self, **options):
+        if self.value is None:
+            return u"???"
         return u"*{:#x}".format(self.int())
 
     def repr(self, **options):
