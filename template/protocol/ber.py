@@ -138,7 +138,7 @@ class Constructed(parray.block):
 
             # If the isTerminator method hasn't been overwritten, then we
             # can just use the original loader for the instance.
-            if ptypes.utils.callable_eq(cls.isTerminator, Constructed.isTerminator):
+            if ptypes.utils.callable_eq(cls, cls.isTerminator, Constructed, Constructed.isTerminator):
                 result = super(Constructed, self).load(**attrs)
 
             # Otherwise, we want to treat this as a parray.terminated instance so
@@ -647,7 +647,7 @@ class Element(pstruct.type):
         if isinstance(result, parray.block):
             method_t = type(result.isTerminator)
             F = lambda _, cb=size: cb
-            if ptypes.utils.callable_eq(result.isTerminator, parray.block.isTerminator):
+            if ptypes.utils.callable_eq(result, result.isTerminator, parray.block, parray.block.isTerminator):
                 result.blocksize = method_t(F, result)
         elif hasattr(result, 'length'):
             result.length = size
@@ -660,7 +660,7 @@ class Element(pstruct.type):
         # check to see if it's last element is the EOC byte.
         if isinstance(result, items):
             F = lambda _, value, sentinel=EOC.tag: value.int() == sentinel
-            if any(ptypes.utils.callable_eq(result.isTerminator, item.isTerminator) for item in items):
+            if any(ptypes.utils.callable_eq(result, result.isTerminator, item, item.isTerminator) for item in items):
                 result.isTerminator = method_t(F, result)
             Fsentinel = result.isTerminator
 
@@ -669,7 +669,7 @@ class Element(pstruct.type):
         # its elements could be an EOC instance.
         elif isinstance(result, parray.terminated):
             F = lambda _, value, sentinel=EOC: isinstance(value['value'], sentinel)
-            if ptypes.utils.callable_eq(result.isTerminator, parray.terminated.isTerminator):
+            if ptypes.utils.callable_eq(result, result.isTerminator, parray.terminated, parray.terminated.isTerminator):
                 result.isTerminator = method_t(F, result)
             Fsentinel = result.isTerminator
 
@@ -696,7 +696,7 @@ class Element(pstruct.type):
     def __alloc_value_construct(self, result, size):
         method_t = type(result.isTerminator)
         F = lambda _, cb=size: cb
-        if ptypes.utils.callable_eq(result.isTerminator, parray.block.isTerminator):
+        if ptypes.utils.callable_eq(result, result.isTerminator, parray.block, parray.block.isTerminator):
             result.blocksize = method_t(F, result)
         return result
 
@@ -820,14 +820,14 @@ class BIT_STRING(pstruct.type):
     _object_ = Block
     def __string(self):
         cls, t = self.__class__, self._object_
-        if ptypes.utils.callable_eq(cls.blocksize, BIT_STRING.blocksize):
+        if ptypes.utils.callable_eq(cls, cls.blocksize, BIT_STRING, BIT_STRING.blocksize):
             return t
         total, res = self.blocksize(), sum(self[fld].li.size() for fld in ['unused'])
         return dyn.clone(t, blocksize=lambda _, cb=max(0, total - res): cb)
 
     def __padding(self):
         cls = self.__class__
-        if ptypes.utils.callable_eq(cls.blocksize, BIT_STRING.blocksize):
+        if ptypes.utils.callable_eq(cls, cls.blocksize, BIT_STRING, BIT_STRING.blocksize):
             return dyn.block(0)
         total, res = self.blocksize(), sum(self[fld].li.size() for fld in ['unused', 'string'])
         return dyn.block(max(0, total - res))
