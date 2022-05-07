@@ -451,14 +451,28 @@ class String(parray.block):
         return "({:d}) {:s}".format(self.size(), string)
 
 class OID(ptype.type):
+    def __init__(self, **attributes):
+        super(OID, self).__init__(**attributes)
+
+        # Don't bother converting them if they don't actually exist.
+        if not hasattr(self, '_values_'):
+            return
+
+        # Convert our _values_ into (name, tuple) since that's now the standard format.
+        values = []
+        for name, oid in getattr(self, '_values_', []):
+            packed = tuple((int(item, 10) for item in oid.split('.')) if isinstance(oid, six.string_types) else oid)
+            values.append((name, packed))
+        self._values_[:] = values
+
     def str(self):
         res = self.identifier()
         return '.'.join(map("{:d}".format, res))
 
     def description(self):
-        Fidentifier = lambda oid: tuple((int(item, 16) for item in oid.split('.')) if isinstance(oid, six.string_types) else oid)
-        descriptions = {Fidentifier(oid) : name for name, oid in getattr(self, '_values_', [])}
-        return descriptions.get(self.identifier(), None)
+        identifier = self.identifier()
+        iterable = (name for name, oid in getattr(self, '_values_', []) if oid == identifier)
+        return next(iterable, None)
 
     def summary(self):
         oid, data, description = self.str(), self.serialize(), self.description()
