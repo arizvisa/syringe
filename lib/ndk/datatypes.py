@@ -440,7 +440,14 @@ class PVOID(void_star):
 #class CHAR(char): pass
 class CCHAR(char): pass
 #class PCHAR(P(CHAR)): pass
-#class PSTR(P(pstr.szstring)): pass
+class PSTR(P(pstr.szstring)):
+    def str(self):
+        return self.d.li.str()
+    def summary(self):
+        res = super(PSTR, self).summary()
+        if self.initializedQ() and self.d.initializedQ():
+            return ' : '.join([res, self.d.summary()])
+        return res
 #class LPSTR(PSTR): pass
 #class PCSTR(P(pstr.szstring)): pass
 #class LCPSTR(PCSTR): pass
@@ -459,7 +466,14 @@ class BOOLEAN(BYTE): pass
 #class LPWORD(PWORD): pass
 class WCHAR(wchar_t): pass
 #class PWCHAR(P(WCHAR)): pass
-class PWSTR(P(pstr.szwstring)): pass
+class PWSTR(P(pstr.szwstring)):
+    def str(self):
+        return self.d.li.str()
+    def summary(self):
+        res = super(PWSTR, self).summary()
+        if self.initializedQ() and self.d.initializedQ():
+            return ' : '.join([res, self.d.summary()])
+        return res
 #class LPWSTR(PWSTR): pass
 #class UINT16(uint16_t): pass
 #class PCWSTR(PWSTR): pass
