@@ -1,4 +1,4 @@
-import ptypes, ndk
+import ptypes
 from ptypes import *
 
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
@@ -262,8 +262,32 @@ class AvFlags(pstruct.type):
         res = self['Flags']
         return "Flags={:s}".format(res.summary())
 @MsvValue.define
-class AvTimestamp(ndk.FILETIME):
+class AvTimestamp(pstruct.type):
     type = 0x0007
+
+    # this was copied out of ndk.datatypes to avoid a whole dependency
+    _fields_ = [
+        (pint.uint32_t, 'dwLowDateTime'),
+        (pint.uint32_t, 'dwHighDateTime')
+    ]
+    def timestamp(self):
+        '''Return the number of 100ns represented by the instance.'''
+        low, high = self['dwLowDateTime'].int(), self['dwHighDateTime'].int()
+        return high * pow(2, 32) + low
+    def datetime(self):
+        res, epoch = self.timestamp(), datetime.datetime(1601, 1, 1, tzinfo=datetime.timezone.utc if hasattr(datetime, 'timezone') else None)
+        delta = datetime.timedelta(microseconds=res * 1e-1)
+        return epoch + delta
+    def summary(self):
+        tzinfo = datetime.timezone(datetime.timedelta(seconds=-(time.altzone if time.daylight else time.timezone))) if hasattr(datetime, 'timezone') else None
+        try:
+            dt = self.datetime()
+            res = dt.astimezone(tzinfo) if tzinfo else dt
+        except (ValueError, OverflowError):
+            return super(AvTimestamp, self).summary()
+        ts, seconds = self.timestamp(), res.second + res.microsecond * 1e-6
+        return "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:s}{:s} ({:#x})".format(res.year, res.month, res.day, res.hour, res.minute, "{:02.6f}".format(seconds).zfill(9), res.strftime('%z'), ts)
+
 @MsvValue.define
 class AvSingleHost(pstruct.type):
     type = 0x0008
