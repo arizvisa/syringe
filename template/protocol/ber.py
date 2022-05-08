@@ -466,11 +466,11 @@ class OID(ptype.type):
         self._values_[:] = values
 
     def str(self):
-        res = self.identifier()
+        res = self.get()
         return '.'.join(map("{:d}".format, res))
 
     def description(self):
-        identifier = self.identifier()
+        identifier = self.get()
         iterable = (name for name, oid in getattr(self, '_values_', []) if oid == identifier)
         return next(iterable, None)
 
@@ -481,7 +481,7 @@ class OID(ptype.type):
             return '{:s} : {:s}'.format(oid, res)
         return '{:s} ({:s}) : {:s}'.format(description, oid, res)
 
-    def identifier(self):
+    def get(self):
         iterable = iter(bytearray(self.serialize()))
 
         # Collect the list of all of the numbers in the identifier.
@@ -917,8 +917,8 @@ class OBJECT_IDENTIFIER(OID):
             result = itertools.chain([item], iterable)
         return super(OBJECT_IDENTIFIER, self).set(result)
 
-    def identifier(self):
-        items = super(OBJECT_IDENTIFIER, self).identifier()
+    def get(self):
+        items = super(OBJECT_IDENTIFIER, self).get()
 
         # Figure out the first identifier component. This is related
         # to that (X*40)+Y expression, and the other article where the
@@ -1436,7 +1436,7 @@ if __name__ == '__main__':
         assert(z['value'].size() == 3)
 
         expected = (2,100,3)
-        assert(z['value'].identifier() == expected)
+        assert(z['value'].get() == expected)
     test_object_identifier_1()
 
     def test_object_identifier_set_2():
@@ -1459,7 +1459,7 @@ if __name__ == '__main__':
         assert(z['value'].size() == 9)
 
         expected = (1,3,6,1,4,1,311,21,20)
-        assert(z['value'].identifier() == expected)
+        assert(z['value'].get() == expected)
     test_object_identifier_3()
 
     def test_object_identifier_set_4():
@@ -1482,7 +1482,7 @@ if __name__ == '__main__':
         assert(z['value'].size() == 3)
 
         expected = (2,16819)
-        assert(z['value'].identifier() == expected)
+        assert(z['value'].get() == expected)
     test_object_identifier_5()
 
     def test_object_identifier_set_6():
@@ -1505,7 +1505,7 @@ if __name__ == '__main__':
         assert(z['value'].size() == 4)
 
         expected = (2,268435248)
-        assert(z['value'].identifier() == expected)
+        assert(z['value'].get() == expected)
     test_object_identifier_7()
 
     def test_object_identifier_set_8():
@@ -1528,7 +1528,7 @@ if __name__ == '__main__':
         assert(z['value'].size() == 4)
 
         expected = (2,268435375)
-        assert(z['value'].identifier() == expected)
+        assert(z['value'].get() == expected)
     test_object_identifier_9()
 
     def test_object_identifier_set_10():
@@ -1551,7 +1551,7 @@ if __name__ == '__main__':
         assert(z['value'].size() == 4)
 
         expected = (0,0,2097024)
-        assert(z['value'].identifier() == expected)
+        assert(z['value'].get() == expected)
     test_object_identifier_11()
 
     def test_object_identifier_set_12():
@@ -1574,7 +1574,7 @@ if __name__ == '__main__':
         assert(z['value'].size() == 1)
 
         expected = (2,47)
-        assert(z['value'].identifier() == expected)
+        assert(z['value'].get() == expected)
     test_object_identifier_13()
 
     def test_object_identifier_set_14():
@@ -1597,7 +1597,7 @@ if __name__ == '__main__':
         assert(z['value'].size() == 2)
 
         expected = (0,0)
-        assert(z['value'].identifier() == expected)
+        assert(z['value'].get() == expected)
     test_object_identifier_15()
 
     def test_object_identifier_16():
@@ -1608,7 +1608,7 @@ if __name__ == '__main__':
         assert(z['value'].size() == 8)
 
         expected = (0,0,0,0,0,0,0,0)
-        assert(z['value'].identifier() == expected)
+        assert(z['value'].get() == expected)
     test_object_identifier_16()
 
     def test_object_identifier_17():
@@ -1619,7 +1619,7 @@ if __name__ == '__main__':
         assert(z['value'].size() == 1)
 
         expected = (1,0)
-        assert(z['value'].identifier() == expected)
+        assert(z['value'].get() == expected)
     test_object_identifier_17()
 
     def test_object_identifier_set_18():
@@ -1642,7 +1642,7 @@ if __name__ == '__main__':
         assert(z['value'].size() == 1)
 
         expected = (0,39)
-        assert(z['value'].identifier() == expected)
+        assert(z['value'].get() == expected)
     test_object_identifier_19()
 
     def test_object_identifier_set_20():
@@ -1665,7 +1665,7 @@ if __name__ == '__main__':
         assert(z['value'].size() == 1)
 
         expected = (0,0)
-        assert(z['value'].identifier() == expected)
+        assert(z['value'].get() == expected)
     test_object_identifier_21()
 
     def test_object_identifier_set_22():
@@ -1688,7 +1688,7 @@ if __name__ == '__main__':
         assert(z['value'].size() == 0)
 
         expected = (0,)
-        assert(z['value'].identifier() == expected)
+        assert(z['value'].get() == expected)
     test_object_identifier_23()
 
     def test_object_identifier_set_24():
@@ -1735,7 +1735,7 @@ if __name__ == '__main__':
         assert(z['value'].size() == 4)
 
         expected = (8571,3,2)
-        assert(z['value'].identifier() == expected)
+        assert(z['value'].get() == expected)
     test_relative_object_identifier_27()
 
     def test_relative_object_identifier_set_28():

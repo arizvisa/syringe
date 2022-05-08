@@ -149,7 +149,7 @@ class SubjectPublicKeyInfo(ber.SEQUENCE):
         p = self.getparent(SubjectPublicKeyInfo)
         res = p['algorithm']['value']
         algorithm, parameters = (res[fld]['value'] if res.has(fld) else None for fld in ['algorithm', 'parameters'])
-        algoIdentifier = tuple(algorithm.identifier())
+        algoIdentifier = tuple(algorithm.get())
 
         # FIXME: this won't always be an RSAPublicKey as it depends
         #        on the algorithm.
@@ -324,7 +324,7 @@ class Extension(ber.SEQUENCE):
     def __extnValue(self):
         p = self.getparent(Extension)
         extensionId = p['extnID']['value']
-        id = extensionId.identifier()
+        id = extensionId.get()
 
         # This octet string is actually der-encoded, so we should
         # return a packet type specifically for the x509 extensions.
