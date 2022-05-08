@@ -159,8 +159,8 @@ class SubjectPublicKeyInfo(ber.SEQUENCE):
 
     _fields_ = [
         (AlgorithmIdentifier, 'algorithm'),
-        #(ber.BIT_STRING, 'subjectPublicKey'),
-        (__subjectPublicKey, 'subjectPublicKey'),
+        #(ber.BIT_STRING, 'subjectPublicKey'),      # FIXME: this can cause deserialization issues
+        (__subjectPublicKey, 'subjectPublicKey'),   # FIXME: this callable seems to be bunk in some situations
     ]
 
 class KeyIdentifier(ber.OCTET_STRING):
@@ -356,7 +356,7 @@ class TBSCertificate(ber.SEQUENCE):
         (Name, 'issuer'),
         (Validity, 'validity'),
         (Name, 'subject'),
-        (SubjectPublicKeyInfo, 'subjectPublicKeyInfo'),
+        (SubjectPublicKeyInfo, 'subjectPublicKeyInfo'),     # FIXME: this needs to be verified
         (dyn.clone(UniqueIdentifier, type=(Context, 1)), 'issuerUniqueID'),
         (dyn.clone(UniqueIdentifier, type=(Context, 2)), 'subjectUniqueID'),
         (dyn.clone(Extensions, type=(Context, 3)), 'extensions'),
