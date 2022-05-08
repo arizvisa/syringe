@@ -385,8 +385,13 @@ if __name__ == '__main__':
     z=z.l
 
     cert = z['value'][0]
-    print(cert['value']['version'])
+    version = cert['value']['version']['value']['DEFAULT']
+    assert(version['value']['v3'])
     x = z['value']['tbscertificate']['value']['extensions']['value']['items']['value']
     k = z.at(0x99).getparent(ber.Element)
-    print(z['value']['tbsCertificate']['value']['issuer']['value'][0]['value'][0])
-    print(z['value']['tbsCertificate']['value']['issuer']['value'][0]['value'][0]['value']['type'])
+    base = z['value']['tbsCertificate']['value']['issuer']['value'][0]['value'][0]['value']
+    assert(base['type']['value'].get() == (2,5,4,3))
+    assert(base['type']['value'].str() == '2.5.4.3')
+    assert(base['type']['value'].description() == 'joint-iso-itu-t.ds.attributeType.commonName')
+    assert(all(base['type']['value'][item] for item in [(2,5,4,3), '2.5.4.3', 'joint-iso-itu-t.ds.attributeType.commonName']))
+    assert(base['value']['value'].str() == 'chmuthu-w7-tst3-ca3')
