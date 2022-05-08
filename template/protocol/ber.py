@@ -559,6 +559,29 @@ class OID(ptype.type):
         data = bytearray(res)
         return super(OID, self).__setvalue__(bytes(data))
 
+    def __getitem__(self, value):
+        '''Return true if the OID matches the specified key.'''
+        if isinstance(value, tuple):
+            return self.get() == value
+
+        # If it's not a string, then we have no clue what to do here.
+        elif not isinstance(value, six.string_types):
+            raise KeyError(value)
+
+        # If it's a name, then we need to search our values to match the tuple.
+        if value.startswith(tuple('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')):
+            iterable = (oid for name, oid in getattr(self, '_values_', []) if name == value)
+            expected = next(iterable, None)
+
+        # Otherwise, we can just split up what the user gave us and be good to go.
+        else:
+            expected = tuple(int(item, 10) for item in value.split('.'))
+
+        # If our value is not a tuple, then we're unable to proceed.
+        if value is None:
+            raise KeyError(value)
+        return self.get() == expected
+
 class CHOICE(Constructed):
     '''FIXME: this is a placeholder, but should probably be integrated into this template'''
 
