@@ -380,18 +380,32 @@ if __name__ == '__main__':
 
     fromhex = operator.methodcaller('decode', 'hex') if sys.version_info.major < 3 else bytes.fromhex
 
-    data = '308202a13082020ea003020102021019af5d26ef02acb448ea8886a359af0a300906052b0e03021d0500301e311c301a0603550403131363686d757468752d77372d747374332d636133301e170d3130303231303032323830335a170d3339313233313233353935395a301a311830160603550403130f63686d757468752d77372d7473743330820122300d06092a864886f70d01010105000382010f003082010a0282010100a5583ba38c6a21642334d91657c7cc8f7deea7b2b453cb4bf95a5e537e069036a95ad11700e17cb46340af803b7bbff966fb2af57fddff47f94db6105b63ffaf6bb026fa2a317d4fa652cfaf06f787658f2f1316b38b02eb39c6caf4ca68502f89e23ba8c2fc5e56671fc0d8eb9bc65ae2148df5730ff66cd9f940d22bea4b0b5a17264baf264f34e48c875bf4110a8c1f80647798cc5c54c03bb2b3c534384ad335f48f94a45f39d69508ad7c88f69bbc7d161b3f8e9351b6ba90ac065c2a7f9cbf6da82ef22808cb1c0bca30e15df47d958ac2d726a4c6489c0363459c84940310ce4af43acff707025ca0d502f6ff63b3b94cf78307930b6f38d9d68c7de90203010001a368306630130603551d25040c300a06082b06010505070301304f0603551d010448304680103c8db6418a8b1b208f76cc07c6724d5ca120301e311c301a0603550403131363686d757468752d77372d747374332d6361338210db048065d808f69f48fa85880a505184300906052b0e03021d0500038181002ba86f466e4a180dec1445a021bcd261ea1b31a7cbd8363b9464dc4dac8d9fb40aaab1f78509f048b360c07188c8ae59f8f5be8b7f31da4a4a31b2c16c0cf9e57827b5f1c5b46a4b52c89d6cdde1475e7f00d87cd426b581f989272aefd876edfed253a6e61c8d5a5d1572ecb91a8f4e4f4eba82e66ee3e825410c21e6425751'
-    z = x509.Packet(source=ptypes.prov.bytes(fromhex(data)))
-    z=z.l
+    def smoketest():
+        data = '308202a13082020ea003020102021019af5d26ef02acb448ea8886a359af0a300906052b0e03021d0500301e311c301a0603550403131363686d757468752d77372d747374332d636133301e170d3130303231303032323830335a170d3339313233313233353935395a301a311830160603550403130f63686d757468752d77372d7473743330820122300d06092a864886f70d01010105000382010f003082010a0282010100a5583ba38c6a21642334d91657c7cc8f7deea7b2b453cb4bf95a5e537e069036a95ad11700e17cb46340af803b7bbff966fb2af57fddff47f94db6105b63ffaf6bb026fa2a317d4fa652cfaf06f787658f2f1316b38b02eb39c6caf4ca68502f89e23ba8c2fc5e56671fc0d8eb9bc65ae2148df5730ff66cd9f940d22bea4b0b5a17264baf264f34e48c875bf4110a8c1f80647798cc5c54c03bb2b3c534384ad335f48f94a45f39d69508ad7c88f69bbc7d161b3f8e9351b6ba90ac065c2a7f9cbf6da82ef22808cb1c0bca30e15df47d958ac2d726a4c6489c0363459c84940310ce4af43acff707025ca0d502f6ff63b3b94cf78307930b6f38d9d68c7de90203010001a368306630130603551d25040c300a06082b06010505070301304f0603551d010448304680103c8db6418a8b1b208f76cc07c6724d5ca120301e311c301a0603550403131363686d757468752d77372d747374332d6361338210db048065d808f69f48fa85880a505184300906052b0e03021d0500038181002ba86f466e4a180dec1445a021bcd261ea1b31a7cbd8363b9464dc4dac8d9fb40aaab1f78509f048b360c07188c8ae59f8f5be8b7f31da4a4a31b2c16c0cf9e57827b5f1c5b46a4b52c89d6cdde1475e7f00d87cd426b581f989272aefd876edfed253a6e61c8d5a5d1572ecb91a8f4e4f4eba82e66ee3e825410c21e6425751'
+        z = x509.Packet(source=ptypes.prov.bytes(fromhex(data)))
+        z=z.l
 
-    cert = z['value'][0]
-    version = cert['value']['version']['value']['DEFAULT']
-    assert(version['value']['v3'])
-    x = z['value']['tbscertificate']['value']['extensions']['value']['items']['value']
-    k = z.at(0x99).getparent(ber.Element)
-    base = z['value']['tbsCertificate']['value']['issuer']['value'][0]['value'][0]['value']
-    assert(base['type']['value'].get() == (2,5,4,3))
-    assert(base['type']['value'].str() == '2.5.4.3')
-    assert(base['type']['value'].description() == 'joint-iso-itu-t.ds.attributeType.commonName')
-    assert(all(base['type']['value'][item] for item in [(2,5,4,3), '2.5.4.3', 'joint-iso-itu-t.ds.attributeType.commonName']))
-    assert(base['value']['value'].str() == 'chmuthu-w7-tst3-ca3')
+        cert = z['value'][0]
+        version = cert['value']['version']['value']['DEFAULT']
+        assert(version['value']['v3'])
+        x = z['value']['tbscertificate']['value']['extensions']['value']['items']['value']
+        k = z.at(0x99).getparent(ber.Element)
+        base = z['value']['tbsCertificate']['value']['issuer']['value'][0]['value'][0]['value']
+        assert(base['type']['value'].get() == (2,5,4,3))
+        assert(base['type']['value'].str() == '2.5.4.3')
+        assert(base['type']['value'].description() == 'joint-iso-itu-t.ds.attributeType.commonName')
+        assert(all(base['type']['value'][item] for item in [(2,5,4,3), '2.5.4.3', 'joint-iso-itu-t.ds.attributeType.commonName']))
+        assert(base['value']['value'].str() == 'chmuthu-w7-tst3-ca3')
+
+if __name__ == '__main__':
+    import sys, ptypes, protocol.x509 as x509
+
+    if len(sys.argv) < 2:
+        smoketest()
+        sys.exit(0)
+
+    source = ptypes.prov.file(sys.argv[1], 'rb')
+    source = ptypes.setsource(source)
+
+    z = x509.Packet(source=source)
+    z=z.l
