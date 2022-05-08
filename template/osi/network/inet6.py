@@ -34,7 +34,7 @@ class in_addr(parray.type):
                     counter = 2
                     continue
             result.append("{:x}".format(item))
-        return ':'.join(result)
+        return ':'.join(result + ([':'] if counter == 1 else []))
     def is_linklocal(self):
         # fe80::/10
         res = functools.reduce(lambda agg, item: agg * pow(2, 32) + item, iterable, 0)
