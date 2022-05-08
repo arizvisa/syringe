@@ -481,7 +481,7 @@ class OID(ptype.type):
             return '{:s} : {:s}'.format(oid, res)
         return '{:s} ({:s}) : {:s}'.format(description, oid, res)
 
-    def get(self):
+    def __getvalue__(self):
         iterable = iter(bytearray(self.serialize()))
 
         # Collect the list of all of the numbers in the identifier.
@@ -499,7 +499,36 @@ class OID(ptype.type):
             items.append(item)
         return tuple(items)
 
-    def set(self, items):
+    def set(self, value):
+
+        # If we received a string, then we'll try to look it up before
+        # converting it to a tuple and trying again.
+        if isinstance(value, six.string_types):
+            string = value
+
+            # If our string begins with an alpha character (a keystring from rfc3383),
+            # then we need to look up the keystring in our available values.
+            if string.startswith(tuple('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')):
+                iterable = (oid for keystring, oid in getattr(self, '_values_', []) if keystring == string)
+                oid = next(iterable, None)
+                if oid is None:
+                    raise KeyError(string)
+                return super(OID, self).set(tuple(oid))
+
+            # Otherwise we need split up the oid into a tuple of integers (being sure
+            # to replace the empty string with 0) so that we can fall through to the
+            # tuple processing case.
+            result = (int(item, 10) if item else 0 for item in string.split('.'))
+            return super(OID, self).set(result)
+
+        # Otherwise let the parent figure it out.
+        return super(OID, self).set(value)
+
+    def __setvalue__(self, items):
+        if isinstance(items, bytes):
+            return super(OID, self).__setvalue__(items)
+
+        # Otherwise we're a tuple, and we need to deal with it.
         iterable = iter(items)
 
         # Define a closure which takes an integer and breaks it down into its
@@ -528,7 +557,7 @@ class OID(ptype.type):
         # Now we can convert our array of packed 7-bit numbers to some
         # bytes that we can use to set our instance using the super method.
         data = bytearray(res)
-        return super(OID, self).set(bytes(data))
+        return super(OID, self).__setvalue__(bytes(data))
 
 class CHOICE(Constructed):
     '''FIXME: this is a placeholder, but should probably be integrated into this template'''
@@ -877,27 +906,11 @@ class NULL(ptype.block):
 class OBJECT_IDENTIFIER(OID):
     tag = 0x06
 
-    def set(self, string):
+    def __setvalue__(self, items):
+        if isinstance(items, bytes):
+            return super(OBJECT_IDENTIFIER, self).__setvalue__(items)
 
-        # If our input is a string, then we need to convert it into a list
-        # of identifier components so we can encode it.
-        if isinstance(string, six.string_types):
-
-            # Check if our string is in the description list stored in the
-            # _values_ attribute.
-            if string in {description for description, oid in getattr(self, '_values_', [])}:
-                res = next(oid for description, oid in self._values_ if description == string)
-                return self.set(res[string])
-
-            # If it isn't, then this should be a '.'-delimited list that
-            # we need to split up into its integral components.
-            iterable = (int(item, 10) if item else 0 for item in string.split('.'))
-            return self.set(iterable)
-
-        # If it isn't a string, then convert it to an iterator that we
-        # will later process.
-        else:
-            iterable = iter(string)
+        iterable = iter(items)
 
         # Consume the oid identifier prefix, and combine it into the very
         # first octet according to the X.690 specification. If there's not
@@ -915,10 +928,10 @@ class OBJECT_IDENTIFIER(OID):
         # the item we calculated for the first two octets.
         else:
             result = itertools.chain([item], iterable)
-        return super(OBJECT_IDENTIFIER, self).set(result)
+        return super(OBJECT_IDENTIFIER, self).__setvalue__(result)
 
-    def get(self):
-        items = super(OBJECT_IDENTIFIER, self).get()
+    def __getvalue__(self):
+        items = super(OBJECT_IDENTIFIER, self).__getvalue__()
 
         # Figure out the first identifier component. This is related
         # to that (X*40)+Y expression, and the other article where the
@@ -957,27 +970,6 @@ class UTF8String(String):
 @Universal.define
 class RELATIVE_OID(OID):
     tag = 0x0d
-    def set(self, string):
-
-        # If our input is a string, then we need to convert it into a list
-        # of identifier components so we can encode it.
-        if isinstance(string, six.string_types):
-
-            # Check if our string is in the description list stored in the
-            # _values_ attribute.
-            if string in {description for description, oid in getattr(self, '_values_', [])}:
-                res = next(oid for description, oid in self._values_ if description == string)
-                return self.set(res[string])
-
-            # If it isn't, then this should be a '.'-delimited list that
-            # we need to split up into its integral components.
-            iterable = (int(item, 10) if item else 0 for item in string.split('.'))
-            result = super(RELATIVE_OID, self).set(iterable)
-
-        # If it's not a string, then we can just pass it to our super class.
-        else:
-            result = super(RELATIVE_OID, self).set(string)
-        return result
 
 @Universal.define
 class TIME(UTF8String):
