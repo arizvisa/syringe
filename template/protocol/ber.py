@@ -1764,3 +1764,14 @@ if __name__ == '__main__':
         res = ber.RELATIVE_OID().set([8571,3,2])
         assert(res.serialize() == expected.serialize())
     test_relative_object_identifier_set_28()
+
+if __name__ == '__main__':
+    import sys, ptypes
+    if len(sys.argv) < 2:
+        sys.exit(0)
+
+    source = ptypes.prov.file(sys.argv[1], 'rb')
+    source = ptypes.setsource(source)
+
+    z = ber.File(source=source)
+    z=z.l
