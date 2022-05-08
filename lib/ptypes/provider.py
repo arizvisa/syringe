@@ -329,6 +329,10 @@ class memoryview(backed):
         view = builtins.memoryview(reference)
         super(memoryview, self).__init__(0, view)
 
+    @property
+    def value(self):
+        return self.backing.tobytes()
+
     @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError, error.UserError))
     def consume(self, amount):
         result = super(memoryview, self).consume(amount)
@@ -363,9 +367,6 @@ class array(backed):
 
 class bytes(memoryview):
     '''This is an alias for the memoryview provider.'''
-    @property
-    def value(self):
-        return builtins.bytes(self.backing)
 string = bytes
 
 class fileobj(bounded):
