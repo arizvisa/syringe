@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import itertools,logging,optparse,os.path
+import itertools,logging,optparse,os.path,locale
 import ptypes,pecoff
 from ptypes import *
 
@@ -36,12 +36,13 @@ def extractLgCpIds(versionInfo):
     try:
         vfi = getChildByKey(versionInfo, u'VarFileInfo')
     except StopIteration:
-        return tuple((cp, lg) for cp, lg in iterateStringFileInfo(versionInfo))
+        items = []
+    else:
+        iterable = (item['Value'].cast(parray.type(_object_=pint.uint16_t,length=2)) for item in vfi['Children'])
+        items = ((cp.int(), lg.int()) for cp, lg in iterable)
 
-    sfi = getChildByKey(versionInfo, u'StringFileInfo')
-    fichildren = itertools.chain(vfi['Children'], sfi['Children'])
-    res = (val.cast(parray.type(_object_=pint.uint16_t,length=2)) for val in itertools.chain( *(var['Value'] for var in fichildren) ))
-    return tuple((cp.int(), lg.int()) for cp, lg in res)
+    iterable = itertools.chain(iterateStringFileInfo(versionInfo), items)
+    return tuple(iterable)
 
 def getStringFileInfo(versionInfo, pack_LgidCp):
     (Lgid, Cp) = pack_LgidCp
@@ -197,6 +198,14 @@ if __name__ == '__main__':
         # more than one, then we have to depend on the user to choose which one.
         if len(lgcpids) > 1:
             language = opts.language if opts.lgid is None else opts.lgid
+            if language is None:
+                lg, _ = locale.getlocale()
+                if lg:
+                    lgid = next((id for id, lang in locale.windows_locale.items() if lang == lg), None)
+                    if lgid is not None:
+                        six.print_("More than one language/codepage identifier has been found in file {:s} ({:s}). Using the identifier for the default locale {:s} ({:d}).".format(filename, ', '.join(map("{:d}".format, (lg for lg, _ in lgcpids))), lg, lgid), file=sys.stderr)
+                    language = lgid
+
             try:
                 codepage, = [cp for lg,cp in lgcpids if lg == language] if opts.codepage is None else (opts.codepage,)
             except ValueError as e:
