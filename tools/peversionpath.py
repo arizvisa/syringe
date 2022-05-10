@@ -42,7 +42,7 @@ def extractLgCpIds(versionInfo):
         items = ((cp.int(), lg.int()) for cp, lg in iterable)
 
     iterable = itertools.chain(iterateStringFileInfo(versionInfo), items)
-    return tuple(iterable)
+    return tuple({item for item in iterable})
 
 def getStringFileInfo(versionInfo, pack_LgidCp):
     (Lgid, Cp) = pack_LgidCp
@@ -61,14 +61,14 @@ class help(optparse.OptionParser):
 
         self.add_option('', '--dump-names', default=False, action='store_true', help='dump the name tables available under the VERSION_INFO resource directory')
         self.add_option('', '--name', default=None, type='int', help='use the specified name when searching through the resource directory')
-        self.add_option('', '--dump-languages', default=False, action='store_true', help='dump the languages available under the VERSION_INFO resource directory')
-        self.add_option('', '--language', default=None, type='int', help='use the specified language when searching through the resource directory')
+        self.add_option('', '--dump-resources', default=False, action='store_true', help='dump the languages for the resources available under the VERSION_INFO resource directory')
+        self.add_option('', '--resource', default=None, type='int', help='use the specified language when searching through the resource directory')
 
         # VS_FIXEDFILEINFO
         self.add_option('-u', '--use-fixedfileinfo', default=False, action='store_true', help='use the VS_FIXEDFILEINFO structure instead of the string table')
 
         # VS_VERSIONINFO
-        self.add_option('', '--list', default=False, action='store_true', help='dump the language-id/codepage pairs that are available')
+        self.add_option('', '--list-lgcp', default=False, action='store_true', help='dump the language-id/codepage pairs that are available')
         self.add_option('-l', '--language-id', dest='lgid', default=None, type='int', help='use the specified language-id when locating the correct string table')
         self.add_option('-c', '--codepage', default=None, type='int', help='use the specified codepage when locating the correct stringtable')
 
@@ -135,27 +135,30 @@ if __name__ == '__main__':
     except AttributeError:
         six.print_("No resource found in file {:s} with the requested name ({!s}).".format(filename, opts.name), file=sys.stderr)
         sys.exit(1)
-    if opts.dump_languages:
-        six.print_('Dumping the language entries from the resource name table as requested by user:', file=sys.stderr)
+    if opts.dump_resources:
+        six.print_('Dumping the languages for the resource entries from the resource name table as requested by user:', file=sys.stderr)
         six.print_('\n'.join(map("{!s}".format, resource_Languages.iterate())), file=sys.stdout)
         sys.exit(0)
 
     # grab the version record from the resource language
     try:
-        if opts.language is not None:
-            resource_Version = resource_Languages.entry(opts.language).l
+        if opts.resource is not None:
+            resource_Version = resource_Languages.entry(opts.resource).l
         else:
             if resource_Languages['NumberOfIdEntries'].int() != 1:
-                raise IndexError
-            resource_Version = resource_Languages['Ids'][0]['Entry'].d.l
-            six.print_("Defaulting to the only available language entry: {:d}".format(resource_Languages['Ids'][0]['Name'].int()), file=sys.stderr)
+                resource_Version = resource_Languages['Ids'][0]['Entry'].d.l
+                six.print_("More than one language resource entry ({:s}) was found in the file {:s}. As no --resource was specified, trying the very first one ({:d}).".format(', '.join(map("{:d}".format, (item['Name'].int() for item in resource_Languages['Ids']))), filename, resource_Languages['Ids'][0]['Name'].int()), file=sys.stderr)
+
+            else:
+                resource_Version = resource_Languages['Ids'][0]['Entry'].d.l
+                six.print_("Defaulting to the only available language resource entry: {:d}".format(resource_Languages['Ids'][0]['Name'].int()), file=sys.stderr)
 
     except IndexError:
-        six.print_("More than one language entry was found in file {:s}: {!s}".format(filename, tuple(item['Name'].int() for item in resource_Languages['Ids'])), file=sys.stderr)
+        six.print_("More than one language resource entry was found in file {:s}: {!s}".format(filename, tuple(item['Name'].int() for item in resource_Languages['Ids'])), file=sys.stderr)
         sys.exit(1)
     except AttributeError:
         resource_Name = resource_Languages.getparent(pecoff.portable.resources.IMAGE_RESOURCE_DIRECTORY_ENTRY)
-        six.print_("No version record found in file {:s} for entry ({!s}) with the requested language ({!s}).".format(filename, resource_Name.Name(), opts.language), file=sys.stderr)
+        six.print_("No version record found in file {:s} for entry ({!s}) with the requested language ({!s}).".format(filename, resource_Name.Name(), opts.resource), file=sys.stderr)
         sys.exit(1)
     else:
         versionInfo = resource_Version['OffsetToData'].d
@@ -174,7 +177,7 @@ if __name__ == '__main__':
 
     # extract the language/codepage ids from the version info
     lgcpids = extractLgCpIds(vi)
-    if opts.list:
+    if opts.list_lgcp:
         six.print_('Dumping language/codepage identifiers as requested by user:', file=sys.stderr)
         six.print_('\n'.join(map("{!s}".format, lgcpids)), file=sys.stdout)
         sys.exit(0)
@@ -197,20 +200,21 @@ if __name__ == '__main__':
         # check how many language/codepage identifiers we have. if we have
         # more than one, then we have to depend on the user to choose which one.
         if len(lgcpids) > 1:
-            language = opts.language if opts.lgid is None else opts.lgid
+            language = opts.resource if opts.lgid is None else opts.lgid
             if language is None:
                 lg, _ = locale.getlocale()
                 if lg:
                     lgid = next((id for id, lang in locale.windows_locale.items() if lang == lg), None)
                     if lgid is not None:
-                        six.print_("More than one language/codepage identifier has been found in file {:s} ({:s}). Using the identifier for the default locale {:s} ({:d}).".format(filename, ', '.join(map("{:d}".format, (lg for lg, _ in lgcpids))), lg, lgid), file=sys.stderr)
+                        six.print_("More than one language identifier ({:s}) has been found in file {:s}. Filtering them using the language from the default locale {:s} ({:d}).".format(', '.join(map("{:d}".format, (lg for lg, _ in lgcpids))), filename, lg, lgid), file=sys.stderr)
                     language = lgid
 
-            try:
-                codepage, = [cp for lg,cp in lgcpids if lg == language] if opts.codepage is None else (opts.codepage,)
-            except ValueError as e:
-                six.print_("More than one language/codepage identifier has been found in file {:s}. Use --list to list the ones available and choose one or use -h for more information.".format(filename), file=sys.stderr)
+            choices = [cp for lg,cp in lgcpids if lg == language] if opts.codepage is None else [opts.codepage]
+            if len(choices) != 1:
+                six.print_("More than one codepage identifier ({:s}) was found in file {:s}. Use --list to list the language/codepage identifiers available and choose one or use -h for more information.".format(', '.join(map("{:d}".format, choices)), filename), file=sys.stderr)
                 sys.exit(1)
+            codepage, = choices
+
             identifier = language, codepage
             if identifier not in lgcpids:
                 six.print_("The specified language/codepage identifier {!s} does not exist in file {:s}. Use --list to list the identifiers that are available or use -h for more information.".format(identifier, filename), file=sys.stderr)
