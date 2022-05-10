@@ -33,8 +33,13 @@ class IMAGE_TLS_DIRECTORY32(pstruct.type):
     class _Characteristics(TLS_Characteristics):
         '''UINT32'''
 
+    def __StartAddressOfRawData(self):
+        p = self.getparent(IMAGE_TLS_DIRECTORY32)
+        start, end = (p[fld].int() for fld in ['StartAddressOfRawData', 'EndAddressOfRawData'])
+        return dyn.block(max(start, end) - start)
+
     _fields_ = [
-        (realaddress(ptype.undefined, type=UINT32), 'StartAddressOfRawData'),
+        (realaddress(__StartAddressOfRawData, type=UINT32), 'StartAddressOfRawData'),
         (realaddress(ptype.undefined, type=UINT32), 'EndAddressOfRawData'),
         (realaddress(UINT32, type=UINT32), 'AddressOfIndex'),   # FIXME: this doesn't seem to calculate the address correctly
         (realaddress(_AddressOfCallbacks, type=UINT32), 'AddressOfCallbacks'),
@@ -52,8 +57,13 @@ class IMAGE_TLS_DIRECTORY64(pstruct.type):
     class _Characteristics(TLS_Characteristics):
         '''UINT32'''
 
+    def __StartAddressOfRawData(self):
+        p = self.getparent(IMAGE_TLS_DIRECTORY64)
+        start, end = (p[fld].int() for fld in ['StartAddressOfRawData', 'EndAddressOfRawData'])
+        return dyn.block(max(start, end) - start)
+
     _fields_ = [
-        (realaddress(ptype.undefined, type=UINT64), 'StartAddressOfRawData'),
+        (realaddress(__StartAddressOfRawData, type=UINT64), 'StartAddressOfRawData'),
         (realaddress(ptype.undefined, type=UINT64), 'EndAddressOfRawData'),
         (realaddress(UINT64, type=UINT64), 'AddressOfIndex'),
         (realaddress(_AddressOfCallbacks, type=UINT64), 'AddressOfCallbacks'),
