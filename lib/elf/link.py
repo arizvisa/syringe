@@ -135,8 +135,17 @@ class link_map(pstruct.type):
 
         DT_ADDRRNGHI = 0x6ffffeff
         DT_GNU_HASH = 0x6ffffef5
-        DT_ADDRTAGIDX = lambda tag: DT_ADDRRNGHI - tag
-        ADDRIDX = lambda tag: DT_NUM + DT_THISPROCNUM + DT_VERSIONTAGNUM + DT_EXTRANUM + DT_VALNUM + DT_ADDRTAGIDX(tag)
+
+        @classmethod
+        def DT_ADDRTAGIDX(cls, tag):
+            '''DT_ADDRTAGIDX = lambda tag: DT_ADDRRNGHI - tag'''
+            return cls.DT_ADDRRNGHI - tag
+        @classmethod
+        def ADDRIDX(cls, tag):
+            '''ADDRIDX = lambda tag: DT_NUM + DT_THISPROCNUM + DT_VERSIONTAGNUM + DT_EXTRANUM + DT_VALNUM + DT_ADDRTAGIDX(tag)'''
+            properties = ['DT_NUM', 'DT_THISPROCNUM', 'DT_VERSIONTAGNUM', 'DT_EXTRANUM', 'DT_VALNUM']
+            result = sum(getattr(cls, name) for name in properties)
+            return result + cls.DT_ADDRTAGIDX(tag)
 
     class _l_gnuhash_table(pstruct.type):
         _fields_ = [
