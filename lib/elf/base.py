@@ -13,11 +13,11 @@ class int(pint.int32_t): pass
 class signed_int(pint.sint32_t): pass
 class unsigned_int(pint.uint32_t): pass
 class long(pint.int_t):
-    length = property(Config.integer.size)
+    length = property(lambda _: Config.integer.size)
 class signed_long(pint.sint_t):
-    length = property(Config.integer.size)
+    length = property(lambda _: Config.integer.size)
 class unsigned_long(pint.uint_t):
-    length = property(Config.integer.size)
+    length = property(lambda _: Config.integer.size)
 class long_long(pint.int64_t): pass
 class signed_long_long(pint.sint64_t): pass
 class unsigned_long_long(pint.uint64_t): pass
