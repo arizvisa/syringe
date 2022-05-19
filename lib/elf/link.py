@@ -274,7 +274,25 @@ class link_map(pstruct.type):
             (r_search_path_struct, 'l_runpath_dirs'),
         ])
 
+    def __iterate__(self, field):
+        yield self
+        while self[field].int():
+            self = self[field].d
+            yield self.l
+        return
+    def iterate(self, field='l_next'):
+        for item in self.__iterate__(field):
+            yield item
+        return
+    def enumerate(self, field='l_next'):
+        for index, item in enumerate(self.iterate()):
+            yield index, item
+        return
+
 class link_map32(link_map):
     ElfXX_Addr = Elf32_Addr
-class link_map32(link_map):
+class link_map64(link_map):
     ElfXX_Addr = Elf64_Addr
+
+# just some aliases
+map, map32, map64 = link_map, link_map32, link_map64
