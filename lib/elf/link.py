@@ -1,7 +1,7 @@
 import ptypes
 from .base import *
 
-from . import dynamic
+from . import dynamic, File
 
 class RT_(pint.enum):
     _values_ = [
@@ -209,7 +209,7 @@ class link_map(pstruct.type):
         star = ElfXX_Addr._value_
 
         F.extend([
-            (ElfXX_Addr, 'l_addr'),
+            (dyn.clone(ElfXX_Addr, _object_=File), 'l_addr'),
             (dyn.pointer(pstr.szstring, star), 'l_name'),
             (dyn.pointer(ElfXX_Dyn, star), 'l_ld'),
             (dyn.pointer(self.__class__, star), 'l_next'),
