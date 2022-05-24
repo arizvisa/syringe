@@ -185,6 +185,7 @@ def namespace(cls):
 
 def configuration(cls):
     attributes, properties, subclass = dict(cls.__dict__), {}, {}
+    implementation = sys.implementation.name if hasattr(sys, 'implementation') else 'cpython'
     for name, value in attributes.items():
         if name.startswith('_'):
             continue
@@ -196,7 +197,7 @@ def configuration(cls):
             subclass[name] = configuration(value)
 
         # we should never be here if we're running in cpython (py2 or py3)
-        elif getattr(sys, 'implementation', ['cpython'])[0] in {'cpython'}:
+        elif implementation in {'cpython'}:
             raise TypeError(name, value)
 
         # if we fallthrough, then we should be micropython or something else

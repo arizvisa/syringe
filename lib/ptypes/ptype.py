@@ -1687,7 +1687,7 @@ def clone(cls, **newattrs):
 
     def slot_getter(t, name, *default):
         res = getattr(t, name, *default)
-        if builtins.isinstance(res, property.fset.__class__):
+        if builtins.isinstance(res, (property.fset.__class__, types.MemberDescriptorType)):
             return t.__slots__.get(name, *default)
         return res
 
