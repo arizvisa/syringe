@@ -195,7 +195,7 @@ class ELFCLASSXX(object):
         def by_tag(self, entry):
             iterable = self.filter_tag(entry)
             return next(iterable)
-        bytag = by_tag
+        by = bytag = by_tag
 
     class PT_INTERP(pstr.szstring):
         type = 3

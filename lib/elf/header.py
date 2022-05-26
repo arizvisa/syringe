@@ -394,6 +394,7 @@ class ShdrEntries(XhdrEntries):
     def by_type(self, type):
         Fpredicate = operator.itemgetter(type)
         return self.by_field('sh_type', Fpredicate)
+    by = by_type
 
 class PhdrEntries(XhdrEntries):
     def by_offset(self, ofs):
@@ -462,6 +463,7 @@ class PhdrEntries(XhdrEntries):
     def by_type(self, type):
         Fpredicate = operator.itemgetter(type)
         return self.by_field('p_type', Fpredicate)
+    by = by_type
 
 ### 32-bit
 class Elf32_Ehdr(pstruct.type, ElfXX_Ehdr):
