@@ -1,4 +1,4 @@
-import ptypes, sys
+import ptypes, sys, os.path
 from ptypes import pstruct,parray,ptype,dyn,pstr,pbinary,utils
 from ..headers import *
 
@@ -62,6 +62,32 @@ class CV_INFO_PDB20(pstruct.type):
         (DWORD, 'Age'),
         (pstr.szstring, 'PdbFileName'),
     ]
+    def SymHash(self):
+        # return the signature/age "hash" despite it not being a real thing.
+        iterable = ("{:0{:d}X}".format(self[fld].int(), 2 * self[fld].size()) for fld in ['Signature', 'Age'])
+        return ''.join(iterable)
+
+    def SymPath(self):
+        # don't think the signature hash or anything even matters.
+        return self['PdbFileName'].str()
+
+    def SymUrl(self):
+        # we're going to return a file:// url because the PDB20 information
+        # is not intended to be hosted on a symsrv afaict.
+        sympath = self.SymPath()
+
+        drive, pathname = os.path.splitdrive(sympath)
+        path = '/'.join(pathname.split('\\'))
+        query = '&'.join("{:s}={:s}".format(fld, format(self[fld].int())) for fld, format in [('Signature', "{:08X}".format), ('Age', "{:d}".format), ('Offset', "{:d}".format)])
+
+        # because py2's urllib is stupid, we use "drive" as '\0' and add it back in afterwards.
+        if sys.version_info.major < 3:
+            import urllib
+            return urllib.basejoin('file:', "{:s}{:s}?{:s}".format('\0', path, query)).replace('\0', drive)
+
+        # format each component into the actual file:// url w/o a fragment
+        import urllib.parse
+        return urllib.parse.urlunsplit(('file', drive, path, query, None))
 
 @CodeViewInfo.define
 class CV_INFO_PDB70(pstruct.type):
