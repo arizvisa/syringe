@@ -123,15 +123,15 @@ class IMAGE_DEBUG_DATA_MISC(pstruct.type):
     type = IMAGE_DEBUG_TYPE_.byname('MISC')
 
     def __Extra(self):
-        bs, res = self.blocksize(), sum(self[fld].li.size() for fld in ['DataType', 'Length', 'Unicode', 'align(Unicode)', 'Data'])
-        return dyn.block(max(0, bs - res))
+        length, res = self['Length'].li, sum(self[fld].li.size() for fld in ['DataType', 'Length', 'Unicode', 'align(Unicode)', 'Data'])
+        return dyn.block(max(0, length.int() - res))
 
     _fields_ = [
         (IMAGE_DEBUG_MISC_, 'DataType'),
         (DWORD, 'Length'),
         (BYTE, 'Unicode'),
         (dyn.block(3), 'align(Unicode)'),
-        (lambda self: dyn.clone(pstr.wstring if self['Unicode'].int() else pstr.string, length=self['Length'].li.int()), 'Data'),
+        (lambda self: pstr.szwstring if self['Unicode'].li.int() else pstr.szstring, 'Data'),
         (__Extra, 'Extra'),
     ]
 IMAGE_DEBUG_TYPE_MISC = IMAGE_DEBUG_DATA_MISC
