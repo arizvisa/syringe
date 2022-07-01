@@ -72,11 +72,12 @@ class CV_INFO_PDB20(pstruct.type):
         return self['PdbFileName'].str()
 
     def SymUrl(self):
-        # we're going to return a file:// url because the PDB20 information
-        # is not intended to be hosted on a symsrv afaict.
+        import ntpath
         sympath = self.SymPath()
 
-        drive, pathname = os.path.splitdrive(sympath)
+        # we're going to return a file:// url because the PDB20 information
+        # is not intended to be hosted on a symsrv afaict.
+        drive, pathname = ntpath.splitdrive(sympath)
         path = '/'.join(pathname.split('\\'))
         query = '&'.join("{:s}={:s}".format(fld, format(self[fld].int())) for fld, format in [('Signature', "{:08X}".format), ('Age', "{:d}".format), ('Offset', "{:d}".format)])
 
@@ -98,29 +99,65 @@ class CV_INFO_PDB70(pstruct.type):
         (pstr.szstring, 'PdbFileName'),
     ]
 
-    def SymHash(self):
-        signature, items = self['Signature'], []
-        for fld in ['Data1', 'Data2', 'Data3']:
-            items.append("{:0{:d}X}".format(signature[fld].int(), 2 * signature[fld].size()))
-        res = signature['Data4'].serialize()
-        items.append(''.join(map("{:02X}".format, bytearray(res))))
-        items.append("{:X}".format(self['Age'].int()))
+    def Signature(self):
+        items = []
+        for fld in (self['Signature'][name] for name in ['Data1', 'Data2', 'Data3']):
+            items.append("{:0{:d}X}".format(fld.int(), 2 * fld.size()))
+        items.append(''.join(map("{:02X}".format, bytearray(self['Signature']['Data4'].serialize()))))
         return ''.join(items)
 
+    def SymHash(self):
+        sig, age = self.Signature(), self['Age'].int()
+        return ''.join([self.Signature(), "{:X}".format(age)])
+
     def SymPath(self):
-        path = self.SymHash()
-        return '/'.join([path, self['PdbFileName'].str()])
+        import ntpath
+        hash, filename = self.SymHash(), self['PdbFileName'].str()
+        drive, pathname = ntpath.splitdrive(filename)
+        return filename if drive else '/'.join([hash, filename])
 
     def SymUrl(self, baseuri='https://msdl.microsoft.com/download/symbols'):
-        if sys.version_info.major < 3:
+        import ntpath
+        signature, sympath = self.Signature(), self.SymPath()
+
+        # Split up the path and check it it has a drive letter (making
+        # it an absolute path).
+        drive, pathname = ntpath.splitdrive(sympath)
+        path = '/'.join(pathname.split('\\'))
+        query = '&'.join("{:s}={:s}".format(name, item) for name, item in [('Signature', signature), ('Age', "{:d}".format(self['Age'].int()))])
+
+        # If it doesn't have a drive letter, then it's a url and we just need to
+        # prefix the sympath that we got with it. Py2's urllib is stupid, though.
+        if not drive and sys.version_info.major < 3:
             import urllib
-            path = '/'.join([self['PdbFileName'].str(), self.SymPath()])
+            path = '/'.join([self['PdbFileName'].str(), sympath])
             return urllib.basejoin(baseuri if baseuri.endswith('/') else "{:s}/".format(baseuri), path)
 
+        # Py3's urllib isn't that bad, so we can that combine all our components
+        # from the baseuri together with the pdf filename and our sympath.
+        elif not drive:
+            import urllib.parse
+            scheme, location, path, query, fragment = urllib.parse.urlsplit(baseuri)
+            newpath = '/'.join([path, self['PdbFileName'].str(), sympath])
+            return urllib.parse.urlunsplit((scheme, location, newpath, query, fragment))
+
+        # Otherwise we have a drive, and we just need to deal with Py2's urllib again.
+        # We use '\0' as a placeholder, and then replace it with the drive afterwards.
+        if sys.version_info.major < 3:
+            import urllib
+            return urllib.basejoin('file:', "{:s}{:s}?{:s}".format('\0', path, query)).replace('\0', drive)
+
+        # With Py3's urllib, we can just use each component as-is.
         import urllib.parse
-        scheme, location, path, query, fragment = urllib.parse.urlsplit(baseuri)
-        newpath = '/'.join([path, self['PdbFileName'].str(), self.SymPath()])
-        return urllib.parse.urlunsplit((scheme, location, newpath, query, fragment))
+        return urllib.parse.urlunsplit(('file', drive, path, query, None))
+
+        # Otherwise, our path needs to be combined with the baseurl.
+        sympath = self.SymPath()
+        if sys.version_info.major < 3:
+            import urllib
+            path = '/'.join([self['PdbFileName'].str(), sympath])
+            return urllib.basejoin(baseuri if baseuri.endswith('/') else "{:s}/".format(baseuri), path)
+
 
 @IMAGE_DEBUG_DIRECTORY_DATA.define
 class IMAGE_DEBUG_DATA_CODEVIEW(pstruct.type):
