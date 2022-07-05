@@ -606,6 +606,7 @@ class SLIST_ENTRY(fpointer_t):
             item = self.__walk_nextentry(result, iter(self._path_))
             if item.int() == 0: break
         return
+    iterate = walk
 
 SLIST_ENTRY._object_ = SLIST_ENTRY
 SLIST_ENTRY._path_ = ()
@@ -743,6 +744,7 @@ class LIST_ENTRY(pstruct.type):
             item = self.__walk_nextentry(result, iter(self._path_))
             item = item[direction]
         return
+    iterate = walk
 
     def moonwalk(self):
         return self.walk(direction=self.blink)
