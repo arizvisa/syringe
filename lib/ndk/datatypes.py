@@ -601,7 +601,7 @@ class SLIST_ENTRY(fpointer_t):
 
         item = self
         while item.int() not in sentinel:
-            result = item.d
+            result = item.d.copy(parent=self)
             yield result.l
             item = self.__walk_nextentry(result, iter(self._path_))
             if item.int() == 0: break
@@ -738,7 +738,7 @@ class LIST_ENTRY(pstruct.type):
 
         item = self[direction]
         while item.int() != 0 and item.int() not in sentinel:
-            result = item.d
+            result = item.d.copy(parent=self[direction])
             yield result.l
             item = self.__walk_nextentry(result, iter(self._path_))
             item = item[direction]
