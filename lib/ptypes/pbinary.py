@@ -399,10 +399,10 @@ class type(base):
 
         with utils.assign(self, **attrs):
             offset, suboffset = self.getposition()
-            def repeat(offset=offset):
-                self.source.seek(offset)
+            def repeat(source=self.source, offset=offset):
+                source.seek(offset)
                 while True:
-                    yield self.source.consume(1)
+                    yield source.consume(1)
                 return
 
             # FIXME: this discards the byteorder fucking up the position for littleendian
@@ -1964,9 +1964,9 @@ class partial(ptype.container):
     def load(self, **attrs):
         '''Load a pbinary.partial using the current source'''
         with utils.assign(self, **attrs):
-            offset, self.value = self.getoffset(), [self.__object__()]
+            source, offset, self.value = self.source, self.getoffset(), [self.__object__()]
             try:
-                object = self.__load_byteorder(offset, (self.source.consume(1) for index in itertools.count()))
+                object = self.__load_byteorder(offset, (source.consume(1) for index in itertools.count()))
             except (StopIteration, error.ProviderError) as E:
                 raise error.LoadError(self, exception=E)
             finally:
@@ -1977,9 +1977,10 @@ class partial(ptype.container):
     def commit(self, **attrs):
         try:
             with utils.assign(self, **attrs):
-                self.source.seek(self.getoffset())
+                source = self.source
+                source.seek(self.getoffset())
                 data = self.serialize()
-                self.source.store(data)
+                source.store(data)
             return self
 
         except (StopIteration, error.ProviderError) as E:

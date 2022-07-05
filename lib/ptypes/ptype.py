@@ -898,18 +898,18 @@ class base(generic):
     def load(self, **attrs):
         """Synchronize the current instance with data from the .source attributes"""
         with utils.assign(self, **attrs):
-            offset, blocksize = self.getoffset(), self.blocksize()
+            source, offset, blocksize = self.source, self.getoffset(), self.blocksize()
 
             # seek to the correct offset that we'll be consuming from.
-            self.source.seek(offset)
+            source.seek(offset)
             try:
-                block = self.source.consume(blocksize)
+                block = source.consume(blocksize)
                 self = self.__deserialize_block__(block)
 
             # if we got an exception from the provider, then recast it
             # as a load error since the block was not read completely.
             except (StopIteration, error.ProviderError) as E:
-                self.source.seek(offset + blocksize)
+                source.seek(offset + blocksize)
                 raise error.LoadError(self, consumed=blocksize, exception=E)
         return self
 
@@ -917,9 +917,9 @@ class base(generic):
         """Commit the current state back to the .source attribute"""
         try:
             with utils.assign(self, **attrs):
-                ofs, data = self.getoffset(), self.serialize()
-                self.source.seek(ofs)
-                self.source.store(data)
+                source, ofs, data = self.source, self.getoffset(), self.serialize()
+                source.seek(ofs)
+                source.store(data)
             return self
 
         except (StopIteration, error.ProviderError) as E:
