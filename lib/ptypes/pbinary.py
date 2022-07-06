@@ -627,16 +627,6 @@ class enum(integer):
             return bitmap.new(0, res)
         return super(enum, self).__getvalue__()
 
-    def has(self, *value):
-        '''Return True if the provided parameter is contained by the enumeration. If no value is provided, then use the current instance.'''
-        if not value:
-            value = (bitmap.value(self.get()),)
-        res, = value
-
-        if isinstance(res, string_types):
-            return self.__byname__(res, None) == bitmap.value(self.get())
-        return self.__byvalue__(res, False) and True or False
-
     def __byvalue__(self, value, *default):
         '''Internal method to search the enumeration for the name representing the provided value.'''
         if len(default) > 1:
@@ -708,7 +698,7 @@ class enum(integer):
     def __getitem__(self, name):
         '''If a key is specified, then return True if the enumeration actually matches the specified constant'''
         if isinstance(name, string_types):
-            return self.has(name)
+            return self.__byname__(name, None) == bitmap.value(self.get())
         return False
 
     @classmethod
@@ -727,13 +717,13 @@ class enum(integer):
         if len(default) > 1:
             raise TypeError("{:s}.byvalue expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
 
+        iterable = (name for name, item in cls._values_ if item == value)
         try:
-            return utils.next(name for name, item in cls._values_ if item == value)
+            result = utils.next(iterable, *default)
 
         except StopIteration:
-            if default: return utils.next(iter(default))
-
-        raise KeyError(cls, 'enum.byvalue', value)
+            raise KeyError(cls, 'enum.byvalue', value)
+        return result
 
     @classmethod
     def byname(cls, name, *default):
@@ -741,13 +731,21 @@ class enum(integer):
         if len(default) > 1:
             raise TypeError("{:s}.byname expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
 
+        iterable = (value for item, value in cls._values_ if item == name)
         try:
-            return utils.next(value for item, value in cls._values_ if item == name)
-
+            result = utils.next(iterable, *default)
         except StopIteration:
-            if default: return utils.next(iter(default))
+            raise KeyError(cls, 'enum.byname', name)
+        return result
 
-        raise KeyError(cls, 'enum.byname', name)
+    @classmethod
+    def has(cls, value):
+        '''Return True if the given value is within the definition of the enumeration.'''
+        if isinstance(value, string_types):
+            iterable = (name == value for name, item in cls._values_)
+        else:
+            iterable = (item == value for name, item in cls._values_)
+        return any(iterable)
 
 class container(type):
     '''contains a list of variable-bit integers'''
