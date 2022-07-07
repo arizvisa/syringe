@@ -1145,13 +1145,16 @@ class container(base):
         if self.value is None:
             return super(container, self).instance()
         try:
-            if not utils.callable_eq(self, self.blocksize, cls, cls.blocksize) or self.initializedQ():
+            if self.initializedQ():
+                bs = self.size()
+            elif utils.callable_eq(self, self.blocksize, cls, cls.blocksize):
+                return super(container, self).instance()
+            else:
                 bs = self.blocksize()
+
         except Exception:
-            pass
-        else:
-            return "{:s}[{:x}:{:+x}]".format(name, ofs, self.size())
-        return super(container, self).instance()
+            return super(container, self).instance()
+        return "{:s}[{:x}:{:+x}]".format(name, ofs, bs)
 
     def initializedQ(self):
         """True if the type is fully initialized"""
