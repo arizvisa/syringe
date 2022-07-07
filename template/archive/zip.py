@@ -230,7 +230,10 @@ class LocalFileHeader32(LocalFileHeader):
 
     def __file_data(self):
         desc = self.p.DirectoryRecord['data descriptor'] if hasattr(self.p, 'DirectoryRecord') else self['data descriptor'].li
-        return dyn.block(desc['compressed size'].int())
+        bs = desc['compressed size'].int()
+
+        # FIXME: this should be returning a ptype.encoded_t for the compression method
+        return dyn.block(bs)
 
     def __post_data_descriptor(self):
         if hasattr(self.p, 'DirectoryRecord'):
@@ -361,6 +364,9 @@ class CentralDirectoryEntry32(CentralDirectoryEntry):
         return self['data descriptor']
     def Comment(self):
         return self['file comment'].str()
+    def Record(self):
+        header = self['relative offset of local header'].d
+        return header.li
 
     def extract(self, **kwds):
         return self.serialize()
@@ -396,6 +402,10 @@ class EndOfCentralDirectory32(EndOfCentralDirectory):
         total = self['total number of entries in the central directory']
         size = self['size of the central directory']
         return "disk#{:d} soc-disk#{:d} soc-offset={:#x} soc-length={:d}/{:d} soc-size={:+d}{:s}".format(disk.int(), socdisk.int(), offset.int(), length.int(), total.int(), size.int(), " ({:s})".format(self['.ZIP file comment'].str()) if self['.ZIP file comment length'].int() else '')
+
+    def Record(self):
+        directory = self['offset of start of central directory with respect to the starting disk number'].d
+        return directory.li
 
     def Comment(self):
         return self['.ZIP file comment'].str()
