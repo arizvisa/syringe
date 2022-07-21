@@ -946,7 +946,7 @@ if __name__ == '__main__':
     if len(sys.argv) == 2:
         filename = sys.argv[1]
         ptypes.setsource(ptypes.prov.file(filename, 'rb'))
-        z = pecoff.Executable.File()
+        self = z = pecoff.Executable.File()
         z=z.l
     else:
         filename = 'obj/kernel32.dll'
@@ -954,7 +954,7 @@ if __name__ == '__main__':
         for x in range(10):
             print(filename)
             try:
-                z = pecoff.Executable.File()
+                self = z = pecoff.Executable.File()
                 z=z.l
                 break
             except IOError:

@@ -122,14 +122,14 @@ if __name__ == '__main__':
     import logging
 
     print('-'*20 + 'loading file..')
-    coff = pecoff.Object.File(source=provider.file(sys.argv[1]))
+    self = coff = pecoff.Object.File(source=provider.file(sys.argv[1]))
     coff.load()
 
     __name__ = 'ImportLibrary' if coff.ImportLibraryQ() else 'CoffObject'
 
 if __name__ == 'ImportLibrary':
     print(coff['Header'])
-    print(coff['Data'])
+    print(coff['Segments'])
 
 if __name__ == 'CoffObject':
     print(coff['Header'])
