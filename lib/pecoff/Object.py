@@ -122,7 +122,7 @@ if __name__ == '__main__':
     import logging
 
     print('-'*20 + 'loading file..')
-    self = coff = pecoff.Object.File(source=provider.file(sys.argv[1]))
+    self = coff = pecoff.Object.File(source=provider.file(sys.argv[1], 'rb'))
     coff.load()
 
     __name__ = 'ImportLibrary' if coff.ImportLibraryQ() else 'CoffObject'

@@ -371,7 +371,7 @@ if __name__ == '__main__':
     import sys
     import ptypes, pecoff.Archive as Archive
     from ptypes import *
-    source = ptypes.setsource(ptypes.prov.file(sys.argv[1]))
+    source = ptypes.setsource(ptypes.prov.file(sys.argv[1], 'rb'))
 
     print("Reading contents of {:s}...".format(source.file.name))
     self = Archive.File()
