@@ -345,6 +345,8 @@ def list_debugpogo(t, outformat, F=None, output=None):
         raise ValueError("No debug data directory entry was found.")
     global D; D = E['Address'].d.li
     item = next((item for item in D if item['Type']['POGO']), None)
+    if item is None:
+        raise KeyError("Unable to find an instance of the POGO debug data directory entry in the list of entries ({:s})".format(', '.join(item['Type'].str() for item in D)))
     global result; result = item['PointerToRawData'].d.li
     entries = result['Entries']
     if F:
