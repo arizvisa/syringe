@@ -126,7 +126,7 @@ Sector.default = Sector.lookup(None)
 
 class SectorType(pint.enum, DWORD):
     def summary(self):
-        return super(SectorType, self).summary() if self.has() else "{:#010x}".format(self.int())
+        return super(SectorType, self).summary() if self.has(self.int()) else "{:#010x}".format(self.int())
 SectorType._values_ = [(item.__name__, type) for type, item in Sector.cache.items() if type is not None]
 Pointer._value_ = SectorType
 
