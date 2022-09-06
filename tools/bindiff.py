@@ -5,12 +5,12 @@ from ptypes import utils
 
 def blockreader(file, blocksize):
     while True:
-        res = file.read(blocksize)
-        for x in res:
-            yield x
+        res = bytearray(file.read(blocksize))
+        for i in range(len(res)):
+            yield bytes(res[i:i+1])
 
         if not res:
-            raise StopIteration
+            break
 
 def infiniterange(start, stop=None, step=1):
     assert step != 0
@@ -160,18 +160,18 @@ def do_diff_generate(A, B, template='%s.diff'):
 
     inputa.seek(0); inputb.seek(0)
     original = inputa.read()
-    newer = array.array('c', inputb.read())
+    newer = bytearray(inputb.read())
     inputa.seek(0); inputb.seek(0)
 
     count = 0
     for o,l in getDifferences(a, b):
         left,right = o,o+l
-        buffer = array.array('c', original)
+        buffer = bytearray(original)
         buffer[left:right] = newer[left:right]
 
         filepiece = '%x-%x'% (left,right)
-        out = file( template% filepiece, 'wb' )
-        out.write( buffer.tostring() )
+        out = open( template% filepiece, 'wb' )
+        out.write( bytes(buffer) )
         out.close()
         count += 1
 
@@ -198,7 +198,7 @@ def run(*args):
         help(*args)
         return
 
-    inputa, inputb = file(inputa, 'rb'), file(inputb, 'rb')
+    inputa, inputb = open(inputa, 'rb'), open(inputb, 'rb')
     a,b = (blockreader(inputa, 512), blockreader(inputb, 512))
 
     if generate_differences:
