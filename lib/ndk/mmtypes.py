@@ -292,7 +292,7 @@ class HARDWARE_PTE(pbinary.flags, versioned):
                 ])
 
             # PAE < 1703
-            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN10_RS2:
+            elif self.NTDDI_VERSION < sdkddkver.NTDDI_WIN10_RS2:
                 f.extend([
                     (26, 'PageFrameNumber'),
                     (26, 'reserved1'),
@@ -391,7 +391,7 @@ class MMPTE_HARDWARE(pbinary.flags, versioned):
                 ])
 
             # PAE < 1703
-            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN10_RS2:
+            elif self.NTDDI_VERSION < sdkddkver.NTDDI_WIN10_RS2:
                 f.extend([
                     (26, 'PageFrameNumber'),
                     (26, 'reserved1'),
@@ -422,7 +422,7 @@ class MMPTE_HARDWARE(pbinary.flags, versioned):
                 ])
 
             # WIN64 <= 1607
-            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_WIN10_RS1:
+            elif self.NTDDI_VERSION <= sdkddkver.NTDDI_WIN10_RS1:
                 f.extend([
                     (4, 'reserved1'),
                     (11, 'SoftwareWsIndex')

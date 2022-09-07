@@ -407,20 +407,20 @@ class PEB(pstruct.type, versioned):
                 (ULONGLONG, 'CsrServerReadOnlySharedMemoryBase')
             ])
 
-        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN10_TH2:
+        if self.NTDDI_VERSION >= sdkddkver.NTDDI_WIN10_TH2:
             f.extend([
                 (ULONG, 'TppWorkerpListLock'),
                 (LIST_ENTRY, 'TppWorkerpList'),
                 (dyn.array(PVOID, 128), 'WaitOnAddressHashTable'),
             ])
 
-        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN10_RS3:
+        if self.NTDDI_VERSION >= sdkddkver.NTDDI_WIN10_RS3:
             f.extend([
                 (PVOID, 'TelemetryCoverageHeader'),
                 (ULONG, 'CloudFileFlags'),
             ])
 
-        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN10_RS4:
+        if self.NTDDI_VERSION >= sdkddkver.NTDDI_WIN10_RS4:
             f.extend([
                 (ULONG, 'CloudFileDiagFlags'),
                 (CHAR, 'PlaceHolderCompatibilityMode'),
