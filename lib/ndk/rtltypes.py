@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-from . import umtypes, mmtypes
+from . import umtypes, mmtypes, sdkddkver
 from .datatypes import *
 
 class SIZE_T64(ULONGLONG): pass
@@ -71,7 +71,7 @@ class RTL_USER_PROCESS_INFORMATION(pstruct.type):
         (mmtypes.SECTION_IMAGE_INFORMATION, 'ImageInformation'),
     ]
 
-class RTL_USER_PROCESS_PARAMETERS(pstruct.type):
+class RTL_USER_PROCESS_PARAMETERS(pstruct.type, versioned):
     _fields_ = [
         (ULONG, 'MaximumLength'),
         (ULONG, 'Length'),
@@ -105,6 +105,16 @@ class RTL_USER_PROCESS_PARAMETERS(pstruct.type):
 
         (dyn.array(RTL_DRIVE_LETTER_CURDIR, 32), 'CurrentDirectories'),
         (ULONG, 'EnvironmentSize'),
+        (ULONG, 'EnvironmentVersion'),
+        (PVOID, 'PackageDependencyData'),
+        (ULONG, 'ProcessGroupId'),
+
+        (lambda self: pint.uint_t if self.NTDDI_VERSION < sdkddkver.NTDDI_WIN10 else ULONG, 'LoaderThreads'),
+        (lambda self: ptype.undefined if self.NTDDI_VERSION < sdkddkver.NTDDI_WIN10_RS5 else umtypes.UNICODE_STRING, 'RedirectionDllName'),
+
+        (lambda self: ptype.undefined if self.NTDDI_VERSION < sdkddkver.NTDDI_WIN10_19H1 else umtypes.UNICODE_STRING, 'HeapPartitionName'),
+        (lambda self: ptype.undefined if self.NTDDI_VERSION < sdkddkver.NTDDI_WIN10_19H1 else ULONG_PTR, 'DefaultThreadpoolCpuSetMasks'),
+        (lambda self: ptype.undefined if self.NTDDI_VERSION < sdkddkver.NTDDI_WIN10_21H2 else ULONG, 'DefaultThreadpoolCpuSetMaskCount'),
     ]
 
 class RTL_PATH_TYPE(pint.enum):
