@@ -1,4 +1,4 @@
-import sys, math, logging
+import sys, math, logging, codecs
 
 __all__ = 'defaults,byteorder,partial'.split(',')
 
@@ -276,6 +276,10 @@ class defaults:
         bigendian_name = field.type('bigendian_name', string_types, 'The formatspec to use when mangling the names for integers that are big-endian.')
         littleendian_name = field.type('littleendian_name', string_types, 'The formatspec to use when mangling the names for integers that are little-endian.')
 
+    class pstr:
+        encoding = field.type('encoding', (string_types, codecs.CodecInfo), 'The default encoding to use for character strings.')
+        wide_encoding = field.type('wide_encoding', (string_types, codecs.CodecInfo), 'The default encoding to use for wide-character strings.')
+
     class parray:
         break_on_max_count = field.bool('break_on_max_count', 'If a dynamic array is larger than max_count, then raise an exception.')
         max_count = field.type('max_count', integer_types, 'Notify via a warning (exception if \'break_on_max_count\') when length is larger than max_count.')
@@ -363,6 +367,11 @@ defaults.ptype.clone_name = 'c({})'
 # integer types
 defaults.pint.bigendian_name = 'be({})' if sys.byteorder.startswith('little') else '{}'
 defaults.pint.littleendian_name = 'le({})' if sys.byteorder.startswith('big') else '{}'
+
+# string encoding
+defaults.pstr.encoding = 'latin1'
+#defaults.pstr.encoding = sys.getdefaultencoding()
+defaults.pstr.wide_encoding = 'utf-16-le' if sys.byteorder == 'little' else 'utf-16-be'
 
 # pbinary types
 defaults.pbinary.offset = partial.hex
