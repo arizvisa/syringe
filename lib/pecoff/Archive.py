@@ -367,6 +367,40 @@ class File(pstruct.type):
             yield self.new(Object.File, offset=offset)
         return
 
+class Indexed(pstruct.type):
+    class Linker1(pstruct.type):
+        def __Strings(self):
+            bs, fields = self.blocksize(), ['Number of symbols', 'Offsets']
+            return dyn.block(self.blocksize() - sum(self[fld].li.size() for fld in fields))
+        _fields_ = [
+            (ulong, 'Number of symbols'),
+            (lambda self: dyn.clone(parray.type, _object_=ulong, length=self['Number of symbols'].li.int()), 'Offsets'),
+            (__Strings, 'Strings'),
+        ]
+    class Linker2(pstruct.type):
+        def __Strings(self):
+            bs, fields = self.blocksize(), ['Number of members', 'Offsets', 'Number of symbols', 'Indices']
+            return dyn.block(self.blocksize() - sum(self[fld].li.size() for fld in fields))
+        _fields_ = [
+            (ulong, 'Number of members'),
+            (lambda self: dyn.clone(parray.type, _object_=ulong, length=self['Number of members'].li.int()), 'Offsets'),
+            (ulong, 'Number of symbols'),
+            (lambda self: dyn.clone(parray.type, _object_=Index, length=self['Number of symbols'].li.int()), 'Indices'),
+            (__Strings, 'Strings'),
+        ]
+    def __indexed_member(self, name, size):
+        if name == '/':
+            return dyn.clone(Indexed.Linker1, blocksize=lambda _, cb=size: cb)
+        elif name == '//':
+            return dyn.clone(Indexed.Linker2, blocksize=lambda _, cb=size: cb)
+        return dyn.clone(ptype.block, length=size)
+
+    _fields_ = [
+        (dyn.clone(pstr.string, length=8), 'signature'),
+        (dyn.clone(Member, _Member_=__indexed_member), 'Linker1'),
+        (dyn.clone(Member, _Member_=__indexed_member), 'Linker2'),
+    ]
+
 if __name__ == '__main__':
     import sys
     import ptypes, pecoff.Archive as Archive
@@ -374,7 +408,7 @@ if __name__ == '__main__':
     source = ptypes.setsource(ptypes.prov.file(sys.argv[1], 'rb'))
 
     print("Reading contents of {:s}...".format(source.file.name))
-    self = Archive.File()
+    self = Archive.Indexed()
     self.load()
     print("Successfuly read {:d} members.".format(len(self['members'])))
 
