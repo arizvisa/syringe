@@ -231,6 +231,70 @@ class IMAGE_ENCLAVE_CONFIG64(pstruct.type):
         (IMAGE_ENCLAVE_FLAG_, 'EnclaveFlags'),
     ]
 
+class HEAP_(pbinary.flags):
+    _fields_ = [
+        (1, 'LOCK_USER_ALLOCATED'),         # 0x80000000
+        (1, 'VALIDATE_PARAMETERS_ENABLED'), # 0x40000000
+        (1, 'VALIDATE_ALL_ENABLED'),        # 0x20000000
+        (1, 'SKIP_VALIDATION_CHECKS'),      # 0x10000000
+        (1, 'NO_ALIGNMENT'),                # 0x08000000
+        (1, 'BREAK_WHEN_OUT_OF_VM'),        # 0x04000000
+        (1, 'PROTECTION_ENABLED'),          # 0x02000000
+        (1, 'FLAG_PAGE_ALLOCS'),            # 0x01000000
+        (4, 'RESERVED_20'),
+        (1, 'RESERVED_19'),
+        (1, 'CREATE_ENABLE_EXECUTE'),       # 0x00040000
+        (1, 'CREATE_ENABLE_TRACING'),       # 0x00020000
+        (1, 'CREATE_ALIGN_16'),             # 0x00010000
+        (4, 'CLASS_MASK'),                  # 0x0000F000
+        (3, 'SETTABLE_USER_FLAGS'),         # 0x00000E00
+        (1, 'SETTABLE_USER_VALUE'),         # 0x00000100
+        (1, 'DISABLE_COALESCE_ON_FREE'),    # 0x00000080
+        (1, 'FREE_CHECKING_ENABLED'),       # 0x00000040
+        (1, 'TAIL_CHECKING_ENABLED'),       # 0x00000020
+        (1, 'REALLOC_IN_PLACE_ONLY'),       # 0x00000010
+        (1, 'ZERO_MEMORY'),                 # 0x00000008
+        (1, 'GENERATE_EXCEPTIONS'),         # 0x00000004
+        (1, 'GROWABLE'),                    # 0x00000002
+        (1, 'NO_SERIALIZE'),                # 0x00000001
+    ]
+
+class FLG_(pbinary.flags):
+    _fields_ = [
+        (1, 'DISABLE_PROTDLLS'),            # 0x80000000
+        (1, 'ENABLE_HANDLE_EXCEPTIONS'),    # 0x40000000
+        (1, 'STOP_ON_UNHANDLED_EXCEPTION'), # 0x20000000
+        (1, 'CRITSEC_EVENT_CREATION'),      # 0x10000000
+        (1, 'DISABLE_DBGPRINT'),            # 0x08000000
+        (1, 'DEBUG_INITIAL_COMMAND_EX'),    # 0x04000000
+        (1, 'HEAP_PAGE_ALLOCS'),            # 0x02000000
+        (1, 'ENABLE_HANDLE_TYPE_TAGGING'),  # 0x01000000
+        (1, 'ENABLE_EXCEPTION_LOGGING'),    # 0x00800000
+        (1, 'ENABLE_CLOSE_EXCEPTIONS'),     # 0x00400000
+        (1, 'HEAP_DISABLE_COALESCING'),     # 0x00200000
+        (1, 'ENABLE_SYSTEM_CRIT_BREAKS'),   # 0x00100000
+        (1, 'DISABLE_PAGE_KERNEL_STACKS'),  # 0x00080000
+        (1, 'ENABLE_KDEBUG_SYMBOL_LOAD'),   # 0x00040000
+        (1, 'ENABLE_CSRDEBUG'),             # 0x00020000
+        (1, 'DISABLE_STACK_EXTENSION'),     # 0x00010000
+        (1, 'HEAP_ENABLE_TAG_BY_DLL'),      # 0x00008000
+        (1, 'MAINTAIN_OBJECT_TYPELIST'),    # 0x00004000
+        (1, 'KERNEL_STACK_TRACE_DB'),       # 0x00002000
+        (1, 'USER_STACK_TRACE_DB'),         # 0x00001000
+        (1, 'HEAP_ENABLE_TAGGING'),         # 0x00000800
+        (1, 'POOL_ENABLE_TAGGING'),         # 0x00000400
+        (1, 'MONITOR_SILENT_PROCESS_EXIT'), # 0x00000200
+        (1, 'APPLICATION_VERIFIER'),        # 0x00000100
+        (1, 'HEAP_VALIDATE_ALL'),           # 0x00000080
+        (1, 'HEAP_VALIDATE_PARAMETERS'),    # 0x00000040
+        (1, 'HEAP_ENABLE_FREE_CHECK'),      # 0x00000020
+        (1, 'HEAP_ENABLE_TAIL_CHECK'),      # 0x00000010
+        (1, 'STOP_ON_HUNG_GUI'),            # 0x00000008
+        (1, 'DEBUG_INITIAL_COMMAND'),       # 0x00000004
+        (1, 'SHOW_LDR_SNAPS'),              # 0x00000002
+        (1, 'STOP_ON_EXCEPTION'),           # 0x00000001
+    ]
+
 class LOAD_LIBRARY_SEARCH_(pbinary.flags):
     _fields_ = [
         (3, 'Reserved'),
@@ -248,8 +312,8 @@ class IMAGE_LOAD_CONFIG_DIRECTORY32(IMAGE_LOAD_CONFIG_DIRECTORY):
         (TimeDateStamp, 'TimeDateStamp'),
         (WORD, 'MajorVersion'),
         (WORD, 'MinorVersion'),
-        (DWORD, 'GlobalFlagsClear'),   # FIXME
-        (DWORD, 'GlobalFlagsSet'), # FIXME
+        (pbinary.littleendian(FLG_), 'GlobalFlagsClear'),
+        (pbinary.littleendian(FLG_), 'GlobalFlagsSet'),
         (DWORD, 'CriticalSectionDefaultTimeout'),
 
         (DWORD, 'DeCommitFreeBlockThreshold'),
@@ -259,7 +323,7 @@ class IMAGE_LOAD_CONFIG_DIRECTORY32(IMAGE_LOAD_CONFIG_DIRECTORY):
         (DWORD, 'VirtualMemoryThreshold'),
         (DWORD, 'ProcessAffinityMask'),
 
-        (DWORD, 'ProcessHeapFlags'),   # FIXME: where are these flags at?
+        (pbinary.littleendian(HEAP_), 'ProcessHeapFlags'),      # XXX: maybe its from HeapCreate?
         (WORD, 'CSDVersion'),
         (pbinary.littleendian(LOAD_LIBRARY_SEARCH_), 'DependentLoadFlags'),
 
@@ -309,8 +373,8 @@ class IMAGE_LOAD_CONFIG_DIRECTORY64(IMAGE_LOAD_CONFIG_DIRECTORY):
         (TimeDateStamp, 'TimeDateStamp'),
         (WORD, 'MajorVersion'),
         (WORD, 'MinorVersion'),
-        (DWORD, 'GlobalFlagsClear'),
-        (DWORD, 'GlobalFlagsSet'),
+        (pbinary.littleendian(FLG_), 'GlobalFlagsClear'),
+        (pbinary.littleendian(FLG_), 'GlobalFlagsSet'),
         (DWORD, 'CriticalSectionDefaultTimeout'),
 
         (ULONGLONG, 'DeCommitFreeBlockThreshold'),
@@ -320,7 +384,7 @@ class IMAGE_LOAD_CONFIG_DIRECTORY64(IMAGE_LOAD_CONFIG_DIRECTORY):
         (ULONGLONG, 'VirtualMemoryThreshold'),
         (ULONGLONG, 'ProcessAffinityMask'),
 
-        (DWORD, 'ProcessHeapFlags'),
+        (pbinary.littleendian(HEAP_), 'ProcessHeapFlags'),      # XXX: maybe its from HeapCreate?
         (WORD, 'CSDVersion'),
         (pbinary.littleendian(LOAD_LIBRARY_SEARCH_), 'DependentLoadFlags'),
 

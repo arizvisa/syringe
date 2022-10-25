@@ -180,42 +180,46 @@ class PEB(pstruct.type, versioned):
 
             f = []
             f.extend([
-                (1, 'FLG_STOP_ON_EXCEPTION'),   # 0x00000001
-                (1, 'FLG_SHOW_LDR_SNAPS'),  # 0x00000002
-                (1, 'FLG_DEBUG_INITIAL_COMMAND'),   # 0x00000004
-                (1, 'FLG_STOP_ON_HUNG_GUI'),    # 0x00000008
-                (1, 'FLG_HEAP_ENABLE_TAIL_CHECK'),  # 0x00000010
-                (1, 'FLG_HEAP_ENABLE_FREE_CHECK'),  # 0x00000020
+                (1, 'FLG_STOP_ON_EXCEPTION'),           # 0x00000001
+                (1, 'FLG_SHOW_LDR_SNAPS'),              # 0x00000002
+                (1, 'FLG_DEBUG_INITIAL_COMMAND'),       # 0x00000004
+                (1, 'FLG_STOP_ON_HUNG_GUI'),            # 0x00000008
+                (1, 'FLG_HEAP_ENABLE_TAIL_CHECK'),      # 0x00000010
+                (1, 'FLG_HEAP_ENABLE_FREE_CHECK'),      # 0x00000020
                 (1, 'FLG_HEAP_VALIDATE_PARAMETERS'),    # 0x00000040
-                (1, 'FLG_HEAP_VALIDATE_ALL'),   # 0x00000080
-                (1, 'FLG_POOL_ENABLE_TAIL_CHECK'),  # 0x00000100
-                (1, 'FLG_POOL_ENABLE_FREE_CHECK'),  # 0x00000200
-                (1, 'FLG_POOL_ENABLE_TAGGING'), # 0x00000400
-                (1, 'FLG_HEAP_ENABLE_TAGGING'), # 0x00000800
-                (1, 'FLG_USER_STACK_TRACE_DB'), # 0x00001000
-                (1, 'FLG_KERNEL_STACK_TRACE_DB'),   # 0x00002000
+                (1, 'FLG_HEAP_VALIDATE_ALL'),           # 0x00000080
+                (1, 'FLG_POOL_ENABLE_TAIL_CHECK'),      # 0x00000100
+                (1, 'FLG_POOL_ENABLE_FREE_CHECK'),      # 0x00000200
+                (1, 'FLG_POOL_ENABLE_TAGGING'),         # 0x00000400
+                (1, 'FLG_HEAP_ENABLE_TAGGING'),         # 0x00000800
+                (1, 'FLG_USER_STACK_TRACE_DB'),         # 0x00001000
+                (1, 'FLG_KERNEL_STACK_TRACE_DB'),       # 0x00002000
                 (1, 'FLG_MAINTAIN_OBJECT_TYPELIST'),    # 0x00004000
-                (1, 'FLG_HEAP_ENABLE_TAG_BY_DLL'),  # 0x00008000
-                (1, 'FLG_IGNORE_DEBUG_PRIV'),   # 0x00010000
-                (1, 'FLG_ENABLE_CSRDEBUG'), # 0x00020000
+                (1, 'FLG_HEAP_ENABLE_TAG_BY_DLL'),      # 0x00008000
+                (1, 'FLG_IGNORE_DEBUG_PRIV'),           # 0x00010000
+                (1, 'FLG_ENABLE_CSRDEBUG'),             # 0x00020000
                 (1, 'FLG_ENABLE_KDEBUG_SYMBOL_LOAD'),   # 0x00040000
                 (1, 'FLG_DISABLE_PAGE_KERNEL_STACKS'),  # 0x00080000
             ])
 
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WINXP:
-                f.append((1, 'FLG_HEAP_ENABLE_CALL_TRACING'))   #0x00100000
+                f.append((1, 'FLG_HEAP_ENABLE_CALL_TRACING'))   # 0x00100000
             else:
-                f.append((1, 'FLG_ENABLE_SYSTEM_CRIT_BREAKS'))   #0x00100000
+                f.append((1, 'FLG_ENABLE_SYSTEM_CRIT_BREAKS'))  # 0x00100000
 
             f.extend([
-                (1, 'FLG_HEAP_DISABLE_COALESCING'), # 0x00200000
-                (1, 'FLG_ENABLE_CLOSE_EXCEPTIONS'), # 0x00400000
+                (1, 'FLG_HEAP_DISABLE_COALESCING'),     # 0x00200000
+                (1, 'FLG_ENABLE_CLOSE_EXCEPTIONS'),     # 0x00400000
                 (1, 'FLG_ENABLE_EXCEPTION_LOGGING'),    # 0x00800000
                 (1, 'FLG_ENABLE_HANDLE_TYPE_TAGGING'),  # 0x01000000
-                (1, 'FLG_HEAP_PAGE_ALLOCS'),    # 0x02000000
+                (1, 'FLG_HEAP_PAGE_ALLOCS'),            # 0x02000000
                 (1, 'FLG_DEBUG_INITIAL_COMMAND_EX'),    # 0x04000000
+                (1, 'FLG_DISABLE_DBGPRINT'),            # 0x08000000
+                (1, 'FLG_CRITSEC_EVENT_CREATION'),      # 0x10000000
+                (1, 'FLG_STOP_ON_UNHANDLED_EXCEPTION'), # 0x20000000
+                (1, 'FLG_ENABLE_HANDLE_EXCEPTIONS'),    # 0x40000000
+                (1, 'FLG_DISABLE_PROTDLLS'),            # 0x80000000
             ])
-            f.append((1+1+1+1+1, 'FLG_RESERVED'))
             self._fields_ = list(reversed(f))
 
         def __repr__(self):
