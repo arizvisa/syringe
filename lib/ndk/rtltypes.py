@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-from . import umtypes, mmtypes, sdkddkver
+from . import umtypes, mmtypes, exception, sdkddkver
 from .datatypes import *
 
 class SIZE_T64(ULONGLONG): pass
@@ -403,3 +403,366 @@ class RTL_HP_LFH_CONFIG(pstruct.type):
         (USHORT, 'MaxBlockSize'),
         (_Options, 'Options'),
     ]
+
+class ACTIVATION_CONTEXT_DATA(pstruct.type):
+    _fields_ = [
+        (ULONG, 'Magic'),
+        (ULONG, 'HeaderSize'),
+        (ULONG, 'FormatVersion'),
+        (ULONG, 'TotalSize'),
+        (ULONG, 'DefaultTocOffset'),
+        (ULONG, 'ExtendedTocOffset'),
+        (ULONG, 'AssemblyRosterOffset'),
+        (ULONG, 'Flags'),
+    ]
+
+class ASSEMBLY_STORAGE_MAP_ENTRY(pstruct.type):
+    _fields_ = [
+        (ULONG, 'Flags'),
+        (umtypes.UNICODE_STRING, 'DosPath'),
+        (HANDLE, 'Handle'),
+    ]
+
+class ASSEMBLY_STORAGE_MAP(pstruct.type):
+    _fields_ = [
+        (ULONG, 'Flags'),
+        (ULONG, 'AssemblyCount'),
+        #(PASSEMBLY_STORAGE_MAP_ENTRY*, 'AssemblyArray'),
+        (lambda self: P(dyn.array(ASSEMBLY_STORAGE_MAP_ENTRY, self['AssemblyCount'].li.int())), 'AssemblyArray'),
+    ]
+
+class file_info(pstruct.type):
+    _fields_ = [
+        (ULONG, 'type'),
+        (PWSTR, 'info'),    # WCHAR*
+    ]
+
+class progids(pstruct.type):
+     def __progids(self):
+        try:
+            p = self.getparent(progids)
+        except Exception:
+            count = 0
+        else:
+            count = p['num'].li.int()
+        return dyn.array(PWSTR, count)
+
+     _fields_ = [
+        #(WCHAR**, 'progids'),
+        (P(__progids), 'progids'),
+        (unsigned_int, 'num'),
+        (unsigned_int, 'allocated'),
+     ]
+
+class entity(pstruct.type):
+    class typelib(pstruct.type):
+        _fields_ = [
+            #(WCHAR*, 'tlbid'),
+            (PWSTR, 'tlbid'),
+            #(WCHAR*, 'helpdir'),
+            (PWSTR, 'helpdir'),
+            (WORD, 'flags'),
+            (WORD, 'major'),
+            (WORD, 'minor'),
+        ]
+    class comclass(pstruct.type):
+        _fields_ = [
+            #(WCHAR*, 'clsid'),
+            (PWSTR, 'clsid'),
+            #(WCHAR*, 'tlbid'),
+            (PWSTR, 'tlbid'),
+            #(WCHAR*, 'progid'),
+            (PWSTR, 'progid'),
+            #(WCHAR*, 'name'),       # clrClass: class name
+            (PWSTR, 'name'),       # clrClass: class name
+            #(WCHAR*, 'version'),    # clrClass: CLR runtime version
+            (PWSTR, 'version'),    # clrClass: CLR runtime version
+            (DWORD, 'model'),
+            (DWORD, 'miscstatus'),
+            (DWORD, 'miscstatuscontent'),
+            (DWORD, 'miscstatusthumbnail'),
+            (DWORD, 'miscstatusicon'),
+            (DWORD, 'miscstatusdocprint'),
+            (progids, 'progids'),
+        ]
+    class ifaceps(pstruct.type):
+        _fields_ = [
+            #(WCHAR*, 'iid'),
+            (PWSTR, 'iid'),
+            #(WCHAR*, 'base'),
+            (PWSTR, 'base'),
+            #(WCHAR*, 'tlib'),
+            (PWSTR, 'tlib'),
+            #(WCHAR*, 'name'),
+            (PWSTR, 'name'),
+            #(WCHAR*, 'ps32'),   # only stored for 'comInterfaceExternalProxyStub'
+            (PWSTR, 'ps32'),   # only stored for 'comInterfaceExternalProxyStub'
+            (DWORD, 'mask'),
+            (ULONG, 'nummethods'),
+        ]
+    class klass(pstruct.type):
+        _fields_ = [
+            #(WCHAR*, 'name'),
+            (PWSTR, 'name'),
+            (BOOL, 'versioned'),
+        ]
+    class clrsurrogate(pstruct.type):
+        _fields_ = [
+            #(WCHAR*, 'name'),
+            (PWSTR, 'name'),
+            #(WCHAR*, 'clsid'),
+            (PWSTR, 'clsid'),
+            #(WCHAR*, 'version'),
+            (PWSTR, 'version'),
+        ]
+    class settings(pstruct.type):
+        _fields_ = [
+            #(WCHAR*, 'name'),
+            (PWSTR, 'name'),
+            #(WCHAR*, 'value'),
+            (PWSTR, 'value'),
+            #(WCHAR*, 'ns'),
+            (PWSTR, 'ns'),
+        ]
+
+    def __u(self):
+        res = self['kind'].li
+
+    _fields_ = [
+        (DWORD, 'kind'),
+        (__u, 'u'),
+    ]
+
+class entity_array(pstruct.type):
+    _fields_ = [
+        (P(entity), 'base'),
+        (unsigned_int, 'num'),
+        (unsigned_int, 'allocated'),
+    ]
+
+class dll_redirect(pstruct.type):
+    _fields_ = [
+        #(WCHAR*, 'name'),
+        (PWSTR, 'name'),
+        #(WCHAR*, 'hash'),
+        (PWSTR, 'hash'),
+        (entity_array, 'entities'),
+    ]
+
+class _assembly_type(pint.enum):
+    _fields_ = [
+        ('APPLICATION_MANIFEST', 0),
+        ('ASSEMBLY_MANIFEST', 1),
+        ('ASSEMBLY_SHARED_MANIFEST', 2),
+    ]
+
+class assembly_type(pint.enum, unsigned___int3264):
+    pass
+
+class assembly_version(pstruct.type):
+    _fields_ = [
+        (USHORT, 'major'),
+        (USHORT, 'minor'),
+        (USHORT, 'build'),
+        (USHORT, 'revision'),
+    ]
+
+class assembly_identity(pstruct.type):
+    _fields_ = [
+        #(WCHAR*, 'name'),
+        (PWSTR, 'name'),
+        #(WCHAR*, 'arch'),
+        (PWSTR, 'arch'),
+        #(WCHAR*, 'public_key'),
+        (PWSTR, 'public_key'),
+        #(WCHAR*, 'language'),
+        (PWSTR, 'language'),
+        #(WCHAR*, 'type'),
+        (PWSTR, 'type'),
+        (assembly_version, 'version'),
+        (BOOL, 'optional'),
+        (BOOL, 'delayed'),
+    ]
+
+class ACTCTX_COMPATIBILITY_ELEMENT_TYPE_(pint.enum):
+    _values_ = [
+        ('UNKNOWN', 0),
+        ('OS', 1),
+    ]
+class ACTCTX_COMPATIBILITY_ELEMENT_TYPE(ACTCTX_COMPATIBILITY_ELEMENT_TYPE_, unsigned___int3264):
+    pass
+
+class COMPATIBILITY_CONTEXT_ELEMENT(pstruct.type):
+    _fields_ = [
+        (GUID, 'Id'),
+        (ACTCTX_COMPATIBILITY_ELEMENT_TYPE, 'Type'),
+    ]
+
+class ACTCTX_RUN_LEVEL_(pint.enum):
+    _values_ = [
+        ('UNSPECIFIED', 0),
+        ('AS_INVOKER', 1),
+        ('HIGHEST_AVAILABLE', 2),
+        ('REQUIRE_ADMIN', 3),
+        ('NUMBER', 4),
+    ]
+
+class ACTCTX_REQUESTED_RUN_LEVEL(ACTCTX_RUN_LEVEL_, unsigned___int3264):
+    pass
+
+class assembly(pstruct.type):
+    _fields_ = [
+        (assembly_type, 'type'),
+        (assembly_identity, 'id'),
+        (file_info, 'manifest'),
+        #(WCHAR*, 'directory'),
+        (PWSTR, 'directory'),
+        (BOOL, 'no_inherit'),
+        (P(dll_redirect), 'dlls'),
+        (unsigned_int, 'num_dlls'),
+        (unsigned_int, 'allocated_dlls'),
+        (entity_array, 'entities'),
+        (P(COMPATIBILITY_CONTEXT_ELEMENT), 'compat_contexts'),
+        (ULONG, 'num_compat_contexts'),
+        (ACTCTX_REQUESTED_RUN_LEVEL, 'run_level'),
+        (ULONG, 'ui_access'),
+    ]
+
+class strsection_header(pstruct.type):
+    _fields = [
+        (DWORD, 'magic'),
+        (ULONG, 'size'),
+        (dyn.array(DWORD, 3), 'unk1'),
+        (ULONG, 'count'),
+        (ULONG, 'index_offset'),
+        (dyn.array(DWORD, 2), 'unk2'),
+        (ULONG, 'global_offset'),
+        (ULONG, 'global_len'),
+]
+
+class guidsection_header(pstruct.type):
+    _fields_ = [
+        (DWORD, 'magic'),
+        (ULONG, 'size'),
+        (dyn.array(DWORD, 3), 'unk'),
+        (ULONG, 'count'),
+        (ULONG, 'index_offset'),
+        (DWORD, 'unk2'),
+        (ULONG, 'names_offset'),
+        (ULONG, 'names_len'),
+    ]
+
+class ACTIVATION_CONTEXT(pstruct.type):
+    _fields_ = [
+        (LONG, 'RefCount'),
+        (ULONG, 'Flags'),
+        (LIST_ENTRY, 'Links'),
+        (P(ACTIVATION_CONTEXT_DATA), 'ActivationContextData'),
+        (PVOID, 'NotificationRoutine'),
+        (PVOID, 'NotificationContext'),
+        (dyn.array(ULONG,8), 'SentNotifications'),
+        (dyn.array(ULONG,8), 'DisabledNotifications'),
+        (ASSEMBLY_STORAGE_MAP, 'StorageMap'),
+        (P(ASSEMBLY_STORAGE_MAP_ENTRY), 'InlineStorageMapEntries'),
+        (ULONG, 'StackTraceIndex'),
+        #(dyn.array(PVOID,4,4), 'StackTraces'), # FIXME
+        (dyn.array(dyn.array(PVOID, 4), 4), 'StackTraces'),
+        (file_info, 'config'),
+        (file_info, 'appdir'),
+        (P(assembly), 'assemblies'),
+        (unsigned_int, 'num_assemblies'),
+        (unsigned_int, 'allocated_assemblies'),
+
+        (DWORD, 'sections'),
+        (P(strsection_header), 'wndclass_section'),
+        (P(strsection_header), 'dllredirect_section'),
+        (P(strsection_header), 'progid_section'),
+        (P(guidsection_header), 'tlib_section'),
+        (P(guidsection_header), 'comserver_section'),
+        (P(guidsection_header), 'ifaceps_section'),
+        (P(guidsection_header), 'clrsurrogate_section'),
+    ]
+
+class RTL_ACTIVATION_CONTEXT_STACK_FRAME(pstruct.type):
+    def __Previous(self):
+        return RTL_ACTIVATION_CONTEXT_STACK_FRAME
+    _fields_ = [
+        (P(__Previous), 'Previous'),
+        (P(ACTIVATION_CONTEXT), 'ActivationContext'),
+        (ULONG, 'Flags'),
+    ]
+
+class RTL_CALLER_ALLOCATED_ACTIVATION_CONTEXT_STACK_FRAME_BASIC(pstruct.type):
+    _fields_ = [
+        (SIZE_T, 'Size'),
+        (ULONG, 'Format'),
+        (RTL_ACTIVATION_CONTEXT_STACK_FRAME, 'Frame'),
+    ]
+
+class RTL_CALLER_ALLOCATED_ACTIVATION_CONTEXT_STACK_FRAME_EXTENDED(pstruct.type):
+    _fields_ = [
+        (SIZE_T, 'Size'),
+        (ULONG, 'Format'),
+        (RTL_ACTIVATION_CONTEXT_STACK_FRAME, 'Frame'),
+        (PVOID, 'Extra1'),
+        (PVOID, 'Extra2'),
+        (PVOID, 'Extra3'),
+        (PVOID, 'Extra4'),
+    ]
+
+class RTL_HEAP_ALLOCATED_ACTIVATION_CONTEXT_STACK_FRAME(pstruct.type):
+    _fields_ = [
+        (RTL_ACTIVATION_CONTEXT_STACK_FRAME, 'Frame'),
+        (ULONG_PTR, 'Cookie'),
+        (dyn.array(PVOID, 8),  'ActivationStackBackTrace[8]'),
+    ]
+
+class ACTIVATION_CONTEXT_STACK_FRAMELIST(pstruct.type):
+    _fields_ = [
+        (ULONG, 'Magic'),
+        (ULONG, 'FramesInUse'),
+        (LIST_ENTRY, 'Links'),
+        (ULONG, 'Flags'),
+        (ULONG, 'NotFramesInUse'),
+        (dyn.array(RTL_HEAP_ALLOCATED_ACTIVATION_CONTEXT_STACK_FRAME, 32), 'Frames'),
+    ]
+
+class ACTIVATION_CONTEXT_STACK(pstruct.type):
+    _fields_ = [
+        (P(RTL_ACTIVATION_CONTEXT_STACK_FRAME), 'ActiveFrame'),
+        (LIST_ENTRY, 'FrameListCache'),
+        (ULONG, 'Flags'),
+        (ULONG, 'NextCookieSequenceNumber'),
+        (ULONG, 'StackId'),
+    ]
+
+class FIBER(pstruct.type, versioned):
+    _fields_ = [
+        (PVOID, 'FiberData'),
+        (P(exception.EXCEPTION_REGISTRATION_RECORD), 'ExceptionList'),    # 0x4, 0x8
+        (PVOID, 'StackBase'),                                   # 0x8, 0x10
+        (PVOID, 'StackLimit'),                                  # 0xc, 0x18
+        (PVOID, 'DeallocationStack'),                           # 0x10, 0x20
+        (lambda self: PVOID if getattr(self, 'WIN64', False) else ptype.undefined, 'padding(FiberContext)'),
+        (CONTEXT, 'FiberContext'),                              # 0x14, 0x30
+    ]
+
+    def __init__(self, **attrs):
+        super(FIBER, self).__init__(**attrs)
+        f = self._fields_ = self._fields_[:]
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_LONGHORN:
+            f.extend([
+                (PVOID, 'Wx86Tib'),                                     # 0x2E0 0x500
+                (P(ACTIVATION_CONTEXT_STACK), 'ActivationContextStackPointer'), # 0x2E4 0x508
+                (PVOID, 'FlsData'),                 # 0x2E8 0x510
+                (ULONG, 'GuaranteedStackBytes'),    # 0x2EC 0x518
+                (ULONG, 'TebFlags'),                # 0x2F0 0x51C
+            ])
+
+        else:
+            f.extend([
+                (ULONG, 'GuaranteedStackBytes'),    # 0x2E0
+                (PVOID, 'FlsData'),                 # 0x2E4
+                (P(ACTIVATION_CONTEXT_STACK), 'ActivationContextStackPointer'),
+            ])
+        return

@@ -692,3 +692,25 @@ if False:
             (long, 'AlignedBaseOffset'),
             (long, 'Alignment'),
         ]
+
+class _EXCEPTION_DISPOSITION(pint.enum):
+    _values_ = [
+        ('ExceptionContinueExecution', 0),
+        ('ExceptionContinueSearch', 1),
+        ('ExceptionNestedException', 2),
+        ('ExceptionCollidedUnwind',3),
+    ]
+
+class PEXCEPTION_ROUTINE(voidstar):
+    '''
+    EXCEPTION_DISPOSITION
+    NTAPI EXCEPTION_ROUTINE(_EXCEPTION_RECORD* ExceptionRecord, PVOID EstablisherFrame, _CONTEXT* ContextRecord, PVOID DispatcherContext);
+    '''
+
+class EXCEPTION_REGISTRATION_RECORD(pstruct.type):
+    def __Next(self):
+        return EXCEPTION_REGISTRATION_RECORD
+    _fields_ = [
+        (P(__Next), 'Next'),
+        (PEXCEPTION_ROUTINE, 'Hander'),
+    ]
