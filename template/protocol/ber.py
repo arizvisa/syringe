@@ -441,7 +441,7 @@ class Block(parray.block):
 class String(parray.block):
     _object_ = pstr.char_t
     def str(self):
-        encoding = self._object_.encoding
+        encoding = codecs.lookup(self._object_.encoding) if isinstance(self._object_.encoding, six.string_types) else self._object_.encoding
         res, _ = encoding.decode(self.serialize())
         return res
     def isTerminator(self, value):
