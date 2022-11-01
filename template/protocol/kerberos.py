@@ -251,10 +251,37 @@ class KERB_ETYPE_(pint.enum, Int32):
         ('des-cbc-crc', 1),
         ('des-cbc-md4', 2),
         ('des-cbc-md5', 3),
+        ('des3-cbc-md5', 5),
+        ('des3-cbc-sha1', 7),
+        ('dsaWithSHA1-CmsOID', 9),
+        ('md5WithRSAEncryption-CmsOID', 10),
+        ('sha1WithRSAEncryption-CmsOID', 11),
+        ('rc2CBC-EnvOID', 12),
+        ('rsaEncryption-EnvOID', 13),
+        ('rsaES-OAEP-ENV-OID', 14),
+        ('des-ede3-cbc-Env-OID', 15),
+        ('des3-cbc-sha1-kd', 16),
         ('aes128-cts-hmac-sha1-96', 17),
         ('aes256-cts-hmac-sha1-96', 18),
+        ('aes128-cts-hmac-sha256-128', 19),
+        ('aes256-cts-hmac-sha384-192', 20),
+
         ('arcfour-hmac', 23),
         ('arcfour-hmac-exp', 24),
+        ('camellia128-cts-cmac', 25),
+        ('camellia256-cts-cmac', 26),
+
+        # https://googleprojectzero.blogspot.com/2022/10/rc4-is-still-considered-harmful.html
+        ('private-rsadsi-rc4-md4', -128),
+        ('private-des-plain', -132),
+        ('private-rsadsi-rc4-hmac', -133),
+        ('private-rsadsi-rc4', -134),
+        ('private-rsadsi-arcfour-hmac', -135),
+        ('private-rsadsi-rc4-exp', -136),
+        ('private-rsadsi-arcfour', -140),
+        ('private-rsadsi-arcfour-exp', -141),
+        ('private-aes128-cts-hmac-sha1-96-plain', -148),
+        ('private-aes256-cts-hmac-sha1-96-plain', -149),
     ]
 
 class EncryptedData(ber.SEQUENCE):
@@ -775,3 +802,33 @@ if __name__ == '__main__':
     from ptypes import *
 
     fromhex = operator.methodcaller('decode', 'hex') if sys.version_info.major < 3 else bytes.fromhex
+
+    etype = krb5.KERB_ETYPE_(length=1).set('des-cbc-md4')
+    kvno = krb5.UInt32(length=1).set(21)
+    edata = krb5.EncryptedData().alloc(etype=etype, kvno=kvno)
+    bodyetype = krb5.EncryptionType().alloc([ber.Packet().alloc(Value=etype.copy()) for item in range(20)])
+    body = krb5.KDC_REQ_BODY().alloc(**{'etype': bodyetype, 'enc-authorization-data': edata})
+    print(body['etype'])
+    print(body['enc-authorization-data']['value']['etype'])
+    print(body['enc-authorization-data']['value']['kvno'])
+    print(body)
+    req = krb5.KDC_REQ().alloc(**{'req-body': body})
+    print(req.serialize())
+
+    realm = krb5.Realm().alloc('not sure')
+    strings = ['test1', 'test2', 'test3']
+    strings = [krb5.Packet().alloc(Value=krb5.KerberosString().alloc(item)) for item in strings]
+    stringlist = krb5.PrincipalName.GeneralStringList().alloc(strings)
+    principal = krb5.PrincipalName().alloc(**{'name-type': krb5.KRB_NT_(length=5).a.set('PRINCIPAL'), 'name-string': stringlist})
+    enc = krb5.EncryptedData().alloc(
+        etype = krb5.Packet().alloc(Value = krb5.KERB_ETYPE_(length=1).set('private-rsadsi-rc4-md4') ),
+        kvno = krb5.Packet().alloc(Value = krb5.UInt32(length=1).set(21) ),
+        cipher = krb5.Packet().alloc(Value = ber.OCTET_STRING().alloc(b'\0'*127) ),
+    )
+    t = krb5.Ticket().alloc(**{
+        'tkt-vno': ber.INTEGER(length=21).set(2*21),
+        'realm': krb5.Realm().alloc('not sure'),
+        'sname': principal,
+        'enc-part': enc
+    })
+    print(t.hexdump())
