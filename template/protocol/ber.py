@@ -751,7 +751,7 @@ class Element(pstruct.type):
             isterminator_int = lambda value, sentinel=EOC.tag: value.int() == sentinel
             isterminator_object = lambda value, sentinel=EOC: isinstance(value['value'], sentinel)
             isterminator_empty = lambda value: False
-            Fsentinel = is_teminator_empty if not len(result.value) else isterminator_object if isinstance(result.value[-1], Element) else isterminator_int
+            Fsentinel = isterminator_empty if not len(result.value) else isterminator_object if isinstance(result.value[-1], Element) else isterminator_int
 
         # Warn the user if the terminator does not check out.
         item = result.value[-1] if len(result.value) else None
@@ -785,7 +785,7 @@ class Element(pstruct.type):
 
         # If a Value was provided during allocation without the Type, then assign
         # one from the Universal/Primitive class using whatever its Tag is in .type
-        value = fields.get('Value', None)
+        value = fields.get('Value', fields.get('value', None))
         if hasattr(value, 'type'):
             klass, tag = (Context.Class, value.type) if isinstance(value.type, six.integer_types) else value.type
             constructedQ = 1 if (ptypes.istype(value) and issubclass(value, Constructed)) or isinstance(value, Constructed) else 0
