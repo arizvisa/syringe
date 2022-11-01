@@ -133,7 +133,7 @@ class Constructed(parray.block):
         # Allocate the lookup table so that we can assign it to ourself
         # while loading. This ties directly into the _object_ method
         # which determines each object to use.
-        table = self.__get_lookup_table__()
+        table, _ = self.__get_lookup_table__()
         with utils.assign(self, __object_state__=table):
 
             # If the isTerminator method hasn't been overwritten, then we
@@ -154,7 +154,7 @@ class Constructed(parray.block):
         # Allocate the lookup table so that we can assign it to ourself
         # while setting. This ties directly into the _object_ method
         # which will use it to determine each element to assign with.
-        table = self.__get_lookup_table__()
+        table, _ = self.__get_lookup_table__()
         with utils.assign(self, __object_state__=table):
 
             # Call the original __setvalue__ implementation using our object
@@ -184,11 +184,11 @@ class Constructed(parray.block):
 
     def __get_lookup_table__(self):
         if not hasattr(self, '_fields_'):
-            return {}
+            return {}, []
 
         # Iterate through all of our fields so that we can collect
         # them into a lookup table.
-        res = {}
+        res, ordered = {}, []
         for item, name in self._fields_:
 
             # Fail hard if the field doesn't have a type attribute
@@ -202,8 +202,10 @@ class Constructed(parray.block):
             klasstag = getattr(klass, 'Class', klass), tag
 
             # ...and append it to our table for later retrieval.
-            res.setdefault(klasstag, []).append( (name, item) )
-        return res
+            items = res.setdefault(klasstag, [])
+            ordered.append((klasstag, len(items)))
+            items.append( (name, item) )
+        return res, ordered
 
     def has(self, key):
         count, klasstag = self.__get_typeindex_by_field(key)
@@ -224,7 +226,8 @@ class Constructed(parray.block):
         # If we're looking for a particular field name, then we need to
         # fetch the lookup table from our current fields.
         if isinstance(key, six.string_types):
-            cls, table = self.__class__, self.__get_lookup_table__()
+            cls = self.__class__
+            table, _ = self.__get_lookup_table__()
 
             # Start by building the lookup table keyed by the field name
             # and storing the klasstag for that particular field. We also
@@ -334,13 +337,14 @@ class Constructed(parray.block):
         if self.value is None:
             return '???'
 
-        res = self.__get_lookup_table__()
+        res, _ = self.__get_lookup_table__()
         iterable = self.__summary_items(res)
         return "{:s} : {{ {:s} }}".format(self.__element__(), ', '.join(iterable))
 
     def alloc(self, *args, **fields):
         cls, protocol = self.__class__, getattr(self.parent, 'Protocol', Protocol)
-        items, table = [], self.__get_lookup_table__()
+        items = []
+        table, ordered = self.__get_lookup_table__()
 
         # First we need to figure out what positional fields we were
         # given so that we use them to empty out our lookup table, and
@@ -358,10 +362,10 @@ class Constructed(parray.block):
         # that we can preserve the order of the fields to append.
         if hasattr(self, '_fields_') and fields:
             res = []
-            for klasstag, list in table.items():
-                for name, t in list:
-                    res.append((name, (klasstag, t)))
-                continue
+            for klasstag, index in ordered:
+                list = table[klasstag]
+                name, t = list[index]
+                res.append((name, (klasstag, t)))
             nametable = res
 
             # Iterate through all of the names in the nametable looking
