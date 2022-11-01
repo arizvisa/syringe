@@ -54,6 +54,8 @@ class OBJECT_IDENTIFIER(ber.OBJECT_IDENTIFIER):
         ('dsaWithSHA1', '1.3.14.3.2.27'),
         ('dsaWithCommandSHA1', '1.3.14.3.2.28'),
         ('sha-1WithRSAEncryption', '1.3.14.3.2.29'),
+        ('emailAddress', '1.2.840.113549.1.9.1'),
+        ('unstructuredName', '1.2.840.113549.1.9.2'),
         ('contentType', '1.2.840.113549.1.9.3'),
         ('messageDigest', '1.2.840.113549.1.9.4'),
         ('signingTime', '1.2.840.113549.1.9.5'),
@@ -61,6 +63,9 @@ class OBJECT_IDENTIFIER(ber.OBJECT_IDENTIFIER):
         ('challengePassword', '1.2.840.113549.1.9.7'),
         ('unstructuredAddress', '1.2.840.113549.1.9.8'),
         ('extendedCertificateAttributes', '1.2.840.113549.1.9.9'),
+        ('issuerAndSerialNumber', '1.2.840.113549.1.9.10'),
+        ('passwordCheck', '1.2.840.113549.1.9.11'),
+        ('publicKey', '1.2.840.113549.1.9.12'),
         ('rsaEncryption', '1.2.840.113549.1.1.1'),
         ('md2withRSAEncryption', '1.2.840.113549.1.1.2'),
         ('md4withRSAEncryption', '1.2.840.113549.1.1.3'),
@@ -75,19 +80,35 @@ class OBJECT_IDENTIFIER(ber.OBJECT_IDENTIFIER):
 class AttributeType(OBJECT_IDENTIFIER):
     pass
 
-class AttributeValue(ber.PrintableString):
-    pass
+class AttributeValue(ptype.definition): pass
+class AttributeValuePrintable(ber.PrintableString): pass
+class AttributeValueUTF8(ber.UTF8String): pass
+class AttributeValueIA5(ber.IA5String): pass
 
 class AttributeTypeAndValue(ber.SEQUENCE):
-    def __AttributeValue(self):
+    def __AttributeValuePrintable(self):
         p = self.getparent(AttributeTypeAndValue)
         res = p['type']['value']
-        return AttributeValue
-    __AttributeValue.type = ber.PrintableString.type
+        return AttributeValuePrintable
+    __AttributeValuePrintable.type = ber.PrintableString.type
+
+    def __AttributeValueUTF8(self):
+        p = self.getparent(AttributeTypeAndValue)
+        res = p['type']['value']
+        return AttributeValueUTF8
+    __AttributeValueUTF8.type = ber.UTF8String.type
+
+    def __AttributeValueIA5(self):
+        p = self.getparent(AttributeTypeAndValue)
+        res = p['type']['value']
+        return AttributeValueIA5
+    __AttributeValueIA5.type = ber.IA5String.type
 
     _fields_ = [
         (AttributeType, 'type'),
-        (__AttributeValue, 'value'),
+        (__AttributeValuePrintable, 'value-printable'),
+        (__AttributeValueUTF8, 'value-utf8'),
+        (__AttributeValueIA5, 'value-ia5'),
     ]
 
 class RelativeDistinguishedName(ber.SET):
@@ -375,7 +396,7 @@ class Packet(ber.Packet):
         return Certificate
 
 if __name__ == '__main__':
-    import sys, operator, ptypes, protocol.x509 as x509
+    import sys, operator, ptypes, protocol.ber as ber, protocol.x509 as x509
     from ptypes import *
 
     fromhex = operator.methodcaller('decode', 'hex') if sys.version_info.major < 3 else bytes.fromhex
@@ -395,13 +416,121 @@ if __name__ == '__main__':
         assert(base['type']['value'].str() == '2.5.4.3')
         assert(base['type']['value'].description() == 'joint-iso-itu-t.ds.attributeType.commonName')
         assert(all(base['type']['value'][item] for item in [(2,5,4,3), '2.5.4.3', 'joint-iso-itu-t.ds.attributeType.commonName']))
-        assert(base['value']['value'].str() == 'chmuthu-w7-tst3-ca3')
+        assert(base['value-printable']['value'].str() == 'chmuthu-w7-tst3-ca3')
+
+    def sampletest():
+        data = '308202123082017b02020dfa300d06092a864886f70d010105050030819b310b3009060355040613024a50310e300c06035504081305546f6b796f3110300e060355040713074368756f2d6b753111300f060355040a13084672616e6b34444431183016060355040b130f5765624365727420537570706f7274311830160603550403130f4672616e6b344444205765622043413123302106092a864886f70d0109011614737570706f7274406672616e6b3464642e636f6d301e170d3132303832323035323635345a170d3137303832313035323635345a304a310b3009060355040613024a50310e300c06035504080c05546f6b796f3111300f060355040a0c084672616e6b3444443118301606035504030c0f7777772e6578616d706c652e636f6d305c300d06092a864886f70d0101010500034b0030480241009bfc6690798442bbab13fd2b7bf8de1512e5f193e3068a7bb8b1e19e26bb9501bfe730ed648502dd1569a834b006ec3f353c1e1b2b8ffa8f001bdf07c6ac53070203010001300d06092a864886f70d01010505000381810014b64cbb817933e671a4da516fcb081d8d60ecbc18c7734759b1f22048bb61fafc4dad898dd121ebd5d8e5bad6a636fd745083b60fc71ddf7de52e817f45e09fe23e79eed73031c72072d9582e2afe125a3445a119087c89475f4a95be23214a5372da2a052f2ec970f65bfafddfb431b2c14a9c062543a1e6b41e7f869b1640'
+        source = ptypes.prov.bytes(fromhex(data))
+        z = x509.Packet(source=source)
+        z=z.l
+
+        signatureValue = ber.BIT_STRING().alloc(string=fromhex('14B64CBB817933E671A4DA516FCB081D8D60ECBC18C7734759B1F22048BB61FAFC4DAD898DD121EBD5D8E5BAD6A636FD745083B60FC71DDF7DE52E817F45E09FE23E79EED73031C72072D9582E2AFE125A3445A119087C89475F4A95BE23214A5372DA2A052F2EC970F65BFAFDDFB431B2C14A9C062543A1E6B41E7F869B1640'))
+        assert(z['value']['signaturevalue']['value'].serialize() == signatureValue.serialize())
+
+        algorithm = x509.OBJECT_IDENTIFIER().set('sha1withRSAEncryption')   # (1,2,840,113549,1,1,5)
+        signatureAlgorithm = x509.AlgorithmIdentifier().alloc(algorithm=algorithm)
+        assert(signatureAlgorithm['algorithm'].serialize() == z['value']['signaturealgorithm']['value']['algorithm'].serialize())
+
+        # FIXME: need some way to ensure that ber.Element<ber.NULL> is appended at the end of the signature algorithm
+        signatureAlgorithm = x509.AlgorithmIdentifier().alloc([x509.Packet().alloc(Value=algorithm), x509.Packet().alloc(Value=ber.NULL)])
+        assert(signatureAlgorithm.serialize() == z['value']['signaturealgorithm']['value'].serialize())
+
+        #print(z['value']['tbscertificate'])
+        names = ['serialNumber', 'signature', 'issuer', 'validity', 'subject', 'subjectPublicKeyInfo']
+        serialNumber = x509.CertificateSerialNumber(length=2).set(3578)
+        assert(z['value']['tbscertificate']['value']['serialnumber']['value'].serialize() == serialNumber.serialize())
+
+        algorithm = x509.OBJECT_IDENTIFIER().set('sha1withRSAEncryption')   # (1,2,840,113549,1,1,5))
+        signature = x509.AlgorithmIdentifier().alloc(algorithm=algorithm)
+        assert(z['value']['tbscertificate']['value']['signature']['value']['algorithm']['value'].serialize() == algorithm.serialize())
+
+        # FIXME: need some way to ensure that ber.Element<ber.NULL> is appended at the end of the signature algorithm
+        signature = x509.AlgorithmIdentifier().alloc([x509.Packet().alloc(Value=algorithm), x509.Packet().alloc(Value=ber.NULL)])
+        assert(z['value']['tbscertificate']['value']['signature']['value'].serialize() == signature.serialize())
+
+        def attributetypeandvalue(type, key, value):
+            t = x509.AttributeType().set(type)
+            return x509.AttributeTypeAndValue().alloc(type=t, **{key: value})
+
+        def name(items):
+            names = [x509.RelativeDistinguishedName().alloc([x509.Packet().alloc(Value=item)]) for item in items]
+            return x509.Name().alloc([x509.Packet().alloc(Value=item) for item in names])
+
+        issuer = []
+        # joint-iso-itu-t.ds.attributeType.countryName
+        issuer.append(attributetypeandvalue((2,5,4,6), 'value-printable', x509.AttributeValuePrintable().alloc('JP')))
+        # joint-iso-itu-t.ds.attributeType.stateOrProvinceName
+        issuer.append(attributetypeandvalue((2,5,4,8), 'value-printable', x509.AttributeValuePrintable().alloc('Tokyo')))
+        # joint-iso-itu-t.ds.attributeType.localityName
+        issuer.append(attributetypeandvalue((2,5,4,7), 'value-printable', x509.AttributeValuePrintable().alloc('Chuo-ku')))
+        # joint-iso-itu-t.ds.attributeType.organizationName
+        issuer.append(attributetypeandvalue((2,5,4,10), 'value-printable', x509.AttributeValuePrintable().alloc('Frank4DD')))
+        # joint-iso-itu-t.ds.attributeType.organizationUnitName
+        issuer.append(attributetypeandvalue((2,5,4,11), 'value-printable', x509.AttributeValuePrintable().alloc('WebCert Support')))
+        # joint-iso-itu-t.ds.attributeType.commonName
+        issuer.append(attributetypeandvalue((2,5,4,3), 'value-printable', x509.AttributeValuePrintable().alloc('Frank4DD Web CA')))
+        # emailName
+        issuer.append(attributetypeandvalue((1,2,840,113549,1,9,1), 'value-ia5', x509.AttributeValueIA5().alloc('support@frank4dd.com')))
+        assert(name(issuer).serialize() == z['value']['tbscertificate']['value']['issuer']['value'].serialize())
+
+        notbefore = x509.Time().alloc('120822052654Z')
+        notafter = x509.Time().alloc('170821052654Z')
+        validity = x509.Validity().alloc(notBefore=notbefore, notAfter=notafter)
+        assert(z['value']['tbscertificate']['value']['validity']['value'].serialize() == validity.serialize())
+
+        subject = []
+        # joint-iso-itu-t.ds.attributeType.countryName
+        subject.append(attributetypeandvalue((2,5,4,6), 'value-printable', x509.AttributeValuePrintable().alloc('JP')))
+        # joint-iso-itu-t.ds.attributeType.stateOrProvinceName
+        subject.append(attributetypeandvalue((2,5,4,8), 'value-utf8', x509.AttributeValueUTF8().alloc('Tokyo')))
+        # joint-iso-itu-t.ds.attributeType.organizationName
+        subject.append(attributetypeandvalue((2,5,4,10), 'value-utf8', x509.AttributeValueUTF8().alloc('Frank4DD')))
+        # joint-iso-itu-t.ds.attributeType.commonName
+        subject.append(attributetypeandvalue((2,5,4,3), 'value-utf8', x509.AttributeValueUTF8().alloc('www.example.com')))
+        assert(z['value']['tbscertificate']['value']['subject']['value'].serialize() == name(subject).serialize())
+
+        algorithm = x509.OBJECT_IDENTIFIER().set('rsaEncryption')
+        subjectalgorithm = x509.AlgorithmIdentifier().alloc(algorithm=algorithm)
+        assert(z['value']['tbscertificate']['value']['subjectpublickeyinfo']['value']['algorithm']['value']['algorithm']['value'].serialize() == algorithm.serialize())
+
+        # FIXME: need some way to ensure that ber.Element<ber.NULL> is appended at the end of the signature algorithm
+        subjectalgorithm = x509.AlgorithmIdentifier().alloc([x509.Packet().alloc(Value=algorithm), x509.Packet().alloc(Value=ber.NULL)])
+        assert(z['value']['tbscertificate']['value']['subjectpublickeyinfo']['value']['algorithm']['value'].serialize() == subjectalgorithm.serialize())
+
+        modulus = ber.INTEGER(length=65).set(0x009bfc6690798442bbab13fd2b7bf8de1512e5f193e3068a7bb8b1e19e26bb9501bfe730ed648502dd1569a834b006ec3f353c1e1b2b8ffa8f001bdf07c6ac5307)
+        pubexp = ber.INTEGER(length=3).set(65537)
+        rsakey = x509.RSAPublicKey().alloc(modulus=modulus, publicExponent=pubexp)
+        assert(z['value']['tbscertificate']['value']['subjectpublickeyinfo']['value']['subjectpublickey']['value']['string']['value'].serialize() == rsakey.serialize())
+
+        pubkey = ber.BIT_STRING().alloc(string=x509.Packet().alloc(Value=rsakey))
+        assert(z['value']['tbscertificate']['value']['subjectpublickeyinfo']['value']['subjectpublickey']['value'].serialize() == pubkey.serialize())
+
+        subjectpublickeyinfo = x509.SubjectPublicKeyInfo().alloc(algorithm=subjectalgorithm, subjectPublicKey=pubkey)
+        assert(z['value']['tbscertificate']['value']['subjectpublickeyinfo']['value'].serialize() == subjectpublickeyinfo.serialize())
+
+        tbs = x509.TBSCertificate().alloc(
+            serialNumber=serialNumber,
+            signature=signature,
+            issuer=name(issuer),
+            validity=validity,
+            subject=name(subject),
+            subjectPublicKeyInfo=subjectpublickeyinfo
+        )
+        assert(z['value']['tbscertificate']['value'].serialize() == tbs.serialize())
+
+        cert = x509.Certificate().alloc(tbsCertificate=tbs, signatureAlgorithm=signatureAlgorithm, signatureValue=signatureValue)
+        a = x509.Packet().alloc(Value=cert)
+        assert(a.serialize() == z.serialize())
 
 if __name__ == '__main__':
-    import sys, ptypes, protocol.x509 as x509
+    import sys, ptypes, protocol.x509 as x509, protocol.ber as ber
 
     if len(sys.argv) < 2:
+        print('running smoketest...')
         smoketest()
+        print('running x509sample...')
+        sampletest()
+        print('you win.')
         sys.exit(0)
 
     source = ptypes.prov.file(sys.argv[1], 'rb')
