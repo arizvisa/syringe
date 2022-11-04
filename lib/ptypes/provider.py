@@ -326,8 +326,11 @@ class disorderly(bounded):
     def __init__(self, items, **kwds):
         '''Instantiate the provider using ``items`` as the backing types.'''
         self.offset, self.contiguous = 0, [item for item in items]
-        self.index = self.__build_index__()
-        self.tree = self.__build_tree__()
+
+        # build the datastructures we need for finding the object for an offset.
+        # FIXME: this shouldn't be done at construction time, and in the future
+        #        we should be able add/remove backing objects as needed.
+        self.index, self.tree = self.__build_index__(), self.__build_tree__()
 
         valid = {'autocommit', 'autoload'}
         res = {item for item in kwds.keys()} - valid
@@ -348,13 +351,14 @@ class disorderly(bounded):
 
     def __build_index__(self):
         index, offset = {}, 0
-        for item in self.contiguous:
-            size = item.size()
+        for object in self.contiguous:
+            size = object.size()
             left, right = offset, offset + size
             left, right = sorted([left, right])
+            item = left, right, object
             index[left] = item
             index.setdefault(right, item)
-            offset += size
+            offset = right
         return index
 
     def __build_tree__(self):
@@ -362,10 +366,14 @@ class disorderly(bounded):
         for item in self.contiguous:
             size = item.size()
             left, right = offset, offset + size
+
+            # XXX: this doesn't belong here since we're growing the tree linearly,
+            #      but in the future this logic will be moved into its own method
+            #      so that we can modify the tree after it has already been created.
             start, stop = bisect.bisect_left(tree, left), bisect.bisect_right(tree, right)
-            if start != stop or start%2 or stop%2:
+            if start != stop or all([start%2, stop%2]):
                 tree[start:stop] = [left, right]
-            elif not (start%2 and stop%2):
+            elif not all([start%2, stop%2]):
                 tree[start:stop] = [left, right]
             elif start%2:
                 tree[start:stop] = [right]
@@ -374,41 +382,35 @@ class disorderly(bounded):
             offset += size
         return tree
 
-    def __range__(self, index, tree, offset):
-        start = bisect.bisect_left(tree, offset)
-        for offset in tree[start:]:
-            item = index[offset]
-            yield offset, offset + item.size(), item
-        return
-
-    def __iterate__(self, left, right):
-        total = sum(item.size() for item in self.contiguous)
+    def __traverse__(self, left, right):
+        total = sum(object.size() for object in self.contiguous)
         if left < 0 or total < right:
             raise error.ConsumeError(self, left, right - left, amount=right - total)
 
-        offset = left
-        for start, stop, item in self.__range__(self.index, self.tree, offset):
-            if offset >= right:
-                break
-            size = item.size()
+        index, stop = bisect.bisect_right(self.tree, left) - 1, left
+        iterable = (self.index[offset] for offset in self.tree[index:])
+        while stop < right:
+            start, stop, object = next(iterable)
 
-            lside = min(offset, start)
-            assert(offset >= start)
-            lslice = offset - lside
+            size = stop - start
+            assert(object.size() == size)
+
+            lside = max(start, left)
+            assert(lside >= start), (start, lside)
+            lslice = lside - start
 
             rside = min(stop, right)
-            assert(start <= rside <= stop)
+            assert(start <= rside <= stop), (stop, rside)
             rslice = rside - start
 
-            yield lslice, rslice, item
-            offset += size
+            yield lslice, rslice, object
         return
 
     def consume(self, amount):
         '''Consume ``amount`` bytes from the provider and return the data that was consumed.'''
         left, right = self.offset, self.offset + amount
         result = bytearray()
-        for lslice, rslice, item in self.__iterate__(left, right):
+        for lslice, rslice, item in self.__traverse__(left, right):
             data = item.serialize() if self.autoload is None else item.load(**self.autoload).serialize()
             # FIXME: if our item changes size during autoload, then our tree is out-of-sync
             result.extend(data[lslice : rslice])
@@ -419,8 +421,8 @@ class disorderly(bounded):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
         left, right, total = self.offset, self.offset + len(data), sum(item.size() for item in self.contiguous)
 
-        # XXX: this is pretty dirty, but whatever.
-        iterable = ((lslice, rslice - lslice, proxy(item, autocommit=self.autocommit)) for lslice, rslice, item in self.__iterate__(left, right))
+        # XXX: this is pretty dirty (using a proxy), but whatever.
+        iterable = ((lslice, rslice - lslice, proxy(item, autocommit=self.autocommit)) for lslice, rslice, item in self.__traverse__(left, right))
 
         current = 0
         for offset, amount, source in iterable:
@@ -1936,7 +1938,99 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_disorder():
+    def test_disorder_traverse_exact():
+        u32 = pint.uint32_t
+        backing = [item(offset=4*i).a for i, item in enumerate([u32] * 8)]
+        fragmented = ptypes.prov.disorderly(backing)
+        items = [item for item in fragmented.__traverse__(0, 32)]
+        if len(items) == 8:
+            raise Success
+
+    @TestCase
+    def test_disorder_traverse_partial_start():
+        u32 = pint.uint32_t
+        backing = [item(offset=4*i).a for i, item in enumerate([u32] * 8)]
+        fragmented = ptypes.prov.disorderly(backing)
+        items = [item for item in fragmented.__traverse__(2, 32)]
+        if len(items) == 8:
+            raise Success
+
+    @TestCase
+    def test_disorder_traverse_partial_stop():
+        u32 = pint.uint32_t
+        backing = [item(offset=4*i).a for i, item in enumerate([u32] * 8)]
+        fragmented = ptypes.prov.disorderly(backing)
+        items = [item for item in fragmented.__traverse__(0, 30)]
+        if len(items) == 8:
+            raise Success
+
+    @TestCase
+    def test_disorder_traverse_partial_both():
+        u32 = pint.uint32_t
+        backing = [item(offset=4*i).a for i, item in enumerate([u32] * 8)]
+        fragmented = ptypes.prov.disorderly(backing)
+        items = [item for item in fragmented.__traverse__(2, 30)]
+        if len(items) == 8:
+            raise Success
+
+    @TestCase
+    def test_disorder_traverse_exact_center():
+        u32 = pint.uint32_t
+        backing = [item(offset=4*i).a for i, item in enumerate([u32] * 8)]
+        fragmented = ptypes.prov.disorderly(backing)
+        items = [item for item in fragmented.__traverse__(12, 20)]
+        if len(items) == 2:
+            raise Success
+
+    @TestCase
+    def test_disorder_traverse_partial_center():
+        u32 = pint.uint32_t
+        backing = [item(offset=4*i).a for i, item in enumerate([u32] * 8)]
+        fragmented = ptypes.prov.disorderly(backing)
+        items = [item for item in fragmented.__traverse__(15, 17)]
+        if len(items) == 2:
+            raise Success
+
+    @TestCase
+    def test_disorder_traverse_single():
+        u32 = pint.uint32_t
+        backing = [item(offset=4*i).a for i, item in enumerate([u32] * 8)]
+        fragmented = ptypes.prov.disorderly(backing)
+        items = [item for item in fragmented.__traverse__(16, 17)]
+        if len(items) == 1:
+            raise Success
+
+    @TestCase
+    def test_disorder_traverse_empty():
+        u32 = pint.uint32_t
+        backing = [item(offset=4*i).a for i, item in enumerate([u32] * 8)]
+        fragmented = ptypes.prov.disorderly(backing)
+        items = [item for item in fragmented.__traverse__(16, 16)]
+        if len(items) == 0:
+            raise Success
+
+    @TestCase
+    def test_disorder_traverse_empty_busted():
+        u32 = pint.uint32_t
+        backing = [item(offset=4*i).a for i, item in enumerate([u32] * 8)]
+        fragmented = ptypes.prov.disorderly(backing)
+        items = [item for item in fragmented.__traverse__(20, 14)]
+        if len(items) == 0:
+            raise Success
+
+    @TestCase
+    def test_disorder_load():
+        u32 = pint.uint32_t
+        backing = bytearray(range(32))
+        source = ptypes.prov.bytes(backing)
+        backwards = [u32().load(source=source, offset=offset) for offset in range(0, 32, 4)][::-1]
+        fragmented = ptypes.prov.disorderly(backwards)
+        argh = parray.type(length=8, _object_=u32, source=fragmented).l
+        if all(x.int() == y.int() for x, y in zip(argh, backwards)):
+            raise Success
+
+    @TestCase
+    def test_disorder_commit():
         u32 = pint.uint32_t
         backing = bytearray(range(32))
         source = ptypes.prov.bytes(backing)
