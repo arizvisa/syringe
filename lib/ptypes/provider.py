@@ -51,7 +51,7 @@ Example usage:
     print( repr(instance) )
 """
 import sys, os, builtins, itertools, functools
-import random as _random
+import bisect, random as _random
 
 from . import config, utils, error
 Config = config.defaults
@@ -321,6 +321,120 @@ class proxy(bounded):
     def __repr__(self):
         '''x.__repr__() <=> repr(x)'''
         return "{:s} -> {:s}".format(super(proxy, self).__repr__(), self.instance.instance())
+
+class disorderly(bounded):
+    def __init__(self, items, **kwds):
+        '''Instantiate the provider using ``items`` as the backing types.'''
+        self.offset, self.contiguous = 0, [item for item in items]
+        self.index = self.__build_index__()
+        self.tree = self.__build_tree__()
+
+        valid = {'autocommit', 'autoload'}
+        res = {item for item in kwds.keys()} - valid
+        if res - valid:
+            raise error.UserError(self, '__init__', message="Invalid keyword(s) specified. Expected ({!r}) : {!r}".format(valid, tuple(res)))
+
+        self.autoload = kwds.get('autoload', None)
+        self.autocommit = kwds.get('autocommit', None)
+
+    def size(self):
+        '''Return the size of the object.'''
+        return sum(item.size() for item in self.contiguous)
+
+    def seek(self, offset):
+        '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
+        res, self.offset = self.offset, offset
+        return res
+
+    def __build_index__(self):
+        index, offset = {}, 0
+        for item in self.contiguous:
+            size = item.size()
+            left, right = offset, offset + size
+            left, right = sorted([left, right])
+            index[left] = item
+            index.setdefault(right, item)
+            offset += size
+        return index
+
+    def __build_tree__(self):
+        tree, offset = [], 0
+        for item in self.contiguous:
+            size = item.size()
+            left, right = offset, offset + size
+            start, stop = bisect.bisect_left(tree, left), bisect.bisect_right(tree, right)
+            if start != stop or start%2 or stop%2:
+                tree[start:stop] = [left, right]
+            elif not (start%2 and stop%2):
+                tree[start:stop] = [left, right]
+            elif start%2:
+                tree[start:stop] = [right]
+            elif stop%2:
+                tree[start:stop] = [left]
+            offset += size
+        return tree
+
+    def __range__(self, index, tree, offset):
+        start = bisect.bisect_left(tree, offset)
+        for offset in tree[start:]:
+            item = index[offset]
+            yield offset, offset + item.size(), item
+        return
+
+    def __iterate__(self, left, right):
+        total = sum(item.size() for item in self.contiguous)
+        if left < 0 or total < right:
+            raise error.ConsumeError(self, left, right - left, amount=right - total)
+
+        offset = left
+        for start, stop, item in self.__range__(self.index, self.tree, offset):
+            if offset >= right:
+                break
+            size = item.size()
+
+            lside = min(offset, start)
+            assert(offset >= start)
+            lslice = offset - lside
+
+            rside = min(stop, right)
+            assert(start <= rside <= stop)
+            rslice = rside - start
+
+            yield lslice, rslice, item
+            offset += size
+        return
+
+    def consume(self, amount):
+        '''Consume ``amount`` bytes from the provider and return the data that was consumed.'''
+        left, right = self.offset, self.offset + amount
+        result = bytearray()
+        for lslice, rslice, item in self.__iterate__(left, right):
+            data = item.serialize() if self.autoload is None else item.load(**self.autoload).serialize()
+            # FIXME: if our item changes size during autoload, then our tree is out-of-sync
+            result.extend(data[lslice : rslice])
+        self.offset += len(result)
+        return builtins.bytes(result)
+
+    def store(self, data):
+        '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
+        left, right, total = self.offset, self.offset + len(data), sum(item.size() for item in self.contiguous)
+
+        # XXX: this is pretty dirty, but whatever.
+        iterable = ((lslice, rslice - lslice, proxy(item, autocommit=self.autocommit)) for lslice, rslice, item in self.__iterate__(left, right))
+
+        current = 0
+        for offset, amount, source in iterable:
+            source.seek(offset)
+            res = source.store(data[current : current + amount])
+            assert(amount == res)
+            current += res
+        return current
+
+    def iterate(self):
+        '''Iterate through all of the instances that back this provider.'''
+        for item in self.contiguous:
+            yield item
+        return
 
 class memoryview(backed):
     '''Basic writeable bytes provider.'''
@@ -1819,6 +1933,31 @@ if __name__ == '__main__':
         res[1].set(0x42424242)
         res[1].commit()
         if source[0].serialize() == b'AAA' and source[1].serialize() == b'ABB' and [source[2]['a']] == [item for item in bytearray(b'B')] and [source[2]['b']] == [item for item in bytearray(b'B')]:
+            raise Success
+
+    @TestCase
+    def test_disorder():
+        u32 = pint.uint32_t
+        backing = bytearray(range(32))
+        source = ptypes.prov.bytes(backing)
+        items = parray.type(length=8, _object_=u32, source=source).l
+        backwards = [item for item in reversed(items)]
+
+        fragmented = ptypes.prov.disorderly(backwards, autocommit={})
+
+        x = parray.type(length=8, _object_=u32, source=fragmented).l
+        for i, item in enumerate(x):
+            shifted = i + 0x41
+            item.set(shifted + shifted*pow(2,8) + shifted*pow(2,16) + shifted*pow(2,24))
+
+        if backing != bytearray(range(32)):
+            raise Failure
+
+        # we can do this because of autocommit, otherwise we'd need to
+        # move through the types directly.
+        x.commit()
+
+        if backing == bytearray(itertools.chain(*(4 * [i] for i in reversed(range(0x41, 0x49))))):
             raise Success
 
     try:
