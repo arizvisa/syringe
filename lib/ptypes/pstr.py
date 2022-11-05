@@ -373,8 +373,9 @@ class string(ptype.type):
         return self.load(offset=0, source=provider.proxy(result))
 
     def str(self):
-        '''Decode the string into the specified encoding type.'''
-        return self.__getvalue__()
+        '''Decode the string into the specified encoding type while stripping any trailing '\0' characters.'''
+        res = self.__getvalue__()
+        return res.rstrip('\0')
 
     def __getvalue__(self):
         '''Try and decode the string into the specified encoding type.'''
@@ -390,8 +391,7 @@ class string(ptype.type):
         return res
 
     def get(self):
-        res = self.__getvalue__()
-        return utils.strdup(res)
+        return self.__getvalue__()
 
     def load(self, **attrs):
         with utils.assign(self, **attrs):
@@ -459,9 +459,9 @@ class szstring(string):
         nullbytes, _ = self.encoding.encode('\0')
         nullstr, _ = self.encoding.decode(nullbytes)
 
-        if isinstance(value, string_types) and value.endswith(nullstr):
+        if isinstance(value, string_types) and not value.endswith(nullstr):
             value += nullstr
-        elif isinstance(value, bytes) and value.endswith(nullbytes):
+        elif isinstance(value, bytes) and not value.endswith(nullbytes):
             value += nullbytes
 
         data, _ = self.encoding.encode(value)
@@ -496,8 +496,9 @@ class szstring(string):
         return result
 
     def str(self):
+        '''Decode the string into the specified encoding type until the first '\0' character.'''
         res = self.__getvalue__()
-        return utils.strdup(res)
+        return utils.strdup(res, '\0')
 
     def __deserialize_stream__(self, stream):
         self.value = b''
@@ -532,7 +533,7 @@ class szstring(string):
             Log.debug('{:s}.summary : {:s} : Unable to decode unicode string. Rendering as hexdump instead.'.format(self.classname(), self.instance()))
             return super(szstring, self).summary(**options)
 
-        escaped = utils.strdup(res).encode('unicode_escape').decode(sys.getdefaultencoding())
+        escaped = utils.strdup(res, '\0').encode('unicode_escape').decode(sys.getdefaultencoding())
         q, escaped = ('"', escaped) if '\'' in escaped and '"' not in escaped else ('\'', escaped.replace('\'', '\\\''))
         return u"({:d}) {:s}".format(len(res), q + escaped + q)
 
@@ -809,7 +810,7 @@ if __name__ == '__main__':
         data = b'\xd50\xa10\xa40\xeb0\rT\x00\x00'
         s = data.decode('utf-16-le')
         x = pstr.wstring(length=len(data) // 2, encoding='utf-16-le').a.set(s)
-        if x.size() == len(data) and x.str() == s:
+        if x.size() == len(data) and x.get() == s:
             raise Success
 
     @TestCase
@@ -839,6 +840,20 @@ if __name__ == '__main__':
         data = b'\x88\xea\x91\xbe\x98Y 2022-8/Pro/Government \x95\xb6\x8f\x91\x00'
         x = pstr.szstring(encoding='shift-jis').a.set(data.decode('shift-jis'))
         if x.serialize() == data:
+            raise Success
+
+    @TestCase
+    def test_str_szstring_encoding_get():
+        s = u'\u30b3\u30fc\u30c9\u30da\u30fc\u30b8'
+        self = pstr.szstring(encoding='utf-8').set(s)
+        if self.get() == s + u'\0':
+            raise Success
+
+    @TestCase
+    def test_str_szstring_encoding_str():
+        s = u'\u30b3\u30fc\u30c9\u30da\u30fc\u30b8'
+        self = pstr.szstring(encoding='utf-8').set(s)
+        if self.str() == s:
             raise Success
 
 if __name__ == '__main__':
