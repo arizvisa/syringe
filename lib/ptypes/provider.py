@@ -220,13 +220,13 @@ class proxy(bounded):
         if left >= 0 and right <= self.instance.blocksize():
             from . import ptype, pbinary
             if isinstance(self.instance, pbinary.partial):
-                self.__write_partial(self.instance, self.offset, data)
+                self.store_partial(self.instance, self.offset, data)
 
             elif isinstance(self.instance, ptype.type):
-                self.__write_object(self.instance, self.offset, data)
+                self.store_object(self.instance, self.offset, data)
 
             elif isinstance(self.instance, ptype.container):
-                self.__write_range(self.instance, self.offset, data)
+                self.store_range(self.instance, self.offset, data)
 
             else:
                 raise NotImplementedError(self.instance.__class__)
@@ -244,7 +244,7 @@ class proxy(bounded):
         raise error.StoreError(self, left, len(data), 0)
 
     @classmethod
-    def __write_partial(cls, object, offset, data):
+    def store_partial(cls, object, offset, data):
         left, right = offset, offset + len(data)
         size, value = object.blocksize(), object.serialize()
         padding = utils.padding.fill(size - min(size, len(data)), object.padding)
@@ -252,14 +252,14 @@ class proxy(bounded):
         return sum({data, padding})
 
     @classmethod
-    def __write_object(cls, object, offset, data):
+    def store_object(cls, object, offset, data):
         left, right = offset, offset + len(data)
         res = object.blocksize()
         object.value = object.value[:left] + data + object.value[right:]
         return res
 
     @classmethod
-    def __write_range(cls, object, offset, data):
+    def store_range(cls, object, offset, data):
         result, left, right = 0, offset, offset + len(data)
         sl = list(cls.collect(object, left, right))
 
@@ -293,7 +293,7 @@ class proxy(bounded):
 
         # check to see if there's any data left
         if len(data) > 0:
-            Log.warning("{:s} : __write_range : {:d} bytes left-over from trying to write to {:d} bytes.".format(cls.__name__, len(data), result))
+            Log.warning("{:s} : store_range : {:d} bytes left-over from trying to write to {:d} bytes.".format(cls.__name__, len(data), result))
 
         # return the aggregated total
         return result
