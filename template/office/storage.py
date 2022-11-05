@@ -469,6 +469,27 @@ class DirectoryEntry(pstruct.type):
         # Load the correct child type from it if one was suggested
         return res if type is None else res.new(type).l
 
+    def enumerate(self):
+        '''Return the index and item of each directory entry below the current one.'''
+        p = self.getparent(Directory)
+        for index, entry in p.enumerate(self):
+            yield index, entry
+        return
+
+    def children(self):
+        '''Return each element belonging to the current directory entry (Root or Storage).'''
+        p = self.getparent(Directory)
+        for _, item in p.children(self):
+            yield item
+        return
+
+    def stores(self):
+        '''Return all of the stores that belong to the current directory entry (Root or Storage).'''
+        p = self.getparent(Directory)
+        for _, item in p.stores(self):
+            yield item
+        return
+
 class Directory(parray.block):
     _object_ = DirectoryEntry
     def blocksize(self):
@@ -507,20 +528,32 @@ class Directory(parray.block):
     def RootEntry(self):
         iterable = (entry for entry in self if entry['Type']['Root'])
         return next(iterable, None)
-    root = RootEntry
+    root = property(fget=RootEntry)
 
     def filter(self, type):
         critique = type if callable(type) else operator.itemgetter(type)
         iterable = ((index, entry) for index, entry in enumerate(self) if critique(entry['Type']))
         return iterable
 
-    def stores(self):
-        return self.filter('Storage')
+    def stores(self, store=None):
+        '''Return the index and entry of each store in the directory (Storage).'''
+        root = self.RootEntry() if store is None else store
+        for index, entry in self.items(root):
+            if entry['Type']['Storage']:
+                yield index, entry
+            continue
+        return
 
-    def roots(self):
-        return self.filter('Root')
+    def items(self, store=None):
+        '''Return the (sorted) index and entry of each item in the directory.'''
+        root = self.RootEntry() if store is None else store
+        assert(root)
+        for index, (_, entry) in enumerate(self.children(root)):
+            yield index, entry
+        return
 
     def children(self, index):
+        '''Return the index and entry of each element belonging to the directory at the specified index.'''
         node = index if isinstance(index, DirectoryEntry) else self[index]
         iChild = node['iChild']
         if iChild['NOSTREAM']:
@@ -530,6 +563,7 @@ class Directory(parray.block):
         return
 
     def enumerate(self, index):
+        '''Return the index and entry of each element below the directory entry at the specified index.'''
         if not isinstance(index, DirectoryEntry):
             (_, node), = stack = [(index, self[index])]
         else:
