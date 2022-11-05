@@ -419,18 +419,45 @@ class disorderly(bounded):
 
     def store(self, data):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-        left, right, total = self.offset, self.offset + len(data), sum(item.size() for item in self.contiguous)
+        left, right, size = self.offset, self.offset + len(data), sum(item.size() for item in self.contiguous)
 
-        # XXX: this is pretty dirty (using a proxy), but whatever.
-        iterable = ((lslice, rslice - lslice, proxy(item, autocommit=self.autocommit)) for lslice, rslice, item in self.__traverse__(left, right))
+        if left == right:
+            return len(data)
 
-        current = 0
-        for offset, amount, source in iterable:
-            source.seek(offset)
-            res = source.store(data[current : current + amount])
-            assert(amount == res)
-            current += res
-        return current
+        elif not (left >= 0 and right <= size):
+            raise error.StoreError(self, left, len(data), 0)
+
+        from . import ptype, pbinary
+
+        cls, successful, offset = self.__class__, [], 0
+        try:
+            for lslice, rslice, item in self.__traverse__(left, right):
+                amount = rslice - lslice
+
+                if isinstance(item, pbinary.partial):
+                    size = proxy.store_partial(item, lslice, data[offset : offset + amount])
+                elif isinstance(item, ptype.type):
+                    size = proxy.store_object(item, lslice, data[offset : offset + amount])
+                elif isinstance(item, ptype.container):
+                    size = proxy.store_range(item, lslice, data[offset : offset + amount])
+                else:
+                    raise TypeError
+
+                self.offset, offset = self.offset + size, offset + amount
+                successful.append(item)
+
+        except error.ConsumeError:
+            Log.warning("{:s} : store : Unable to write {:d} bytes to offset {:#x} of object {:s}.".format(cls.__name__, amount, lslice, item.instance()))
+            raise
+
+        except Exception as E:
+            Log.warning("{:s} : store : Unable to write {:d} bytes to offset {:#x} of unknown object {!s}.".format(cls.__name__, amount, lslice, item))
+            raise
+
+        # FIXME: Not sure if I'm supposed to trap and raise an exception or whatever if this fails?
+        if self.autocommit is not None:
+            [item.commit(**self.autocommit) for item in successful]
+        return offset
 
     def iterate(self):
         '''Iterate through all of the instances that back this provider.'''
