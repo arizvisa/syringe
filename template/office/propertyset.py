@@ -327,7 +327,7 @@ class PropertyIdentifierAndOffset(pstruct.type):
 
     _fields_ = [
         (PropertyIdentifier, 'PropertyIdentifier'),
-        (DWORD, 'Offset'),
+        (__Offset, 'Offset'),
     ]
 
 class PropertySet(pstruct.type):
@@ -343,19 +343,52 @@ class PropertySet(pstruct.type):
         (__Property, 'Property'),
     ]
 
-class PropertySetStream(pstruct.type):
-    class FMTOFFSET(pstruct.type):
-        def __Offset(self):
-            raise NotImplementedError
-            # FIXME: this should be an rpointer(PropertySet, DWORD)
+class FMTID(GUID):
+    def to_name(self):
+        res = ptypes.bitmap.new(0, 0)
+        for item in bytearray(self.serialize()):
+            res = ptypes.bitmap.append(res, (item, 8))
+        res = ptypes.bitmap.push(res, ptypes.bitmap.new(0, 2))
+        table32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ012345'
+        items = [table32[index] for index in map(ptypes.bitmap.int, reversed(ptypes.bitmap.split(res, 5)))]
+        string = ''.join(item.lower() if (index * 5) % 8 else item.upper() for index, item in enumerate(items))
+        return "\5{:s}".format(string)
 
-        _fields_ = [
-            (GUID, 'FMTID'),
-            (DWORD, 'Offset')
-        ]
+    def of_name(self, name):
+        prefix, string = name[:1], name[1:]
+        table32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ012345'
+        lookup = {item : index for index, item in enumerate(table32)}
+        integers = [lookup[item.upper()] for item in string]
+        items = (ptypes.bitmap.new(integer, 5) for integer in integers)
+        res = functools.reduce(ptypes.bitmap.append, items, ptypes.bitmap.new(0, 0))
+        integer, zero = ptypes.bitmap.consume(res, 2)
+        assert(zero == 0)
+        data = bytearray(map(ptypes.bitmap.int, reversed(ptypes.bitmap.split(integer, 8))))
+        return self.load(offset=0, source=ptypes.prov.bytes(bytes(data)))
+
+class FMTOFFSET(pstruct.type):
+    def __Offset(self):
+        try:
+            p = self.getparent(PropertySetStream)
+        except ptypes.error.ItemNotFoundError:
+            return DWORD
+
+        formatId = self['FMTID'].li
+        return dyn.rpointer(PropertySet, p, DWORD)
 
     _fields_ = [
-        (WORD, 'ByteOrder'),
+        (FMTID, 'FMTID'),
+        (__Offset, 'Offset')
+    ]
+
+class PropertySetStream(pstruct.type):
+    class _ByteOrder(pint.enum, WORD):
+        _values_ = [
+            ('LittleEndian', 0xfffe),
+            ('BigEndian', 0xfeff),
+        ]
+    _fields_ = [
+        (_ByteOrder, 'ByteOrder'),
         (WORD, 'Version'),
         (DWORD, 'SystemIdentifier'),
         (GUID, 'CLSID'),
