@@ -229,6 +229,10 @@ class FAT(AllocationTable):
         def _calculate_(self, nextindex):
             realindex = self.__index__
             return self._uSectorSize + realindex * self._uSectorSize
+        def dereference(self, **attrs):
+            p = self.getparent(FAT)
+            attrs.setdefault('source', p.parent.source)
+            return super(FAT.Pointer, self).dereference(**attrs)
 
     def _object_(self):
         '''return a custom pointer that can be used to dereference entries in the FAT.'''
@@ -279,16 +283,23 @@ class DIFAT(AllocationTable):
 class MINIFAT(AllocationTable):
     class Pointer(Pointer):
         def _calculate_(self, next_index_from_chain):
-            if self.__sector__:
+            if not hasattr(self, '__minisource__'):
                 sector, index = self.__sector__, self.__index__
                 return sector.getoffset() + self._uMiniSectorSize * index
+            elif hasattr(self, '__index__'):
+                return self.__index__ * self._uMiniSectorSize
             raise NotImplementedError
+
+        def dereference(self, **attrs):
+            if hasattr(self, '__minisource__'):
+                attrs.setdefault('source', self.__minisource__)
+            return super(MINIFAT.Pointer, self).dereference(**attrs)
 
     def _object_(self):
         p, index = self.getparent(File), len(self.value)
-        count, table = self._uSectorSize // self._uMiniSectorSize, [item for item in p.minisectors()]
+        count, table = self._uSectorSize // self._uMiniSectorSize, self.__minitable__ if hasattr(self, '__minitable__') else [item for item in p.minisectors()]
         sector = table[index // count] if index // count < len(table) else None
-        return dyn.clone(self.Pointer, _object_=dyn.block(self._uMiniSectorSize), __index__=index % count, __sector__=sector)
+        return dyn.clone(self.Pointer, _object_=dyn.block(self._uMiniSectorSize), __index__=index % count, __sector__=sector, __minisource__=ptypes.provider.disorderly(table))
 
 ### Header types
 class uByteOrder(pint.enum, USHORT):
@@ -454,7 +465,7 @@ class DirectoryEntry(pstruct.type):
             minisector = dyn.block(self._uMiniSectorSize, __name__='MiniSector')
             datatype = dyn.blockarray(minisector, self['qwSize'].int())
             stream = F.Stream(self['sectLocation'])
-            source = ptypes.provider.disorderly(stream, autoload={}, autocommit={})
+            source = ptypes.provider.disorderly(stream, autocommit={})
             return self.new(datatype, source=source).l
 
         # Determine whether the data is stored in the minifat or the regular fat, and
@@ -661,8 +672,8 @@ class File(pstruct.type):
         ## We're loading it from the source temporarily, so we can still dereference the sector.
         return self.new(DIFAT, recurse=self.attributes, length=length).load(source=source)
 
-    @ptypes.utils.memoize(self=lambda self: self)
-    def MiniFat(self):
+    @ptypes.utils.memoize(self=lambda self: self, attrs=lambda attrs:frozenset(map(tuple, attrs.items())))
+    def MiniFat(self, **attrs):
         '''Return an array containing the MiniFat'''
         res = self['MiniFat']
         start, count = res['sectMiniFat'].int(), res['csectMiniFat'].int()
@@ -670,15 +681,16 @@ class File(pstruct.type):
         iterable = fat.chain(start)
         sectors = [sector for sector in self.chain(iterable)]
         source = ptypes.provider.disorderly(sectors, autocommit={})
-        return self.new(MINIFAT, recurse=self.attributes, length=count * self._uSectorCount).load(source=source)
+        minisectors = [item for item in self.minisectors()]
+        return self.new(MINIFAT, __minitable__=minisectors, recurse=self.attributes, length=count * self._uSectorCount, source=source).load(**attrs)
 
-    @ptypes.utils.memoize(self=lambda self: self)
-    def Fat(self):
+    @ptypes.utils.memoize(self=lambda self: self, attrs=lambda attrs:frozenset(map(tuple, attrs.items())))
+    def Fat(self, **attrs):
         '''Return an array containing the FAT'''
         count, difat = self['Fat']['csectFat'].int(), self.DiFat()
         sectors = [sector.d.l for _, sector in zip(range(count), difat)]
         source = ptypes.provider.disorderly(sectors, autocommit={})
-        return self.new(FAT, recurse=self.attributes, length=self._uSectorCount).load(source=source)
+        return self.new(FAT, recurse=self.attributes, length=self._uSectorCount, source=source).load(**attrs)
 
     def difatsectors(self):
         '''Return all the tables in the document that contains DiFat.'''
