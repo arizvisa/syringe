@@ -426,6 +426,22 @@ class type(base):
             Log.warning("container.serialize : {:s} : Padding `{:s}` due to user explicitly requesting serialization of misaligned binary instance.".format(self.classname(), self.instance()))
         return bitmap.data(self.__getvalue__())
 
+    def __format__(self, spec):
+        if self.value is None or not spec:
+            return super(type, self).__format__(spec)
+
+        prefix, spec = spec[:-1], spec[-1:]
+        if spec in 'bxXdon' and prefix:
+            integer, count = self.__getvalue__()
+            return "{:{:s}{:s}}".format(integer, prefix, spec)
+        elif spec == 'b':
+            integer, count = self.__getvalue__()
+            return "{:0{:d}b}".format(integer, count)
+        elif spec in 'xXdon':
+            integer, count = self.__getvalue__()
+            return "{:{:s}{:s}}".format(integer, prefix, spec)
+        return super(type, self).__format__(prefix + spec)
+
 class integer(type):
     """An atomic component of any binary array or structure.
 
@@ -2185,6 +2201,33 @@ class partial(ptype.container):
         if self.initializedQ():
             self.object.setposition((offset[0], 0), recurse=self.__calculate__)
         return super(partial, self).setposition(offset, recurse=False)
+
+    def __format__(self, spec):
+        if self.value is None or not spec:
+            return super(partial, self).__format__(spec)
+
+        prefix, spec = spec[:-1], spec[-1:]
+        if prefix == '#' and spec in 'xX':
+            object, size = self.object, self.size()
+            integer, count = object.__getvalue__()
+            return "{:#0{:d}{:s}}".format(integer, 2 + 2 * size, spec)
+        elif spec in 'xXdon' and prefix:
+            object = self.object
+            integer, count = object.__getvalue__()
+            return "{:{:s}{:s}}".format(integer, prefix, spec)
+        elif spec == 'b':
+            object, size = self.object, self.size()
+            integer, count = object.__getvalue__()
+            return "{:0{:d}b}".format(integer, 8 * size)
+        elif spec in 'xX':
+            object, size = self.object, self.size()
+            integer, count = object.__getvalue__()
+            return "{:0{:d}{:s}}".format(integer, 2 * size, spec)
+        elif spec in 'don':
+            object, size = self.object, self.size()
+            integer, count = object.__getvalue__()
+            return "{:{:s}}".format(integer, spec)
+        return super(partial, self).__format__(prefix + spec)
 
 class flags(struct):
     '''represents bit flags that can be toggled'''

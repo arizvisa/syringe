@@ -149,6 +149,17 @@ class type(pint.type):
     def int(self):
         return super(type, self).__getvalue__()
 
+    def __format__(self, spec):
+        if self.value is None or not spec:
+            return super(type, self).__format__(spec)
+
+        prefix, spec = spec[:-1], spec[-1:]
+        if spec in 'eEfFgG%' and prefix:
+            return "{:{:s}{:s}}".format(self.float(), prefix, spec)
+        elif spec in 'eEfFgG%':
+            return "{:{:s}}".format(self.float(), spec)
+        return super(type, self).__format__(prefix + spec)
+
 class float_t(type):
     """Represents a packed floating-point number corresponding to the binary interchange format.
 

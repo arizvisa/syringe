@@ -436,6 +436,18 @@ class string(ptype.type):
 
     def classname(self):
         return '{:s}<{:s}>'.format(super(string, self).classname(), self._object_.typename())
+
+    def __format__(self, spec):
+        if self.value is None or not spec:
+            return super(type, self).__format__(spec)
+
+        prefix, spec = spec[:-1], spec[-1:]
+        if spec == 's' and prefix:
+            return "{:{:s}s}".format(self.str(), prefix)
+        elif spec == 's':
+            return self.str()
+        return super(string, self).__format__(prefix + spec)
+
 type = string
 
 class szstring(string):

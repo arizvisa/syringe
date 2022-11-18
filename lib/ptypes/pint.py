@@ -318,6 +318,23 @@ class type(ptype.type):
         return self.__getvalue__()
     get = int
 
+    def __format__(self, spec):
+        if self.value is None or not spec:
+            return super(type, self).__format__(spec)
+
+        prefix, spec = spec[:-1], spec[-1:]
+        if spec in 'don' and prefix:
+            return "{:{:s}{:s}}".format(self.int(), prefix, spec)
+        elif spec in 'don':
+            return "{:{:s}}".format(self.int(), spec)
+        elif prefix == '#' and spec in 'xX':
+            return "{:#0{:d}{:s}}".format(self.int(), 2 + 2 * self.size(), spec)
+        elif not prefix and spec in 'xX':
+            return "{:0{:d}{:s}}".format(self.int(), 2 * self.size(), spec)
+        elif spec in 'xX':
+            return "{:{:s}{:s}}".format(self.int(), prefix, spec)
+        return super(type, self).__format__(prefix + spec)
+
 class uinteger_t(type):
     '''Provides unsigned integer support'''
     def summary(self, **options):

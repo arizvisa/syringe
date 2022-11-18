@@ -520,6 +520,38 @@ class __interface__(object):
             return u"[{:s}] {:s} {{{:s}}} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, prop, result)
         return u"[{:s}] {:s} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, result)
 
+    def __format__(self, spec):
+        prefix, spec = spec[:-1], spec[-1:]
+        if spec:
+            if self.value is None:
+                raise error.InitializationError(self, '__interface__.__format__')
+            return super(__interface__, self).__format__(spec)
+
+        # Grab the properties, similar to self.__repr__()
+        try:
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in self.properties().items())
+
+        except error.InitializationError:
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in self.__properties__().items())
+
+        # Render with self.repr() and check for newlines. If there are any, then
+        # we fall back to using self.summary() because we're being formatted.
+        # Render with self.summary which should pretty much always work.
+        try:
+            result = self.summary()
+
+        # If it doesn't, though, because maybe the data is uninitialized then
+        # we fall back to self.repr() while stripping out the last newline.
+        except Exception:
+            result = self.repr().rstrip('\n')
+
+        # Format the whole thing as a single line (similar to self.__repr__).
+        _hex, _precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
+        descr = u"{:s} '{:s}'".format(utils.repr_class(self.classname()), self.name()) if self.value is None else utils.repr_instance(self.classname(), self.name())
+        if prop:
+            return u"[{:s}] {:s} {{{:s}}} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, prop, result)
+        return u"[{:s}] {:s} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, result)
+
     # naming
     @classmethod
     def typename(cls):
