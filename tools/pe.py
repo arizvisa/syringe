@@ -1,11 +1,13 @@
 #!/usr/bin/env python
-import six,argparse,logging,importlib
-import functools,operator,itertools,types
+import argparse,logging,importlib
+import functools,operator,os,types,six,itertools,types
 import ptypes,pecoff
 #ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 ptypes.config.defaults.ptype.clone_name = '{}'
 ptypes.config.defaults.pint.bigendian_name = 'be({})'
 ptypes.config.defaults.pint.littleendian_name = '{}'
+
+OFS = os.environ.get('IFS', os.environ.get('OFS', ':'))
 
 def Locate(path, obj):
     return Resolve(obj, path.split(':'))
@@ -20,7 +22,7 @@ def Extract(obj, outformat, file=None):
         out = lambda string, **kwargs: (kwargs['file'] if sys.version_info.major < 3 else kwargs['file'].buffer).write(string)
         res = obj.serialize()
     elif outformat == 'list':
-        res = '\n'.join((n.summary() if hasattr(n, 'summary') else str(n) for n in obj))
+        res = '\n'.join(itertools.starmap("{}{}{}".format, ((n[:1] + (OFS,) + (n[-1:])) if isinstance(n, tuple) else (i, OFS, n.summary()) if hasattr(n, 'summary') else (i, OFS, str(n)) for i, n in enumerate(obj))))
 
     # default
     elif not obj:
@@ -110,6 +112,12 @@ def extract_section(t, index, outformat, F=None, output=None):
         return Extract(F(result), outformat, file=output)
     if outformat == 'print':
         return six.print_("{!r}".format(S), file=output)
+    elif outformat == 'list':
+        content = result['PointerToRawData'].d.li
+        data = content.serialize()
+        length, Fhexify = 0x10, operator.methodcaller(*(['hex'] if hasattr(bytes, 'hex') else ['encode', 'hex']))
+        iterable = ((offset, Fhexify(row)) for row, offset in zip(map(bytes, map(bytearray, zip(*[iter(data)] * length))), itertools.count(0, length)))
+        return Extract(iterable, outformat, file=output)
     return Extract(result['PointerToRawData'].d.li, outformat or 'hex', file=output)
 
 def list_entries(t, outformat, F=None, output=None):
@@ -139,6 +147,11 @@ def extract_entry(t, index, outformat, F=None, output=None):
     if outformat in {'hex', 'raw'}:
         res = ptypes.dyn.block(cb.int())(offset=T.d.getoffset())
         return Extract(res.li, outformat, file=output)
+    elif outformat in {'list'}:
+        fields = [field for field in result.keys()][:8]
+        renders = {'TimeDateStamp': operator.methodcaller('int'), 'Name': lambda item: item.d.l.str()}
+        iterable = (OFS.join([name, str(renders[name](result[name])) if name in renders else str(result[name].int())]) for name in fields)
+        return Extract(iterable, outformat, file=output)
     return Extract(result, outformat or 'print', file=output)
 
 def list_exports(t, outformat, F=None, output=None):
@@ -156,7 +169,7 @@ def list_exports(t, outformat, F=None, output=None):
             six.print_("[{:d}] {!r} {!r} {:s}".format(hint, name, ordinalstring, "{:#x}".format(entrypoint) if fwd is None else fwd), file=output)
         return
     if outformat in {'list'}:
-        return Extract(("{:s}:{:s}:{:s}:{:s}:{:s}:{:s}".format('' if rva is None else "{:d}".format(rva), '' if hint is None else "{:d}".format(hint), name or '', ordinalstring or '', "{:d}".format(entrypoint) if fwd is None else '', fwd if entrypoint is None else '') for rva, hint, name, ordinalstring, entrypoint, fwd in result.iterate()), outformat, file=output)
+        return Extract(("{:s}{OFS}{:s}{OFS}{:s}{OFS}{:s}{OFS}{:s}{OFS}{:s}".format('' if rva is None else "{:d}".format(rva), '' if hint is None else "{:d}".format(hint), name or '', ordinalstring or '', "{:d}".format(entrypoint) if fwd is None else '', fwd if entrypoint is None else '', OFS=OFS) for rva, hint, name, ordinalstring, entrypoint, fwd in result.iterate()), outformat, file=output)
     return Extract(result, outformat, file=output)
 
 def extract_export(t, index, outformat, F=None, output=None):
@@ -176,6 +189,9 @@ def extract_export(t, index, outformat, F=None, output=None):
         aof, aon, no = (et[n].d.li[index] for n in ('AddressOfFunctions', 'AddressOfNames', 'AddressOfNameOrdinals'))
         data = ptypes.parray.type(length=3).set([aof, aon, no])
         return Extract(data, outformat, file=output)
+    if not F and outformat in {'list'}:
+        fields = ['index', 'rva', 'hint', 'name', 'ordinalname', 'entry', 'forwarded']
+        return Extract(((i, OFS.join([fld, str(item)])) for i, (fld, item) in enumerate(zip(fields, result))), outformat, file=output)
     return Extract(F(et) if F else result, outformat, file=output)
 
 def list_imports(t, outformat, F=None, output=None):
@@ -195,7 +211,7 @@ def list_imports(t, outformat, F=None, output=None):
             six.print_("[{:d}]{:s} {:<{:d}s} IAT[{:d}] INT[{:d}]".format(i, ' '*(imax-len(str(i))), ite['Name'].d.li.str(), nmax, len(iat), len(int)), file=output)
         return
     if outformat in {'list'}:
-        return Extract(("{:d}:{:s}".format(i, n['Name'].d.li.str()) for i, n in enumerate(result[:-1])), outformat, file=output)
+        return Extract(("{:d}{OFS}{:s}".format(i, n['Name'].d.li.str(), OFS=OFS) for i, n in enumerate(result[:-1])), outformat, file=output)
     return Extract(result, outformat, file=output)
 
 def extract_import(t, index, outformat, F=None, output=None):
@@ -209,9 +225,9 @@ def extract_import(t, index, outformat, F=None, output=None):
     global result; result = ite
     if not F and (not outformat or outformat in {'list'}):
         # FIXME: separate these fields somehow
-        summary = "hint:{:d} name:{:s} offset:{:#x} value:{:#x}".format
+        summary = "hint={:d}{OFS}name={:s}{OFS}offset={:#x}{OFS}value={:#x}".format
         for ie in result.iterate():
-            six.print_(summary(*ie), file=output)
+            six.print_(summary(*ie, OFS=OFS), file=output)
         return
     return Extract(F(result) if F else result, outformat, file=output)
 
@@ -229,6 +245,21 @@ def list_resources(t, outformat, F=None, output=None):
         for re in dumpresources(res):
             six.print_('/'.join(map(str, re)), summary(followresource(re, rt)), file=output)
         return
+    elif outformat in {'list'}:
+        def recurse(entry, state):
+            for name in entry.Iterate():
+                item = entry.entry(name).l
+                if not hasattr(item, 'Entry'):
+                    yield '/'.join(map(str, itertools.chain(state, [name]))), item
+                    continue
+                for item in recurse(item, state + [name]):
+                    yield item
+                continue
+            return
+        items = ((p, item) for p, item in recurse(result, []))
+        render, fields = {'OffsetToData': lambda item: item.d.getoffset()}, {'OffsetToData': 'Offset'}
+        iterable = ([(i, 'Entry', p)] + [(i, fields.get(name, name), (render[name](item[name]) if name in render else item[name].int())) for name in item.keys()] for i, (p, item) in enumerate(recurse(result, [])))
+        return Extract(((i, OFS.join(map(str, [name, value]))) for i, name, value in itertools.chain(*iterable)), outformat, file=output)
     return Extract(result, outformat, file=output)
 
 def extract_resource(t, path, outformat, F=None, output=None):
@@ -282,6 +313,13 @@ def list_signature(t, outformat, F=None, output=None):
         for i, se in enumerate(result):
             six.print_(summary(i, se), file=output)
         return
+    elif outformat in {'list'}:
+        Fhexify = operator.methodcaller(*(['hex'] if hasattr(bytes, 'hex') else ['encode', 'hex']))
+        fields = {'bCertificate': 'bCertificateOffset'}
+        render = {'wRevision': operator.methodcaller('str'), 'wCertificateType': operator.methodcaller('str'), 'bCertificate': lambda item: Fhexify(item.serialize())}
+        render['bCertificate'] = lambda item: item.getoffset()
+        iterable = ([(i, fields.get(name, name), (render[name](item[name]) if name in render else item[name].int())) for name in list(item.keys())] for i, item in enumerate(result))
+        return Extract(((i, OFS.join(map(str, [field, item]))) for i, field, item in itertools.chain(*iterable)), outformat, file=output)
     return Extract(result, outformat or 'raw', file=output)
 
 def extract_signature(t, index, outformat, F=None, output=None):
@@ -331,9 +369,9 @@ def emit_pdb(t, outformat, F=None, output=None):
         return
     if outformat in {'list'}:
         fields = [fld for fld in info]
-        six.print_(':'.join(fields[0:1] + [info[fields[0]].str().upper()]))
-        six.print_(':'.join(fields[1:2] + ["{:d}".format(info[fields[1]].int())]))
-        six.print_(':'.join(fields[2:3] + [info[fields[2]].str()]))
+        six.print_(OFS.join(fields[0:1] + [info[fields[0]].str().upper()]))
+        six.print_(OFS.join(fields[1:2] + ["{:d}".format(info[fields[1]].int())]))
+        six.print_(OFS.join(fields[2:3] + [info[fields[2]].str()]))
         return
     if F:
         return Extract(F(info), outformat, file=output)
@@ -358,7 +396,7 @@ def list_debugpogo(t, outformat, F=None, output=None):
             six.print_("[{:d}] {:#x}-{:#x} {:+#x} {:s}".format(i, rva.int(), rva.int() + size.int(), size.int(), item['section'].str()))
         return
     if outformat in {'list'}:
-        return Extract(("{:x}{:+x}:{:x}:{:s}".format(item['rva'].int(), item['rva'].int()+item['size'].int(), item['size'].int(), item['section'].str()) for item in entries), outformat, file=output)
+        return Extract(("{:x}{:+x}{OFS}{:x}{OFS}{:s}".format(item['rva'].int(), item['rva'].int()+item['size'].int(), item['size'].int(), item['section'].str(), OFS=OFS) for item in entries), outformat, file=output)
     return Extract(entries, outformat, file=output)
 
 def args():
