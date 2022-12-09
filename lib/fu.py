@@ -1830,9 +1830,12 @@ def generate():
         builtins.bytes,
         builtins.object
     ]
+
+    # generate a lookup table of all the builtin methods so that we can exclude them.
+    # of course we need to exclude some of the methods, because dir() can lie to us.
     for item in items:
         for name in dir(item):
-            if name not in {'__dict__', '__abstractmethods__'}:
+            if name not in {'__dict__', '__abstractmethods__', '__annotations__'}:
                 yield item, name, getattr(item, name)
             continue 
         continue
