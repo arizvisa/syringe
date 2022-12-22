@@ -336,7 +336,7 @@ class string(ptype.type):
         cb, _ = self.encoding.encode('\0')
 
         size, esize = self.size() if self.initializedQ() else self.blocksize(), len(cb)
-        encoded, _ = self.encoding.encode(value) if isinstance(value, string_types) else value
+        encoded, _ = self.encoding.encode(value) if isinstance(value, string_types) else (value, len(value))
 
         object = ptype.clone(self._object_, encoding=self.encoding)
         result = parray.type(_object_=object, length=size // esize)
@@ -476,7 +476,7 @@ class szstring(string):
         elif isinstance(value, bytes) and not value.endswith(nullbytes):
             value += nullbytes
 
-        data, _ = self.encoding.encode(value)
+        data, _ = self.encoding.encode(value) if isinstance(value, string_types) else (value, len(value))
         result = parray.type(_object_=self._object_, length=len(data) // len(nullbytes))
 
         # iterate through everything
