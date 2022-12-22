@@ -146,6 +146,64 @@ class backed(bounded):
             return len(data)
         raise error.StoreError(self, left, len(data))
 
+class object_backed(bounded):
+    '''Provider that is backed by other objects that is backed by other objects that is backed by other objects that is backed by another provider.'''
+
+    def __iter__(self):
+        raise NotImplementedError
+
+    @classmethod
+    def __collect__(cls, iterable, left, right):
+        offset = 0
+        if left > offset:
+            for item in iterable:
+                if left < offset + item.size():
+                    yield offset, item
+                    offset += item.size()
+                    break
+                offset += item.size()
+        else:
+            item = next(iterable)
+            yield offset, item
+            offset += item.size()
+
+        for item in iterable:
+            if right <= offset:
+                break
+            yield offset, item
+            offset += item.size()
+        return
+
+    @classmethod
+    def __interval__(cls, iterable, left, right):
+        for position, item in cls.__collect__(iterable, left, right):
+            lposition, rposition = left - position, right - position
+            yield item, max(0, lposition), min(item.size(), rposition)
+        return
+
+    def interval(self, left, right):
+        '''Return the instance, start offset, end offset of every item within the specified interval.'''
+        iterable, left, right = iter(self), left, right
+        return self.__interval__(iterable, left, right)
+
+    def __pinpoint__(self, left, right):
+        '''Return the start offset and end offset of the original source that are within the specified interval.'''
+        # XXX: this isn't really implemented at the moment as i'd need to consolidate each
+        #      contiguous interval and most importantly i don't actually need this anymore.
+        def recurse(iterable, left, right):
+            for item, start, stop in self.__interval__(iterable, left, right):
+                if isinstance(item.source, object_backed):
+                    iterable, offset, size = iter(item.source), item.getoffset(), item.size()
+                    for item in recurse(iterable, offset, offset + size):
+                        yield item
+                else:
+                    res = left - position
+                    yield item, res, res + (right - left)
+                continue
+            return
+        iterable, left, right = iter(self), left, right
+        return recurse(iterable, left, right)
+
 ## core providers
 class empty(base):
     '''Empty provider. Returns only zeroes.'''
@@ -162,7 +220,7 @@ class empty(base):
         Log.info("{:s}.store : Tried to write {:d} bytes to a read-only medium.".format(type(self).__name__, len(data)))
         return len(data)
 
-class proxy(bounded):
+class proxy(object_backed):
     """Provider that will read or write it's data to/from the specified ptype.
 
     If autoload or autocommit is specified during construction, the object will sync the proxy with it's source before performing any operations requested of the proxied-type.
@@ -318,11 +376,14 @@ class proxy(bounded):
             yield res
         if robj is not None: yield robj
 
+    def __iter__(self):
+        yield self.instance
+
     def __repr__(self):
         '''x.__repr__() <=> repr(x)'''
         return "{:s} -> {:s}".format(super(proxy, self).__repr__(), self.instance.instance())
 
-class disorderly(bounded):
+class disorderly(object_backed):
     def __init__(self, items, **kwds):
         '''Instantiate the provider using ``items`` as the backing types.'''
         self.offset, self.contiguous = 0, [item for item in items]
@@ -459,7 +520,7 @@ class disorderly(bounded):
             [item.commit(**self.autocommit) for item in successful]
         return offset
 
-    def iterate(self):
+    def __iter__(self):
         '''Iterate through all of the instances that back this provider.'''
         for item in self.contiguous:
             yield item
