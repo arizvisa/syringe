@@ -565,7 +565,11 @@ class enum(type):
 
         prefix, spec = spec[:-1], spec[-1:]
         if spec in 's':
-            return "{:{:s}{:s}}".format(self.summary(), prefix, spec)
+            res = self.get()
+            integer = "{:#0{:d}x}".format(res, 2 + 2 * self.size())
+            string = self.__byvalue__(res, None)
+            summary = "{:s}({:s})".format(string, integer) if string else integer
+            return "{:{:s}{:s}}".format(summary, prefix, spec)
         return super(enum, self).__format__(prefix + spec)
 
 # update our current state
