@@ -559,6 +559,15 @@ class enum(type):
             iterable = (item == value for name, item in cls._values_)
         return any(iterable)
 
+    def __format__(self, spec):
+        if self.value is None or not spec:
+            return super(enum, self).__format__(spec)
+
+        prefix, spec = spec[:-1], spec[-1:]
+        if spec in 's':
+            return "{:{:s}{:s}}".format(self.summary(), prefix, spec)
+        return super(enum, self).__format__(prefix + spec)
+
 # update our current state
 for _, definition in sorted(globals().items()):
     if definition in [type] or getattr(definition, '__base__', type) is type:

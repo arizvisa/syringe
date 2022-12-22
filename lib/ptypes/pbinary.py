@@ -763,6 +763,19 @@ class enum(integer):
             iterable = (item == value for name, item in cls._values_)
         return any(iterable)
 
+    def __format__(self, spec):
+        if self.value is None or not spec:
+            return super(enum, self).__format__(spec)
+
+        prefix, spec = spec[:-1], spec[-1:]
+        if spec in 's':
+            res = self.get()
+            integer = bitmap.hex(res)
+            string = self.__byvalue__(bitmap.value(res), None)
+            summary = "{:s}({:s})".format(string, integer) if string else integer
+            return "{:{:s}{:s}}".format(summary, prefix, spec)
+        return super(enum, self).__format__(prefix + spec)
+
 class container(type):
     '''contains a list of variable-bit integers'''
 
