@@ -279,18 +279,90 @@ class TypedPropertyValue(pstruct.type):
     ]
 
 ############
-class _PROPERTY_IDENTIFIER(pint.enum):
+class _PROPERTY_IDENTIFIER_RESERVED(pint.enum):
     _values_ = [
-        ('DICTIONARY', 0x00000000),
-        ('CODEPAGE', 0x00000001),
-        ('LOCALE', 0x80000000),
-        ('BEHAVIOR', 0x80000001),
+        ('DICTIONARY', 0x00000000),     # Dictionary
+        ('CODEPAGE', 0x00000001),       # VT_I2
+        ('LOCALE', 0x80000000),         # VT_UI4
+        ('BEHAVIOR', 0x80000003),       # VT_UI4
     ]
 
-class PropertyIdentifier(_PROPERTY_IDENTIFIER, DWORD):
+class PIDSI_(pint.enum):
+    _values_ = [
+        ('TITLE', 0x00000002),          # VT_LPSTR
+        ('SUBJECT', 0x00000003),        # VT_LPSTR
+        ('AUTHOR', 0x00000004),         # VT_LPSTR
+        ('KEYWORDS', 0x00000005),       # VT_LPSTR
+        ('COMMENTS', 0x00000006),       # VT_LPSTR
+        ('TEMPLATE', 0x00000007),       # VT_LPSTR
+        ('LASTAUTHOR', 0x00000008),     # VT_LPSTR
+        ('REVNUMBER', 0x00000009),      # VT_LPSTR
+        ('EDITTIME', 0x0000000A),       # VT_FILETIME (UTC)
+        ('LASTPRINTED', 0x0000000B),    # VT_FILETIME (UTC)
+        ('CREATE_DTM', 0x0000000C),     # VT_FILETIME (UTC)
+        ('LASTSAVE_DTM', 0x0000000D),   # VT_FILETIME (UTC)
+        ('PAGECOUNT', 0x0000000E),      # VT_I4
+        ('WORDCOUNT', 0x0000000F),      # VT_I4
+        ('CHARCOUNT', 0x00000010),      # VT_I4
+        ('THUMBNAIL', 0x00000011),      # VT_CF
+        ('APPNAME', 0x00000012),        # VT_LPSTR
+        ('DOC_SECURITY', 0x00000013),   # VT_I4
+    ] + _PROPERTY_IDENTIFIER_RESERVED._values_
+
+class PIDDSI_(pint.enum):
+    _values_ = [
+        ('CATEGORY', 0x00000002),       # VT_LPSTR
+        ('PRESFORMAT', 0x00000003),     # VT_LPSTR
+        ('BYTECOUNT', 0x00000004),      # VT_I4
+        ('LINECOUNT', 0x00000005),      # VT_I4
+        ('PARCOUNT', 0x00000006),       # VT_I4
+        ('SLIDECOUNT', 0x00000007),     # VT_I4
+        ('NOTECOUNT', 0x00000008),      # VT_I4
+        ('HIDDENCOUNT', 0x00000009),    # VT_I4
+        ('MMCLIPCOUNT', 0x0000000A),    # VT_I4
+        ('SCALE', 0x0000000B),          # VT_BOOL
+        ('HEADINGPAIR', 0x0000000C),    # VT_VARIANT | VT_VECTOR
+        ('DOCPARTS', 0x0000000D),       # VT_VECTOR | VT_LPSTR
+        ('MANAGER', 0x0000000E),        # VT_LPSTR
+        ('COMPANY', 0x0000000F),        # VT_LPSTR
+        ('LINKSDIRTY', 0x00000010),     # VT_BOOL
+    ] + _PROPERTY_IDENTIFIER_RESERVED._values_
+
+class ReservedProperty(_PROPERTY_IDENTIFIER_RESERVED, DWORD):
     pass
 
+class PropertyIdentifier(ptype.definition):
+    cache, default = {}, ReservedProperty
+
+    # FIXME: the correct property identifier should be determined by the
+    #        FMTID that is referenced by the FMTOFFSET for an entry.
+
+@PropertyIdentifier.define
+class SummaryInformationProperty(PIDSI_, DWORD):
+    type = (0xF29F85E0, 0x4FF9, 0x1068, 0xAB9108002B27B3D9)
+
+@PropertyIdentifier.define
+class DocumentSummaryInformationProperty(PIDDSI_, DWORD):
+    type = (0xD5CDD505, 0x2E9C, 0x101B, 0x939708002B2CF9AE)
+
+@PropertyIdentifier.define
+class PropertyBagProperty(_PROPERTY_IDENTIFIER_RESERVED, DWORD):
+    type = (0x20001801, 0x5DE6, 0x11D1, 0x8E3800C04FB9386D)
+
 class DictionaryEntry(pstruct.type):
+    def __PropertyIdentifier(self):
+        if hasattr(self, '__format_identifier__'):
+            return PropertyIdentifier.get(self.__format_identifier__)
+
+        try:
+            p = self.getparent(FMTOFFSET)
+
+        except ptypes.error.ItemNotFoundError:
+            return PropertyIdentifier.default
+
+        fmtid = p['FMTID']
+        return PropertyIdentifier.get(fmtid.identifier())
+
     def __Name(self):
         length = self['Length'].li
         raise NotImplementedError
@@ -301,7 +373,7 @@ class DictionaryEntry(pstruct.type):
         return dyn.clone(pstr.wstring, length=length.int())
 
     _fields_ = [
-        (PropertyIdentifier, 'PropertyIdentifier'),
+        (__PropertyIdentifier, 'PropertyIdentifier'),
         (DWORD, 'Length'),
         (lambda self: dyn.block(self['Length'].li.int()), 'Name'),
     ]
@@ -314,6 +386,19 @@ class Dictionary(pstruct.type):
     ]
 
 class PropertyIdentifierAndOffset(pstruct.type):
+    def __PropertyIdentifier(self):
+        if hasattr(self, '__format_identifier__'):
+            return PropertyIdentifier.get(self.__format_identifier__)
+
+        try:
+            p = self.getparent(FMTOFFSET)
+
+        except ptypes.error.ItemNotFoundError:
+            return PropertyIdentifier.default
+
+        fmtid = p['FMTID']
+        return PropertyIdentifier.lookup(fmtid.identifier())
+
     def __Offset(self):
         try:
             p = self.getparent(PropertySet)
@@ -326,7 +411,7 @@ class PropertyIdentifierAndOffset(pstruct.type):
         return dyn.rpointer(TypedPropertyValue, p, DWORD)
 
     _fields_ = [
-        (PropertyIdentifier, 'PropertyIdentifier'),
+        (__PropertyIdentifier, 'PropertyIdentifier'),
         (__Offset, 'Offset'),
     ]
 
@@ -344,6 +429,10 @@ class PropertySet(pstruct.type):
     ]
 
 class FMTID(GUID):
+    def identifier(self):
+        iterable = (self[fld].int() for fld in self)
+        return tuple(iterable)
+
     def to_name(self):
         res = ptypes.bitmap.new(0, 0)
         for item in bytearray(self.serialize()):
@@ -396,7 +485,8 @@ class PropertySetStream(pstruct.type):
         (lambda self: dyn.array(FMTOFFSET, self['NumPropertySets'].li.int()), 'FormatOffset'),
 
         # XXX: this might not be correct and are likely dependent on the offset
-        #      specified by the FormatOffset array.
+        #      specified by the FormatOffset array. that's how we figure out the
+        #      FMTID in order to choose the correct PropertyIdentifier anywayz.
         (lambda self: dyn.array(PropertySet, self['NumPropertySets'].li.int()), 'PropertySet'),
         (ptype.block, 'Padding'),
     ]
