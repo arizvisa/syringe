@@ -2025,6 +2025,102 @@ class definition(object):
             return True
         return False
 
+    ## special descriptors that automatically generate a type from a definition
+    class __auto_type_descriptor(object):
+        def __init__(self, attribute, definition):
+            self._attribute = attribute
+            self._definition = definition
+
+        def __get__(self, obj, type=None):
+            cls = type or definition
+            clsname = '.'.join(getattr(cls, attribute) for attribute in ['__module__', '__name__'] if hasattr(cls, attribute))
+            if obj is not None or type is None:
+                raise AttributeError("type object '{:s}' has no attribute '{:s}' when instantiated and is only accessible from the definition".format(clsname, self._attribute))
+            if not hasattr(type, self._definition):
+                raise AttributeError("type object '{:s}' has no attribute '{:s}'".format(clsname, self._definition))
+            return getattr(type, self._definition)
+
+    class __type_instance__(__auto_type_descriptor):
+        '''Use the "_object_" attribute to return a type that is associated with the definition.'''
+        def __get__(self, obj, type=None):
+            result = super(definition.__type_instance__, self).__get__(obj, type)
+            if not builtins.isinstance(result, builtins.type):
+                if not callable(result):
+                    cls = type or definition
+                    clsname = '.'.join(getattr(cls, attribute) for attribute in ['__module__', '__name__'] if hasattr(cls, attribute))
+                    raise TypeError("type object '{:s}' in attribute '{:s}' is not a supported type or callable".format('.'.join(getattr(result, attribute) for attribute in ['__module__', '__name__'] if hasattr(result, attribute)), '.'.join([clsname, self._definition])))
+                return result
+
+            elif not issubclass(result, generic):
+                cls = type or definition
+                clsname = '.'.join(getattr(cls, attribute) for attribute in ['__module__', '__name__'] if hasattr(cls, attribute))
+                raise TypeError("type object '{:s}' in attribute '{:s}' is not a supported type or callable".format('.'.join(getattr(result, attribute) for attribute in ['__module__', '__name__'] if hasattr(result, attribute)), '.'.join([clsname, self._definition])))
+
+            name = '.'.join([type.__name__, self._attribute])
+            return builtins.type(name, (result,), {'__module__': result.__module__})
+
+    class __callable_descriptor__(object):
+        def __init__(self, callable, *args, **kwargs):
+            self.callable = callable
+            self.args = args
+            self.kwargs = kwargs
+        def __get__(self, obj, type=None):
+            args, kwargs = self.args, self.kwargs
+            return self.callable(*args, **kwargs)
+
+    class __enum_instance__(__auto_type_descriptor):
+        '''Use the "_enum_" attribute as the base class for an enumeration generated using the types associated with the definition.'''
+        @staticmethod
+        def bytes_or_whatever(enum, key):
+            '''Convert the key used as input for enum into an integer that can be assigned to the enumeration's values.'''
+            temporary = enum().alloc()
+            if builtins.isinstance(key, bitmap.integer_types):
+                return key
+            elif builtins.isinstance(key, builtins.bytes):
+                return temporary.load(source=provider.bytes(key)).int()
+            elif builtins.isinstance(key, temporary.get().__class__):
+                return temporary.set(key).int()
+            return key
+
+        def __get__(self, obj, type=None):
+            result = super(definition.__enum_instance__, self).__get__(obj, type)
+
+            from . import pint, pbinary
+            if not issubclass(result, generic):
+                raise TypeError("type object '{:s}' in attribute '{:s}' is not a supported type or callable".format('.'.join(getattr(result, attribute) for attribute in ['__module__', '__name__'] if hasattr(result, attribute)), '.'.join([clsname, self._definition])))
+            if not issubclass(result, (pint.enum, pbinary.enum)):
+                raise TypeError("type object '{:s}' in attribute '{:s}' is not a supported enumeration type".format('.'.join(getattr(result, attribute) for attribute in ['__module__', '__name__'] if hasattr(result, attribute)), '.'.join([clsname, self._definition])))
+
+            cls = type or definition
+            clsname = '.'.join(getattr(cls, attribute) for attribute in ['__module__', '__name__'] if hasattr(cls, attribute))
+
+            def get_filtered_values(values):
+                newvalues = {object.__name__ : self.bytes_or_whatever(result, key) for key, object in type.cache.items()}
+                newvalues.update({name : key for name, key in values})
+                if all(builtins.isinstance(key, bitmap.integer_types) for _, key in newvalues.items()):
+                    return [(name, integer) for name, integer in newvalues.items()]
+
+                invalid = {name for name, key in newvalues.items() if not builtins.isinstance(key, bitmap.integer_types)}
+                fixed = {name : key for name, key in newvalues.items() if name not in invalid}
+                if fixed:
+                    Log.warning("{:s} : {:s} : Some of the values within the definition were not integers and have been ignored ({:s})".format(clsname, self._attribute, ', '.join(invalid)))
+                elif invalid:
+                    Log.warning("{:s} : {:s} : Returning an enumeration that has no values defined due to their \"{:s}\" attribute being non-integer".format(clsname, self._attribute, type.attribute))
+                return [(name, integer) for name, integer in fixed.items()]
+
+            attributes = {}
+            module, name = (type.__module__, '.'.join([type.__name__, self._attribute])) if result.__name__ == self._definition else (result.__module__, result.__name__)
+            attributes['__module__'] = module
+            values = getattr(result, '_values_', None) or []
+            attributes['_values_'] = definition.__callable_descriptor__(get_filtered_values, values)
+            return builtins.type(name, (result,), attributes)
+
+    # Just a generic type based on "definition._object_" that is scoped within the definition
+    type = __type_instance__('type', '_object_')
+
+    # An enumeration that inherits from "definition._enum_" and uses the names/values within the definition
+    enum = __enum_instance__('enum', '_enum_')
+
 class wrapper_t(type):
     '''This type represents a type that is backed and sized by another ptype.
 
