@@ -2,10 +2,6 @@ import ptypes, logging
 from ptypes import *
 import array,functools
 
-# big-endian
-intofdata = lambda data: functools.reduce(lambda t, c: t * 256 | c, bytearray(data), 0)
-dataofint = lambda integer: ((integer == 0) and b'\0') or (dataofint(integer // 256).lstrip(b'\0') + bytes(bytearray([integer % 256])[:1]))
-
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
 ### ripped from the png specification
@@ -40,9 +36,10 @@ class Chunks(ptype.definition):
             return '{:s}<{:s}>[size:{:#x}]'.format(res, type, self.blocksize())
 
     default = UnknownChunk
+    class _enum_(pint.enum, pint.uint32_t): pass
 
-class ChunkType(pint.enum, pint.uint32_t):
-    _values_ = []
+class ChunkType(Chunks.enum):
+    pass
 
 ######
 class Signature(dyn.block(8)):
@@ -221,7 +218,69 @@ class PLTE(parray.block):
 class IEND(ptype.block):
     type = b'IEND'
 
-ChunkType._values_[:] = [(t.__name__, intofdata(key)) for key, t in Chunks.cache.items()]
+@Chunks.define
+class bKGD(ptype.block):
+    type = b'bKGD'
+
+@Chunks.define
+class tIME(ptype.block):
+    type = b'tIME'
+
+@Chunks.define
+class hIST(ptype.block):
+    type = b'hIST'
+
+@Chunks.define
+class sPLT(ptype.block):
+    type = b'sPLT'
+
+@Chunks.define
+class sBIT(ptype.block):
+    type = b'sBIT'
+
+@Chunks.define
+class oFFs(ptype.block):
+    type = b'oFFs'
+
+@Chunks.define
+class pCAL(ptype.block):
+    type = b'pCAL'
+
+@Chunks.define
+class fRAc(ptype.block):
+    type = b'fRAc'
+
+@Chunks.define
+class gIFg(ptype.block):
+    type = b'gIFg'
+
+@Chunks.define
+class gIFx(ptype.block):
+    type = b'gIFx'
+
+@Chunks.define
+class gIFt(ptype.block):
+    type = b'gIFt'
+
+@Chunks.define
+class aLIG(ptype.block):
+    type = b'aLIG'
+
+@Chunks.define
+class fING(ptype.block):
+    type = b'fING'
+
+@Chunks.define
+class fALS(ptype.block):
+    type = b'fALS'
+
+@Chunks.define
+class xSCL(ptype.block):
+    type = b'xSCL'
+
+@Chunks.define
+class ySCL(ptype.block):
+    type = b'ySCL'
 
 if __name__ == '__main__':
     import sys
