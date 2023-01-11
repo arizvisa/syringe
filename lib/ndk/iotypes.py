@@ -1,4 +1,4 @@
-import logging
+import functools, operator, itertools
 
 import ptypes
 from ptypes import *
@@ -284,3 +284,199 @@ class CTL_CODE(pbinary.struct):
         (12, 'Function'),
         (METHOD_, 'Method'),
     ]
+
+class IO_TYPE_(pint.enum):
+    _values_ = [
+        ('ADAPTER', 0x00000001),
+        ('CONTROLLER', 0x00000002),
+        ('DEVICE', 0x00000003),
+        ('DRIVER', 0x00000004),
+        ('FILE', 0x00000005),
+        ('IRP', 0x00000006),
+        ('MASTER_ADAPTER', 0x00000007),
+        ('OPEN_PACKET', 0x00000008),
+        ('TIMER', 0x00000009),
+        ('VPB', 0x0000000a),
+        ('ERROR_LOG', 0x0000000b),
+        ('ERROR_MESSAGE', 0x0000000c),
+        ('DEVICE_OBJECT_EXTENSION', 0x0000000d),
+    ]
+
+class IRP_MJ_(pint.enum, UCHAR):
+    _values_ = [
+        ('CREATE', 0x00),
+        ('CREATE_NAMED_PIPE', 0x01),
+        ('CLOSE', 0x02),
+        ('READ', 0x03),
+        ('WRITE', 0x04),
+        ('QUERY_INFORMATION', 0x05),
+        ('SET_INFORMATION', 0x06),
+        ('QUERY_EA', 0x07),
+        ('SET_EA', 0x08),
+        ('FLUSH_BUFFERS', 0x09),
+        ('QUERY_VOLUME_INFORMATION', 0x0a),
+        ('SET_VOLUME_INFORMATION', 0x0b),
+        ('DIRECTORY_CONTROL', 0x0c),
+        ('FILE_SYSTEM_CONTROL', 0x0d),
+        ('DEVICE_CONTROL', 0x0e),
+        ('INTERNAL_DEVICE_CONTROL', 0x0f),
+        ('SHUTDOWN', 0x10),
+        ('LOCK_CONTROL', 0x11),
+        ('CLEANUP', 0x12),
+        ('CREATE_MAILSLOT', 0x13),
+        ('QUERY_SECURITY', 0x14),
+        ('SET_SECURITY', 0x15),
+        ('POWER', 0x16),
+        ('SYSTEM_CONTROL', 0x17),
+        ('DEVICE_CHANGE', 0x18),
+        ('QUERY_QUOTA', 0x19),
+        ('SET_QUOTA', 0x1a),
+        ('PNP', 0x1b),
+        #('PNP_POWER', IRP_MJ_PNP),   # Obsolete....
+        #('MAXIMUM_FUNCTION', 0x1b),
+        #('SCSI', IRP_MJ_INTERNAL_DEVICE_CONTROL),
+
+        # FltMgr's IRP major codes
+        ('ACQUIRE_FOR_SECTION_SYNCHRONIZATION', (-1)),
+        ('RELEASE_FOR_SECTION_SYNCHRONIZATION', (-2)),
+        ('ACQUIRE_FOR_MOD_WRITE', (-3)),
+        ('RELEASE_FOR_MOD_WRITE', (-4)),
+        ('ACQUIRE_FOR_CC_FLUSH', (-5)),
+        ('RELEASE_FOR_CC_FLUSH', (-6)),
+        ('NOTIFY_STREAM_FO_CREATION', (-7)),
+
+        ('FAST_IO_CHECK_IF_POSSIBLE', (-13)),
+        ('NETWORK_QUERY_OPEN', (-14)),
+        ('MDL_READ', (-15)),
+        ('MDL_READ_COMPLETE', (-16)),
+        ('PREPARE_MDL_WRITE', (-17)),
+        ('MDL_WRITE_COMPLETE', (-18)),
+        ('VOLUME_MOUNT', (-19)),
+        ('VOLUME_DISMOUNT', (-20)),
+    ]
+
+class IRP_MN(ptype.definition):
+    cache = {}
+    default = UCHAR
+
+@IRP_MN.define(type='DIRECTORY_CONTROL')
+class IRP_MN_(pint.enum, UCHAR):
+    '''IRP_MJ_DIRECTORY_CONTROL'''
+    _values_ = [
+        ('QUERY_DIRECTORY', 0x01),
+        ('NOTIFY_CHANGE_DIRECTORY', 0x02),
+    ]
+
+@IRP_MN.define(type='FILE_SYSTEM_CONTROL')
+class IRP_MN_(pint.enum, UCHAR):
+    '''IRP_MJ_FILE_SYSTEM_CONTROL'''
+    _values_ = [
+        ('USER_FS_REQUEST', 0x00),
+        ('MOUNT_VOLUME', 0x01),
+        ('VERIFY_VOLUME', 0x02),
+        ('LOAD_FILE_SYSTEM', 0x03),
+        #('TRACK_LINK', 0x04),    # To be obsoleted soon
+        ('KERNEL_CALL', 0x04),
+    ]
+
+@IRP_MN.define(type='LOCK_CONTROL')
+class IRP_MN_(pint.enum, UCHAR):
+    '''IRP_MJ_LOCK_CONTROL'''
+    _values_ = [
+        ('LOCK', 0x01),
+        ('UNLOCK_SINGLE', 0x02),
+        ('UNLOCK_ALL', 0x03),
+        ('UNLOCK_ALL_BY_KEY', 0x04),
+    ]
+
+@IRP_MN.define(type='READ')
+@IRP_MN.define(type='WRITE')
+class IRP_MN_(pint.enum, UCHAR):
+    '''IRP_MJ_READ|IRP_MJ_WRITE'''
+    _values_ = [
+        ('NORMAL', 0x00),
+        ('DPC', 0x01),
+        ('MDL', 0x02),
+        ('COMPLETE', 0x04),
+        ('COMPRESSED', 0x08),
+
+        ('MDL_DPC', 2|1),           # (IRP_MN_MDL|IRP_MN_DPC)
+        ('COMPLETE_MDL', 4|2),      # (IRP_MN_COMPLETE|IRP_MN_MDL)
+        ('COMPLETE_MDL_DPC', 6|1),  # (IRP_MN_COMPLETE_MDL|IRP_MN_DPC)
+    ]
+
+@IRP_MN.define(type='INTERNAL_DEVICE_CONTROL')
+class IRP_MN_(pint.enum, UCHAR):
+    '''IRP_MJ_SCSI'''
+    _values_ = [
+        ('SCSI_CLASS', 0x01),
+    ]
+
+@IRP_MN.define(type='PNP')
+class IRP_MN_(pint.enum, UCHAR):
+    '''IRP_MJ_PNP'''
+    _values_ = [
+        ('START_DEVICE', 0x00),
+        ('QUERY_REMOVE_DEVICE', 0x01),
+        ('REMOVE_DEVICE', 0x02),
+        ('CANCEL_REMOVE_DEVICE', 0x03),
+        ('STOP_DEVICE', 0x04),
+        ('QUERY_STOP_DEVICE', 0x05),
+        ('CANCEL_STOP_DEVICE', 0x06),
+
+        ('QUERY_DEVICE_RELATIONS', 0x07),
+        ('QUERY_INTERFACE', 0x08),
+        ('QUERY_CAPABILITIES', 0x09),
+        ('QUERY_RESOURCES', 0x0A),
+        ('QUERY_RESOURCE_REQUIREMENTS', 0x0B),
+        ('QUERY_DEVICE_TEXT', 0x0C),
+        ('FILTER_RESOURCE_REQUIREMENTS', 0x0D),
+
+        ('READ_CONFIG', 0x0F),
+        ('WRITE_CONFIG', 0x10),
+        ('EJECT', 0x11),
+        ('SET_LOCK', 0x12),
+        ('QUERY_ID', 0x13),
+        ('QUERY_PNP_DEVICE_STATE', 0x14),
+        ('QUERY_BUS_INFORMATION', 0x15),
+        ('DEVICE_USAGE_NOTIFICATION', 0x16),
+        ('SURPRISE_REMOVAL', 0x17),
+
+        ('QUERY_LEGACY_BUS_INFORMATION', 0x18),
+
+        ('IRP_MN_DEVICE_ENUMERATED', 0x19),
+    ]
+
+@IRP_MN.define(type='POWER')
+class IRP_MN_(pint.enum, UCHAR):
+    '''IRP_MJ_POWER'''
+    _values_ = [
+        ('WAIT_WAKE', 0x00),
+        ('POWER_SEQUENCE', 0x01),
+        ('SET_POWER', 0x02),
+        ('QUERY_POWER', 0x03),
+    ]
+
+@IRP_MN.define(type='SYSTEM_CONTROL')
+class IRP_MN_(pint.enum, UCHAR):
+    '''IRP_MJ_SYSTEM_CONTROL'''
+    _values_ = [
+        ('QUERY_ALL_DATA', 0x00),
+        ('QUERY_SINGLE_INSTANCE', 0x01),
+        ('CHANGE_SINGLE_INSTANCE', 0x02),
+        ('CHANGE_SINGLE_ITEM', 0x03),
+        ('ENABLE_EVENTS', 0x04),
+        ('DISABLE_EVENTS', 0x05),
+        ('ENABLE_COLLECTION', 0x06),
+        ('DISABLE_COLLECTION', 0x07),
+        ('REGINFO', 0x08),
+        ('EXECUTE_METHOD', 0x09),
+
+        ('SET_TRACE_NOTIFY', 0x0A),
+        ('REGINFO_EX', 0x0B),
+    ]
+
+class IRP_MN_(pint.enum, UCHAR):
+    '''IRP_MJ_*'''
+    _values_ = [("IRP_MN_{:s}".format(key), value) for key, value in itertools.chain(*map(operator.attrgetter('_values_'), map(operator.itemgetter(1), IRP_MN.cache.items())))]
+
