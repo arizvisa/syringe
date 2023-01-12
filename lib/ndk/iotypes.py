@@ -391,6 +391,32 @@ class IRP_MN_(pint.enum, UCHAR):
 
 @IRP_MN.define(type='READ')
 @IRP_MN.define(type='WRITE')
+class IRP_MN_READWRITE(dynamic.union):
+    class _flags(pbinary.flags):
+        _fields_ = [
+            (4, 'padding'),
+            (1, 'DPC'),
+            (1, 'MDL'),
+            (1, 'COMPLETE'),
+            (1, 'COMPRESSED'),
+        ]
+    class _enumeration(pint.enum, UCHAR):
+        _values_ = [
+            ('NORMAL', 0x00),
+            ('DPC', 0x01),
+            ('MDL', 0x02),
+            ('COMPLETE', 0x04),
+            ('COMPRESSED', 0x08),
+
+            ('MDL_DPC', 2|1),           # (IRP_MN_MDL|IRP_MN_DPC)
+            ('COMPLETE_MDL', 4|2),      # (IRP_MN_COMPLETE|IRP_MN_MDL)
+            ('COMPLETE_MDL_DPC', 6|1),  # (IRP_MN_COMPLETE_MDL|IRP_MN_DPC)
+        ]
+    _fields_ = [
+        (dyn.clone(pbinary.partial, _object_=_flags), 'flags'),
+        (_enumeration, 'enum'),
+    ]
+
 class IRP_MN_(pint.enum, UCHAR):
     '''IRP_MJ_READ|IRP_MJ_WRITE'''
     _values_ = [
@@ -477,6 +503,8 @@ class IRP_MN_(pint.enum, UCHAR):
     ]
 
 class IRP_MN_(pint.enum, UCHAR):
-    '''IRP_MJ_*'''
-    _values_ = [("IRP_MN_{:s}".format(key), value) for key, value in itertools.chain(*map(operator.attrgetter('_values_'), map(operator.itemgetter(1), IRP_MN.cache.items())))]
+    '''IRP_MJ_**'''
+    _values_ = map(operator.attrgetter('_values_'), filter(lambda definition: hasattr(definition, '_values_'), map(operator.itemgetter(1), IRP_MN.cache.items())))
+    _values_ = [_values_ for _values_ in sorted(_values_, key=len)]
+    _values_ = [("IRP_MN_{:s}".format(key), value) for key, value in itertools.chain(*reversed(_values_))]
 
