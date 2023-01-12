@@ -80,6 +80,7 @@ Example usage:
             (dyn.clone(pstr.wstring, length=8), 'widestring'),
         ]
 """
+import itertools
 from . import ptype, parray, pstruct, error, utils, bitmap, provider, pint
 
 __all__ = 'block,blockarray,align,array,clone,pointer,rpointer,opointer,union'.split(',')
@@ -352,7 +353,7 @@ class union(__union_interface__):
     will be used to decode the structures used by field 'a' and field 'b'.
     """
     _value_ = None      # root type. determines block size.
-    _fields_ = []       # aliases of root type that will act on the same data
+    _fields_ = None      # aliases of root type that will act on the same data
     __object__ = None   # objects associated with each alias
     value = None
 
@@ -372,24 +373,24 @@ class union(__union_interface__):
 
         # if the blocksize method is not modified, then allocate all fields and choose the largest
         if utils.callable_eq(self, self.blocksize, union, union.blocksize):
-            iterable = (self.new(t) for t in objects)
-            size = max(item.a.blocksize() for item in iterable)
+            elements = [self.new(t) for t in objects]
+            size = max(item.a.blocksize() for item in elements) if elements else 0
             return clone(ptype.block, length=size)
 
         # otherwise, just use the blocksize to build a ptype.block for the root type
         return clone(ptype.block, length=self.blocksize())
 
     def __create__(self):
-        t = self.__choose__(t for t, _ in self._fields_)
-        res = self.new(t, offset=self.getoffset())
-        self.value = [res]
+        fields = self._fields_ or []
+        t = self.__choose__(t for t, _ in fields)
+        self.value = res, = [self.new(t, offset=self.getoffset())]
 
         source = provider.proxy(res)      # each element will write into the offset occupied by value
         self.__object__ = []
-        for t, name in self._fields_:
-            res = self.new(t, __name__=name, offset=0, source=source)
-            self.__append__(res)
-        return self.value[0]
+        for t, name in fields:
+            element = self.new(t, __name__=name, offset=0, source=source)
+            self.__append__(element)
+        return res
 
     def alloc(self, **attrs):
         res = self.__create__() if self.value is None else self.value[0]
@@ -398,7 +399,8 @@ class union(__union_interface__):
         return self
 
     def serialize(self):
-        return self.value[0].serialize()
+        object, = self.value[0]
+        return object.serialize()
 
     def load(self, **attrs):
         res = (self.__create__() if self.value is None else self.value[0]).load(**attrs)
@@ -414,7 +416,8 @@ class union(__union_interface__):
         return self.object.commit(**attrs)
 
     def __deserialize_block__(self, block):
-        self.value[0].__deserialize_block__(block)
+        object, = self.value
+        object.__deserialize_block__(block)
         return self
 
     def __properties__(self):
@@ -451,15 +454,13 @@ class union(__union_interface__):
         result.append("[{:x}] {:s}{:s} {:s}".format(self.getoffset(), inst, " {{{:s}}}".format(prop) if prop else '', self.object.summary()))
 
         # now try to do the rest of the fields
-        for fld, value in __izip_longest__(self._fields_, self.__object__ or []):
+        for fld, value in __izip_longest__(self._fields_ or [], self.__object__ or []):
             t, name = fld or (value.__class__, value.name())
             inst = utils.repr_instance(value.classname(), value.name() or name)
             prop = ','.join("{:s}={!r}".format(k, v) for k, v in value.properties().items())
             result.append("[{:x}] {:s}{:s} {:s}".format(self.getoffset(), inst, " {{{:s}}}".format(prop) if prop else '', value.summary()))
 
-        if len(result) > 0:
-            return '\n'.join(result)
-        return "[{:x}] Empty []".format(self.getoffset())
+        return '\n'.join(itertools.chain(result, [] if len(result) > 1 else ['']))
 
     def __details_uninitialized(self):
         gettypename = lambda cls: cls.typename() if ptype.istype(cls) else cls.__name__
@@ -474,7 +475,7 @@ class union(__union_interface__):
             result.append("[{:x}] {:s} ???".format(self.getoffset(), gettypename(self._value_)))
 
         # now the rest of the fields
-        for fld, value in __izip_longest__(self._fields_, self.__object__ or []):
+        for fld, value in __izip_longest__(self._fields_ or [], self.__object__ or []):
             t, name = fld or (value.__class__, value.name())
             if value is None:
                 result.append("[{:x}] {:s} {:s} ???".format(self.getoffset(), utils.repr_class(gettypename(t)), name))
@@ -483,9 +484,7 @@ class union(__union_interface__):
             prop = ','.join("{:s}={!r}".format(k, v) for k, v in value.properties().items())
             result.append("[{:x}] {:s}{:s} {:s}".format(self.getoffset(), inst, " {{{:s}}}".format(prop) if prop else '', value.summary() if value.initializedQ() else '???'))
 
-        if len(result) > 0:
-            return '\n'.join(result)
-        return "[{:x}] Empty []".format(self.getoffset())
+        return '\n'.join(itertools.chain(result, [] if len(result) > 1 else ['']))
 
     def __blocksize_originalQ__(self):
         '''Return whether the instance's blocksize has been rewritten by a definition.'''
