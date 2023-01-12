@@ -420,9 +420,11 @@ class union(__union_interface__):
     def __properties__(self):
         result = super(union, self).__properties__()
         if self.initializedQ():
-            result['object'] = ["{:s}<{:s}>".format(item.name(), item.classname()) for item in self.__object__]
-        else:
-            result['object'] = ["{:s}<{:s}>".format(name, t.typename()) for t, name in self._fields_]
+            expected = self.object.serialize()
+            Fsynchronized = lambda bytes, expected=self.object.serialize(): (lambda length: expected[:length] == bytes[:length])(min(len(bytes), len(expected)))
+            fields = {field for (_, field), element in __izip_longest__(self._fields_ or [], self.__object__ or []) if not Fsynchronized(element.serialize())}
+            fields and result.setdefault('uncommitted', fields)
+        result['union'] = True
         return result
 
     def __getitem__(self, key):
