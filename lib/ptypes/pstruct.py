@@ -135,6 +135,7 @@ class __structure_interface__(ptype.container):
 
     def __properties__(self):
         result = super(__structure_interface__, self).__properties__()
+        getattr(self, '_fields_', []) or result.setdefault('missing-fields', True)
         if self.initializedQ():
             if len(self.value) < len(self._fields_ or []):
                 result['abated'] = True
@@ -341,14 +342,14 @@ class type(__structure_interface__):
         return result
 
     def repr(self, **options):
-        return self.details(**options) + '\n'
+        return self.details(**options)
 
     def details(self, **options):
         gettypename = lambda t: t.typename() if ptype.istype(t) else t.__name__
         if self.value is None:
-            f = functools.partial(u"[{:x}] {:s} {:s} ???".format, self.getoffset())
-            res = (f(utils.repr_class(gettypename(t)), name) for t, name in self._fields_ or [])
-            return '\n'.join(res)
+            formatter = functools.partial(u"[{:x}] {:s} {:s} ???".format, self.getoffset())
+            result = (formatter(utils.repr_class(gettypename(t)), name) for t, name in self._fields_ or [])
+            return '\n'.join(itertools.chain(result, [] if len(self._fields_ or []) > 1 else ['']))
 
         result, offset = [], self.getoffset()
         fmt = functools.partial(u"[{:x}] {:s} {:s} {:s}".format, offset)
@@ -366,9 +367,7 @@ class type(__structure_interface__):
             result.append(u"[{:x}] {:s}{:s} {:s}".format(offset, instance, u" {{{:s}}}".format(properties) if properties else u"", value))
             offset += item.size()
 
-        if len(result) > 0:
-            return '\n'.join(result)
-        return u"[{:x}] Empty[]".format(self.getoffset())
+        return '\n'.join(itertools.chain(result, [] if len(result) > 1 else ['']))
     def __setvalue__(self, *values, **fields):
         result = self
 
