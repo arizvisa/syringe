@@ -690,7 +690,7 @@ class File(pstruct.type):
         count, difat = self['Fat']['csectFat'].int(), self.DiFat()
         sectors = [sector.d.l for _, sector in zip(range(count), difat)]
         source = ptypes.provider.disorderly(sectors, autocommit={})
-        return self.new(FAT, recurse=self.attributes, length=self._uSectorCount, source=source).load(**attrs)
+        return self.new(FAT, recurse=self.attributes, length=len(sectors) * self._uSectorCount, source=source).load(**attrs)
 
     def difatsectors(self):
         '''Return all the tables in the document that contains DiFat.'''
