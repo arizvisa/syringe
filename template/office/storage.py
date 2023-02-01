@@ -464,21 +464,35 @@ class DirectoryEntry(pstruct.type):
         if self['Type']['Root']:
             minisector = dyn.block(self._uMiniSectorSize, __name__='MiniSector')
             datatype = dyn.blockarray(minisector, self['qwSize'].int())
-            stream = F.Stream(self['sectLocation'])
+            stream = F.Stream(self['sectLocation'].int())
             source = ptypes.provider.disorderly(stream, autocommit={})
-            return self.new(datatype, source=source).l
+            result = self.new(datatype, source=source)
 
         # Determine whether the data is stored in the minifat or the regular fat, and
         # then use it to fetch the data using the correct reference.
-        fstream = F.MiniStream if self['qwSize'].int() < F['MiniFat']['ulMiniSectorCutoff'].int() else F.Stream
-        data = fstream(self['sectLocation'].int())
+        else:
+            fstream = F.MiniStream if self['qwSize'].int() < F['MiniFat']['ulMiniSectorCutoff'].int() else F.Stream
+            data = fstream(self['sectLocation'].int())
 
-        # Crop the block if specified, or use the regular one if not
-        source = ptypes.provider.disorderly(data, autocommit={})
-        res = self.new(DirectoryEntryData, length=self['qwSize'].int(), source=source).l if clamp else data
+            # Assign all of the pieces that we'll use to return what the user wanted.
+            source = ptypes.provider.disorderly(data, autocommit={})
+            clamped = self.new(DirectoryEntryData, length=self['qwSize'].int(), source=source)
+            backing = self.new(DirectoryEntryData, length=data.size(), source=source)
 
-        # Load the correct child type from it if one was suggested
-        return res if type is None else res.new(type).l
+            # Load the correct child type from whatever was requested.
+            if clamp:
+                res = clamped if type is None else self.new(type, source=ptypes.provider.proxy(clamped.l))
+            else:
+                res = backing if type is None else self.new(type, source=source)
+            result = res
+
+        # Ignore any exceptions if we received any and just return what we got.
+        try:
+            result.li if result.value is None else result
+        except Exception as E:
+            exc, logger = E.__class__, __import__('logging').getLogger(__name__)
+            logger.warning("Ignoring {:s} that was raised during load: {}".format('.'.join([exc.__module__, exc.__name__]), result))
+        return result
 
     def enumerate(self):
         '''Return the index and item of each directory entry below the current one.'''
