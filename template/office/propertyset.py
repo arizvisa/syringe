@@ -52,6 +52,12 @@ class CodePageString(pstruct.type):
         (__Characters, 'Characters'),
         (dyn.padding(4), 'padding(Characters)'),
     ]
+    def alloc(self, **fields):
+        string = fields.pop('Characters', None)
+        fields.setdefault('Characters', string) if ptype.isinstance(string) else fields.setdefault('Characters', pstr.szstring().a.set(string)) if string else None
+        res = super(CodePageString, self).alloc(**fields)
+        return res if 'Size' in fields else res.set(Size=res['Characters'].size())
+
 class DATE(pfloat.double): pass
 class VARIANT_BOOL(pint.enum, short):
     _values_ = [('VARIANT_TRUE', 0xffff), ('VARIANT_FALSE', 0x0000)]
@@ -72,12 +78,22 @@ class UnicodeString(pstruct.type):
         (__Characters, 'Characters'),
         (dyn.padding(4), 'padding(Characters)'),
     ]
+    def alloc(self, **fields):
+        string = fields.pop('Characters', None)
+        fields.setdefault('Characters', string) if ptype.isinstance(string) else fields.setdefault('Characters', pstr.wstring().alloc(string)) if string else None
+        res = super(UnicodeString, self).alloc(**fields)
+        return res if 'Size' in fields else res.set(Size=res['Characters'].size())
+
 class FILETIME(ndk.FILETIME): pass
 class BLOB(pstruct.type):
     _fields_ = [
         (DWORD, 'Size'),
         (lambda self: dyn.block(self['Size'].li.int()), 'Bytes'),
     ]
+    def alloc(self, **fields):
+        res = super(BLOB, self).alloc(**fields)
+        return res if 'Size' in fields else res.set(Size=res['Bytes'].size())
+
 class IndirectPropertyName(CodePageString): pass
 class ClipboardData(pstruct.type):
     _fields_ = [
@@ -86,6 +102,10 @@ class ClipboardData(pstruct.type):
         (lambda self: dyn.block(self['Size'].li.int()), 'Data'),
         (dyn.padding(4), 'padding(Data)'),
     ]
+    def alloc(self, **fields):
+        res = super(ClipboardData, self).alloc(**fields)
+        return res if 'Size' in fields else res.set(Size=res['Data'].size())
+
 class VersionedStream(pstruct.type):
     _fields_ = [
         (GUID, 'VersionGuid'),
@@ -378,12 +398,20 @@ class DictionaryEntry(pstruct.type):
         (lambda self: dyn.block(self['Length'].li.int()), 'Name'),
     ]
 
+    def alloc(self, **fields):
+        res = super(DictionaryEntry, self).alloc(**fields)
+        return res if 'Length' in fields else res.set(Length=res['Name'].size())
+
 class Dictionary(pstruct.type):
     _fields_ = [
         (DWORD, 'NumEntries'),
         (lambda self: dyn.array(DictionaryEntry, self['NumEntries'].li.int()), 'Entry'),
         (dyn.padding(4), 'Padding'),
     ]
+
+    def alloc(self, **fields):
+        res = super(Dictionary, self).alloc(**fields)
+        return res if 'NumEntries' in fields else res.set(NumEntries=len(res['Entry']))
 
 class PropertyIdentifierAndOffset(pstruct.type):
     def __PropertyIdentifier(self):
@@ -427,6 +455,14 @@ class PropertySet(pstruct.type):
         #(lambda self: dyn.array(Property, self['NumProperties'].li.int()), 'Property'),
         (__Property, 'Property'),
     ]
+
+    def alloc(self, **fields):
+        res = super(PropertySet, self).alloc(**fields)
+        if 'NumProperties' not in fields:
+            res.set(NumProperties=len(res['PropertyIdentifierAndOffset']))
+        if 'Size' not in fields:
+            res.set(Size=sum(res[fld].size() for fld in ['Size', 'NumProperties', 'PropertyIdentifierAndOffset']))
+        return res
 
 class FMTID(GUID):
     def identifier(self):
