@@ -413,6 +413,11 @@ class Dictionary(pstruct.type):
         res = super(Dictionary, self).alloc(**fields)
         return res if 'NumEntries' in fields else res.set(NumEntries=len(res['Entry']))
 
+    def enumerate(self):
+        for index, item in enumerate(self['Entry']):
+            yield index, item['PropertyIdentifier'], item['Name']
+        return
+
 class PropertyIdentifierAndOffset(pstruct.type):
     def __PropertyIdentifier(self):
         if hasattr(self, '__format_identifier__'):
@@ -463,6 +468,18 @@ class PropertySet(pstruct.type):
         if 'Size' not in fields:
             res.set(Size=sum(res[fld].size() for fld in ['Size', 'NumProperties', 'PropertyIdentifierAndOffset']))
         return res
+
+    def enumerate(self):
+        for index, item in enumerate(self['PropertyIdentifierAndOffset']):
+            property = item['Offset'].d.li
+            yield index, item['PropertyIdentifier'], property
+        return
+
+    def iterate(self):
+        for _, identifier, property in self.enumerate():
+            value = {entry['PropertyIdentifier'] : entry['Name'] for _, entry in property.enumerate()} if isinstance(property, Dictionary) else property['Value']
+            yield identifier, value
+        return
 
 class FMTID(GUID):
     def identifier(self):
@@ -526,6 +543,11 @@ class PropertySetStream(pstruct.type):
         (lambda self: dyn.array(PropertySet, self['NumPropertySets'].li.int()), 'PropertySet'),
         (ptype.block, 'Padding'),
     ]
+
+    def enumerate(self):
+        for index, item in enumerate(self['FormatOffset']):
+            yield index, item['FMTID'], item['Offset'].d.li
+        return
 
 if __name__ == '__main__':
     import builtins, operator, os, math, functools, itertools, sys, types
