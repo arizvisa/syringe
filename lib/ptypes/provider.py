@@ -50,7 +50,7 @@ Example usage:
     instance.commit(source=ptypes.provider.name(...))
     print( repr(instance) )
 """
-import sys, os, builtins, itertools, functools
+import sys, os, builtins, itertools, functools, operator
 import bisect, random as _random
 
 from . import config, utils, error
@@ -232,7 +232,7 @@ class proxy(object_backed):
         autoload -- A dict that will be passed to the source type's .load method when data is read from the provider.
         """
 
-        self.instance = source
+        self._object = source
         self.offset = 0
 
         valid = {'autocommit', 'autoload'}
@@ -243,9 +243,13 @@ class proxy(object_backed):
         self.autoload = kwds.get('autoload', None)
         self.autocommit = kwds.get('autocommit', None)
 
+    @property
+    def object(self):
+        return self._object
+
     def size(self):
         '''Return the size of the object.'''
-        res = self.instance
+        res = self._object
         return res.size()
 
     def seek(self, offset):
@@ -258,9 +262,9 @@ class proxy(object_backed):
         '''Consume ``amount`` bytes from the provider.'''
         left, right = self.offset, self.offset + amount
 
-        buf = self.instance.serialize() if self.autoload is None else self.instance.load(**self.autoload).serialize()
+        buf = self._object.serialize() if self.autoload is None else self._object.load(**self.autoload).serialize()
 #        if self.autoload is not None:
-#            Log.debug("{:s}.consume : Autoloading : {:s} : {!r}".format(type(self).__name__, self.instance.instance(), self.instance.source))
+#            Log.debug("{:s}.consume : Autoloading : {:s} : {!r}".format(type(self).__name__, self._object.instance(), self._object.source))
 
         if amount >= 0 and left >= 0 and right <= len(buf):
             result = buf[left : right]
@@ -274,25 +278,25 @@ class proxy(object_backed):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
         left, right = self.offset, self.offset + len(data)
 
-        # if trying to store within the bounds of self.instance..
-        if left >= 0 and right <= self.instance.blocksize():
+        # if trying to store within the bounds of self._object..
+        if left >= 0 and right <= self._object.blocksize():
             from . import ptype, pbinary
-            if isinstance(self.instance, pbinary.partial):
-                self.store_partial(self.instance, self.offset, data)
+            if isinstance(self._object, pbinary.partial):
+                self.store_partial(self._object, self.offset, data)
 
-            elif isinstance(self.instance, ptype.type):
-                self.store_object(self.instance, self.offset, data)
+            elif isinstance(self._object, ptype.type):
+                self.store_object(self._object, self.offset, data)
 
-            elif isinstance(self.instance, ptype.container):
-                self.store_range(self.instance, self.offset, data)
+            elif isinstance(self._object, ptype.container):
+                self.store_range(self._object, self.offset, data)
 
             else:
-                raise NotImplementedError(self.instance.__class__)
+                raise NotImplementedError(self._object.__class__)
 
             self.offset += len(data)
-            self.instance if self.autocommit is None else self.instance.commit(**self.autocommit)
+            self._object if self.autocommit is None else self._object.commit(**self.autocommit)
 #            if self.autocommit is not None:
-#                Log.debug("{:s}.store : Autocommitting : {:s} : {!r}".format(type(self).__name__, self.instance.instance(), self.instance.source))
+#                Log.debug("{:s}.store : Autocommitting : {:s} : {!r}".format(type(self).__name__, self._object.instance(), self._object.source))
             return len(data)
 
         # otherwise, check if nothing is being written
@@ -377,11 +381,11 @@ class proxy(object_backed):
         if robj is not None: yield robj
 
     def __iter__(self):
-        yield self.instance
+        yield self._object
 
     def __repr__(self):
         '''x.__repr__() <=> repr(x)'''
-        return "{:s} -> {:s}".format(super(proxy, self).__repr__(), self.instance.instance())
+        return "{:s} -> {:s}".format(super(proxy, self).__repr__(), self._object.instance())
 
 class disorderly(object_backed):
     def __init__(self, items, **kwds):
@@ -400,6 +404,10 @@ class disorderly(object_backed):
 
         self.autoload = kwds.get('autoload', None)
         self.autocommit = kwds.get('autocommit', None)
+
+    @property
+    def object(self):
+        return self.contiguous
 
     def size(self):
         '''Return the size of the object.'''
@@ -525,6 +533,10 @@ class disorderly(object_backed):
         for item in self.contiguous:
             yield item
         return
+
+    def __repr__(self):
+        '''x.__repr__() <=> repr(x)'''
+        return "{:s} -> [{:s}]".format(super(disorderly, self).__repr__(), ', '.join(map(operator.methodcaller('instance'), self.contiguous)))
 
 class memoryview(backed):
     '''Basic writeable bytes provider.'''
