@@ -481,7 +481,7 @@ class DirectoryEntry(pstruct.type):
 
             # Load the correct child type from whatever was requested.
             if clamp:
-                res = clamped if type is None else self.new(type, source=ptypes.provider.proxy(clamped.l))
+                res = clamped if type is None else self.new(type, source=ptypes.provider.proxy(clamped.l, autocommit={}))
             else:
                 res = backing if type is None else self.new(type, source=source)
             result = res
