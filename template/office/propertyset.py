@@ -1,11 +1,17 @@
 # [MS-OLEPS].pdf
-import ptypes, ndk
+import sys, ptypes
 from ptypes import *
-from ndk.datatypes import *
+from . import intsafe
+from .intsafe import *
 
-class GUID(ndk.GUID):
-    pass
+HRESULT = sys.modules['ndk.datatypes'].HRESULT if 'ndk.datatypes' in sys.modules else intsafe.LONG
+class HRESULT(HRESULT):
+    '''
+    This type should come from ndk.datatypes so that we can easily decode the error code, but
+    since this template might be distributed without it.. we autodetect the module instead.
+    '''
 
+# Variant types
 class VT_(object):
     _values_ = [
         ('EMPTY', 0x0000),              # Type is undefined, and the minimum property set version is 0.
@@ -84,7 +90,7 @@ class UnicodeString(pstruct.type):
         res = super(UnicodeString, self).alloc(**fields)
         return res if 'Size' in fields else res.set(Size=res['Characters'].size())
 
-class FILETIME(ndk.FILETIME): pass
+class FILETIME(intsafe.FILETIME): pass
 class BLOB(pstruct.type):
     _fields_ = [
         (DWORD, 'Size'),

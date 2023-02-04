@@ -1,5 +1,6 @@
-import ptypes, ndk
+import ptypes
 from ptypes import *
+from . import intsafe
 
 import functools, operator, itertools, types, math
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
@@ -14,68 +15,9 @@ class WORD(pint.uint16_t): pass
 class DWORD(pint.uint32_t): pass
 class QWORD(pint.uint64_t): pass
 
-class CLSID(ndk.CLSID):
-    class _Data(pint.uint_t):
-        def summary(self):
-            return "{:0{:d}x}".format(self.int(), self.size() * 2)
-
-    class _Data4(pint.uint_t):
-        def summary(self):
-            res = self.serialize()
-            d1 = ''.join(map('{:02x}'.format, bytearray(res[:2])))
-            d2 = ''.join(map('{:02x}'.format, bytearray(res[2:])))
-            return '-'.join([d1, d2])
-
-    def __Data(self, byteorder, length):
-        class _Data(byteorder(self._Data)):
-            pass
-        _Data.length = length
-        return _Data
-
-    def __Data1(self):
-        if not hasattr(self, 'byteorder'):
-            return dyn.clone(self._Data, length=4)
-        if self.byteorder is ptypes.config.byteorder.bigendian:
-            order = pint.bigendian
-        elif self.byteorder is ptypes.config.byteorder.littleendian:
-            order = pint.littleendian
-        else:
-            raise ValueError(self.byteorder)
-        return self.__Data(order, 4)
-
-    def __Data2and3(self):
-        if not hasattr(self, 'byteorder'):
-            return dyn.clone(self._Data, length=2)
-        if self.byteorder is ptypes.config.byteorder.bigendian:
-            order = pint.bigendian
-        elif self.byteorder is ptypes.config.byteorder.littleendian:
-            order = pint.littleendian
-        else:
-            raise ValueError(self.byteorder)
-        return self.__Data(order, 2)
-
-    def __Data4(self):
-        if not hasattr(self, 'byteorder'):
-            return dyn.clone(self._Data4, length=8)
-        if self.byteorder is ptypes.config.byteorder.bigendian:
-            order = pint.bigendian
-        elif self.byteorder is ptypes.config.byteorder.littleendian:
-            order = pint.littleendian
-        else:
-            raise ValueError(self.byteorder)
-        class _Data4(order(self._Data4)):
-            length = 8
-        return _Data4
-
-    _fields_ = [
-        (__Data1, 'Data1'),
-        (__Data2and3, 'Data2'),
-        (__Data2and3, 'Data3'),
-        (__Data4, 'Data4'),
-    ]
-
-class FILETIME(ndk.FILETIME): pass
-class TIME_T(ndk.FILETIME): pass
+class CLSID(intsafe.CLSID): pass
+class FILETIME(intsafe.FILETIME): pass
+class TIME_T(intsafe.FILETIME): pass
 
 class LengthPrefixedAnsiString(pstruct.type):
     _fields_ = [
