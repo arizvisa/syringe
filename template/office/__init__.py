@@ -1,11 +1,13 @@
 import ptypes
 from ptypes import *
-import six,itertools,functools,operator
+import sys,itertools,functools,operator
 
 ptypes.Config.ptype.clone_name = '{}'
 ptypes.Config.pbinary.littleendian_name = '{}'
 ptypes.Config.pbinary.bigendian_name = 'be({})'
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
+
+integer_types = (int, long) if sys.version_info.major < 3 else int
 
 ### utility functions
 R = lambda f: list(reversed(f))     # reverse a ._fields_ declaration because Micro$oft's documentation lists structures with bit 0 as the high bit
@@ -31,10 +33,10 @@ class RecordUnknown(ptype.block):
         names = self.shortname().split('.')
         if self.type is None:
             res = '?'
-        elif isinstance(self.type, six.integer_types):
+        elif isinstance(self.type, integer_types):
             res = "{:#x}".format(self.type)
         elif hasattr(self.type, '__iter__'):
-            res = "({:s})".format(','.join("{:#x}".format(item) if isinstance(item, six.integer_types) else "{!r}".format(item) for item in self.type))
+            res = "({:s})".format(','.join("{:#x}".format(item) if isinstance(item, integer_types) else "{!r}".format(item) for item in self.type))
         else:
             res = repr(self.type)
         names[-1] = "{:s}<{:s}>[size:{:#x}]".format(names[-1], res, self.blocksize())
@@ -293,7 +295,7 @@ class RecordContainer(parray.block):
         return
 
     def filter(self, type):
-        if isinstance(type, six.integer_types):
+        if isinstance(type, integer_types):
             for item in self:
                 if item['header'].Instance() == type:
                     yield item
@@ -308,7 +310,7 @@ class RecordContainer(parray.block):
 
     def __getitem__(self, index):
         flazy = (lambda item: item['data'].d.li) if getattr(self, 'lazy', False) else (lambda item: item['data'])
-        if hasattr(self, '_values_') and isinstance(index, six.string_types):
+        if hasattr(self, '_values_') and isinstance(index, string_types):
             lookup = { name : value for name, value in self._values_ }
             t = lookup[index]
             iterable = (index for index, item in enumerate(self) if isinstance(flazy(item), t))

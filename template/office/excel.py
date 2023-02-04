@@ -73,7 +73,7 @@ class RecordGeneral(RecordGeneralBase):
         if operator.contains(fields, 'header'):
             return res
         rt, cb = getattr(res.d, 'type', 0), sum(item.size() for item in [res.d, res['extra']])
-        res.h.set(type=rt if isinstance(rt, six.integer_types) else rt[0], length=cb)
+        res.h.set(type=rt if isinstance(rt, integer_types) else rt[0], length=cb)
         return res
 
 class RecordContainer(RecordContainer):
