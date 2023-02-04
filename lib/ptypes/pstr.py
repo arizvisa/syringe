@@ -416,7 +416,7 @@ class string(ptype.type):
 
     def serialize(self):
         if self.initializedQ():
-            return bytes(self.value)
+            return super(string, self).serialize()
         raise error.InitializationError(self, 'string.serialize')
 
     def summary(self, **options):
