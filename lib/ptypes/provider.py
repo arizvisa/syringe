@@ -146,7 +146,7 @@ class backed(bounded):
             return len(data)
         raise error.StoreError(self, left, len(data))
 
-class object_backed(bounded):
+class proxied(bounded):
     '''Provider that is backed by other objects that is backed by other objects that is backed by other objects that is backed by another provider.'''
 
     def __iter__(self):
@@ -192,7 +192,7 @@ class object_backed(bounded):
         #      contiguous interval and most importantly i don't actually need this anymore.
         def recurse(iterable, left, right):
             for item, start, stop in self.__interval__(iterable, left, right):
-                if isinstance(item.source, object_backed):
+                if isinstance(item.source, proxied):
                     iterable, offset, size = iter(item.source), item.getoffset(), item.size()
                     for item in recurse(iterable, offset, offset + size):
                         yield item
@@ -220,8 +220,8 @@ class empty(base):
         Log.info("{:s}.store : Tried to write {:d} bytes to a read-only medium.".format(type(self).__name__, len(data)))
         return len(data)
 
-class proxy(object_backed):
-    """Provider that will read or write it's data to/from the specified ptype.
+class proxy(proxied):
+    """Provider that will read or write its data to/from the specified ptype.
 
     If autoload or autocommit is specified during construction, the object will sync the proxy with it's source before performing any operations requested of the proxied-type.
     """
@@ -387,7 +387,7 @@ class proxy(object_backed):
         '''x.__repr__() <=> repr(x)'''
         return "{:s} -> {:s}".format(super(proxy, self).__repr__(), self._object.instance())
 
-class disorderly(object_backed):
+class disorderly(proxied):
     def __init__(self, items, **kwds):
         '''Instantiate the provider using ``items`` as the backing types.'''
         self.offset, self.contiguous = 0, [item for item in items]
