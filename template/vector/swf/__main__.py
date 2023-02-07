@@ -10,5 +10,14 @@ if __name__ == '__main__':
     a = a.l
     tags = a['tags']
     print(tags)
-    sys.exit(0)
 
+    items = [x['header'] for x in tags]
+    for item in items:
+        item.__class__.debug = True
+    x = items[-5]
+    items = [item.o for item in items]        
+    x.setoffset(x.getoffset(), recurse=True)
+    print(items[-5])
+    print(items[-5].__position__)
+
+    sys.exit(0)

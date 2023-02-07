@@ -801,6 +801,7 @@ class container(type):
 
         # If our field does not exist, then we must be being asked for the end
         # of the container. So we take our current position, and add the size.
+        raise NotImplementedError
         offset, suboffset = self.getposition()
         offset, suboffset = offset, suboffset + self.blockbits()
         return offset + (suboffset // 8), suboffset % 8
@@ -816,32 +817,27 @@ class container(type):
         # out what partial type that we're relative to (if any) and get a calculator.
         if recurse and not callable(recurse):
             p = self.getparent(partial, default=None)
-            recurse = (lambda pos: ((pos[0], pos[0]), utils.byteorder_calculator(1))) if p is None else p.__calculate__
+            recurse = (lambda pos, _: utils.position_calculator(0, pos[0], pos)) if p is None else p.__calculate__
 
         # If we have at least one member, then we need to figure out our
         # lower boundary and seed our calculator at the first member before
         # calculating the location of each of our members.
+        # If we have at least one member
         if recurse and len(self.value or []) > 0:
-            bounds, calculator = recurse(position)
+            calculator = recurse(position, self.blockbits())
+            x = next(calculator)
+            print('trying', self.blockbits(), x)
+            super(container, self).setposition(x)
 
             # Iterate through all of our members using the calculator to
             # figure out the correct position.
-            position, size = next(calculator), 0
+            position = calculator.send(0)
             for item in self.value:
+                print('going', position)
                 item.setposition(position, recurse=recurse)
-
-                # Continue to calculate and aggregate the number of bits we contain.
                 bits = item.bits() if item.initializedQ() else item.blockbits()
-                size += bits
-
-                # Update our calculator with our size and figure out the next position.
                 position = calculator.send(bits)
-
-            # Now we have our size and can figure out where within our container
-            # that our lowest postion should be located at.
-            (start, stop), length = bounds, min(size, 8 * operator.sub(*(bounds)))
-            lowest = (start + (length // 8), start + (length % 8)) if size < length else (stop, 0)
-            return super(container, self).setposition(lowest)
+            return res
         return res
 
     def copy(self, **attrs):
@@ -1014,7 +1010,7 @@ class container(type):
         # validate the index, and figure out whether we can find our parent
         # partial in order to adjust other members that have been shifted.
         _, p = self.value[index], self.getparent(partial, default=None)
-        recurse = (lambda pos: ((pos[0], pos[0]), utils.byteorder_calculator(1))) if p is None else p.__calculate__
+        recurse = (lambda pos, _: utils.position_calculator(0, pos[0], pos)) if p is None else p.__calculate__
 
         # if it's a pbinary element, then swap the old value out into a
         # variable that we can cross-check the size against.
@@ -1027,7 +1023,8 @@ class container(type):
             # if our size doesn't match, then we need to recalculate the
             # container position, and everything that exists after our value.
             if res.bits() != value.bits():
-                bounds, calculator = recurse(value.getposition())
+                calculator = recurse(value.getposition(), value.blockbits())    # FIXME
+                value.setposition(next(calculator))
 
                 # Now we iterate through all the members figuring out their position.
                 position, size = next(calculator), 0
@@ -1040,13 +1037,7 @@ class container(type):
 
                     # And update our calculator with our element size for the next position.
                     position = calculator.send(bits)
-
-                # Now we know where our lowest position is at and we can move to it.
-                (start, stop), length = bounds, min(size, 8 * operator.sub(*reversed(bounds)))
-                position = (start + (length // 8), start + (length % 8)) if size < length else (stop, 0)
-                self.setposition(position)
-
-            # Afterwards just return the value that we assigned.
+                return value
             return value
 
         # if element it's being assigned to is a container, then we can't really
@@ -1083,10 +1074,11 @@ class container(type):
         size += bitmap.size(item) if bitmap.isinstance(item) else item.bits()
 
         # now we can create a calculator and figure out the starting position.
-        bounds, calculator = recurse(self.getposition()); next(calculator)
-        position = calculator.send(size)
+        calculator = recurse(self.getposition(), self.bits())
+        self.setposition(next(calculator))
 
         # and then iterate through the rest of the items adjusting each one.
+        position = calculator.send(0)
         for item in items:
             if bitmap.isinstance(item):
                 bits = bitmap.size(item)
@@ -1097,12 +1089,6 @@ class container(type):
             # adjust for the next position and include the bits to our total.
             position = calculator.send(bits)
             size += bits
-
-        # Now we have our size and can figure out where the lowest offset
-        # in the container should be using some quick math.
-        (start, stop), length = bounds, min(size, 8 * operator.sub(*bounds))
-        lowest = (start + (length // 8), start + (length % 8)) if size < length else (stop, 0)
-        self.setposition(position)
         return result
 
 ### generics
@@ -1112,7 +1098,7 @@ class __array_interface__(container):
     def alloc(self, fields=(), **attrs):
         result = super(__array_interface__, self).alloc(**attrs)
         p = self.getparent(partial, default=None)
-        recurse = (lambda pos: ((pos[0], pos[0]), utils.byteorder_calculator(1))) if p is None else p.__calculate__
+        recurse = (lambda pos, _: utils.position_calculator(0, pos[0], pos)) if p is None else p.__calculate__
 
         # generate an index that we'll use for the allocation.
         if len(fields) > 0 and isinstance(fields[0], tuple):
@@ -1121,10 +1107,11 @@ class __array_interface__(container):
             indices = {index : ("{:d}".format(index), value) for index, value in enumerate(fields)}
 
         # seed our calculator at the container's position and adjust ourselves to it.
-        bounds, calculator = recurse(result.getposition())
+        calculator = recurse(result.getposition(), result.blockbits())
+        self.setposition(next(calculator))
 
         # No we need to go through our members, and figure out what needs to change.
-        position, size = next(calculator), 0
+        position = calculator.send(0)
         for index, item in enumerate(self.value):
             if index in indices:
                 name, value = indices[index]
@@ -1140,17 +1127,8 @@ class __array_interface__(container):
                 else:
                     item, _ = result.value[index], result.value[index].set(value)
 
-            # update our calculator and total with whatever was just processed.
-            bits = item.bits()
+            # update our calculator with whatever was just processed.
             position = calculator.send(item.bits())
-            size += bits
-
-        # before returning our result, we need to calculate the new container position.
-        (start, stop), length = bounds, min(size, 8 * operator.sub(*reversed(bounds)))
-        position = (start + (length // 8), start + (length % 8)) if size < length else (stop, 0)
-        self.setposition(position)
-
-        # now we're good to return the result
         return result
 
     def summary(self, **options):
@@ -1302,11 +1280,12 @@ class __array_interface__(container):
 
         # since we're not initialized, we need to figure out our parent, and create a calculator to start with.
         p = self.getparent(partial, default=None)
-        recurse = (lambda pos: ((pos[0], pos[0]), utils.byteorder_calculator(1))) if p is None else p.__calculate__
-        bounds, calculator = recurse(self.getposition())
+        recurse = (lambda pos, _: utils.position_calculator(0, pos[0], pos)) if p is None else p.__calculate__
+        calculator = recurse(self.getposition(), self.bits())
+        self.setposition(next(calculator))
 
-        # now we just need to iterate through our items, and keep track of the size.
-        self.value, position, size = [], next(calculator), 0
+        # now we just need to iterate through our items updating our calculator.
+        self.value, position = [], calculator.send(0)
         for idx, value in enumerate(items):
             name = "{:d}".format(idx)
             if istype(value) or ptype.isresolveable(value):
@@ -1316,18 +1295,9 @@ class __array_interface__(container):
             else:
                 item = self.new(self._object_, __name__=name, position=position).a.set(value)
 
-            # now we can add our element.
-            self.value.append(res)
-
-            # grab our bits, update our calculator, and the total with its size.
-            bits = item.bite()
-            position = calculator.send(bits)
-            size += bits
-
-        # calculate where our lowest member should be at and reposition ourselves.
-        (start, stop), length = bounds, min(size, 8 * operator.sub(*reversed(bounds)))
-        position = (start + (length // 8), start + (length % 8)) if size < length else (stop, 0)
-        self.setposition(position)
+            # now we can add our element, and then update our calculator.
+            self.value.append(item)
+            position = calculator.send(item.bits())
 
         # set the array length to our number of array members and return.
         self.length = len(self.value)
@@ -1350,14 +1320,15 @@ class __structure_interface__(container):
 
             # as we're going to be assigning everything, figure out a calculator to use.
             p = self.getparent(partial, default=None)
-            recurse = (lambda pos: ((pos[0], pos[0]), utils.byteorder_calculator(1))) if p is None else p.__calculate__
+            recurse = (lambda pos, _: utils.position_calculator(0, pos[0], pos)) if p is None else p.__calculate__
 
-            position = self.value[0].getposition() if len(self.value or []) > 0 else result.getposition()
-            bounds, calculator = recurse(position)
+            position = result.getposition()
+            calculator = recurse(position, result.blockbits())
+            self.setposition(next(calculator))
 
             # now we can iterate through our structure fields to allocate them using
             # the fields that were actually given to us by the caller.
-            position, size = next(calculator), 0
+            position = calculator.send(0)
             for idx, (t, name) in enumerate(self._fields_ or []):
                 if name not in fields:
                     if ptype.isresolveable(t):
@@ -1378,15 +1349,9 @@ class __structure_interface__(container):
                 else:
                     item, _ = result.value[idx], result.value[idx].set(item)
 
-                # update our calculator and size with the item was just processed.
-                bits = item.bits()
-                position = calculator.send(bits)
-                size += bits
-
-            # with our size, we just need to reset our position to the lowest bounds.
-            (start, stop), length = bounds, min(size, 8 * operator.sub(*reversed(bounds)))
-            position = (start + (length // 8), start + (length % 8)) if size < length else (stop, 0)
-            result.setposition(position)
+                # update our calculator with the item was just processed.
+                position = calculator.send(item.bits())
+            return result
         return result
 
     def __append__(self, object):
@@ -1575,7 +1540,7 @@ class __structure_interface__(container):
         # by first searching to see if we have a parent to calculate position.
         if result.initializedQ():
             p = self.getparent(partial, default=None)
-            recurse = (lambda pos: ((pos[0], pos[0]), utils.byteorder_calculator(1))) if p is None else p.__calculate__
+            recurse = (lambda pos, _: utils.position_calculator(0, pos[0], pos)) if p is None else p.__calculate__
 
             # update our current fields with the value we got, and instantiate
             # the index that we'll use to allocate the entire type.
@@ -1601,24 +1566,16 @@ class __structure_interface__(container):
 
             # Finally we seed our calculator with our current position,
             # and update it with whatever our lower boundaries are.
-            bounds, calculator = recurse(self.getposition())
+            calculator = recurse(self.getposition(), self.blockbits())
+            self.setposition(next(calculator))
 
             # We now can just gather the positions, the size, and update every member.
-            position, size = next(calculator), 0
+            position = calculator.send(0)
             for index, item in enumerate(self.value):
                 if index in indices:
                     value = indices[index]
                     item = assign((index, value, position))
-
-                # Figure our item's number of bits, update the size, and then the position.
-                bits = item.bits()
-                position = calculator.send(bits)
-                size += bits
-
-            # Use our size to calculate where our lowest position in the container should be.
-            (start, stop), length = bounds, min(size, 8 * operator.sub(*reversed(bounds)))
-            position = (start + (length // 8), start + (length % 8)) if size < length else (stop, 0)
-            result.setposition(position)
+                position = calculator.send(item.bits())
             return result
         return result.a.set(value, **fields)
 
@@ -1978,20 +1935,82 @@ class partial(ptype.container):
         result = self.object.bitmap()
         return self.__transform__(bitmap.data(result))
 
-    def __calculate__(self, position=(0, 0)):
+    def __calculate__(self, position=(0, 0), bits=0):
         '''Return the interval of the requested position and a coroutine that consumes an arbitrary number of bits while yielding the translated positions according to the current byte order.'''
+        # FIXME: we need to take the bits we're given so that we can calculate the starting position of the first member
         base, = self.getposition()
         length = max(1, min(self.blocksize(), self.length))
-        mask = length - 1
+        mask, (offset, suboffset) = length - 1, position
 
-        # Take our position that we're being asked to start at, and convert
-        # it into an offset relative to our partial type. This will be our goal.
-        # Take our position that we're being asked to start at and convert it
-        # into an offset relative to our partial type. We'll also mask this offset
-        # in order to figure out the lowest boundary in case we're at little endian.
-        offset, suboffset = position
+        # Take our position that we're supposed to start at, and translate
+        # it so that it's relative to our partial instance. Then use it to
+        # calculate how many bits deep we actually are.
         goal = offset - base
-        return (base + goal, base + (goal & ~mask)), utils.position_calculator(length, base, position)
+        res, bytes = goal & ~mask, mask - goal & mask
+        depth = res + 8 * bytes
+
+        # Now we take our bit depth, and add the bit size to figure out
+        # where we would typically stop consuming bits. This is our ending,
+        # and we need to convert this back into an actual seek position.
+        stop = depth + bits
+        seek_offset, seek_suboffset = stop // 8, stop % 8
+        seek_base, seek_depth = seek_offset & ~mask, seek_offset & mask
+
+        # Now we'll need to use our stopping point to figure out where
+        # the base of our container will actually be located at.
+        seek = seek_base + mask - seek_depth, seek_suboffset
+
+        # Our goal is pointing to the where the base of the container starts,
+        # so now we need to add our bits to figure out where the first member
+        # actually starts so that we can seek to actually seek to it.
+        shifted = suboffset + bits
+        translated = res + shifted // 8, res + bits % 8
+        depth = mask - bytes
+
+        # We know how deep we are.. so to figure out where to start, we need
+        # to use whichever size is the smallest (bytes or bits) to figure out
+        # where our lowest offset is going to be at. Then we need to convert
+        # this back into bytes so that we can subtract it from our mask.
+        consumed = min(8 * (mask - bytes), bits)
+        print('need to consume', 8 * bytes, bits, consumed, 'for', goal)
+        bitdepth = suboffset + consumed
+        depth, subdepth = bitdepth // 8, bitdepth % 8
+
+        # lowest = base + res
+        # requested = base + res + bytes
+        # current = base + res + depth
+        #res = goal & ~mask, (goal & ~mask) + min(8 * mask + suboffset, bits + suboffset)
+        #print('fuq', base + res, mask - bytes, depth, subdepth)
+
+        # Figure out the very starting position based on the number of bits that
+        # we calculated for the depth, and yield it so that the caller knows where
+        # to start while we grab the number of bits they wanna consume
+        seek = base + res + (mask - depth), subdepth
+        print('start', seek, bytes, bits)
+        print('base is', mask, (base + res, subdepth), bytes)
+        calculator, bits = utils.position_calculator(length, base, seek), (yield base + res, subdepth)
+        assert next(calculator) == seek
+
+        # Now we can start receiving bits and calculating the next position
+        while True:
+            print('consume', bits)
+            position = calculator.send(bits)
+            print('yield', position)
+            bits = (yield position)
+        return
+
+        #print('bitdepth', depth, bitdepth)
+        #print('current', position)
+        #print('go',position)
+
+        # We know where things are, but now we need to use the number of
+        # bits we were given to figure out where the lowest address of our
+        # container should be at.
+
+        # Take the number of bits we were given and adjust the goal by it in order
+        # to figure out what our lowest boundary will likely be.
+        #print("moving {:d} to {!s} start[{:d}] low[{:d}]".format(bits, (base + offset, suboffset), base + goal, base+res))
+        #return (base + goal, base + res), utils.position_calculator(length, base, position)
 
     def __consumer__(self, iterator, size=None):
         offset, length = self.getoffset(), getattr(self, 'length', Config.integer.size)
@@ -4156,8 +4175,8 @@ if __name__ == '__main__':
             length = 8
 
         x = blah(offset=0)
-        bounds, I = x.__calculate__((8, 0))
-        if bounds == (8, 8) and next(I) == (8, 0) and I.send(0) == (8, 0):
+        I = x.__calculate__((8, 0), 128 * 8)
+        if next(I) == (8, 0) and I.send(0) == (15, 0):
             raise Success
 
     @TestCase
@@ -4166,8 +4185,8 @@ if __name__ == '__main__':
             length = 8
 
         x = blah(offset=8)
-        bounds, I = x.__calculate__((8, 0))
-        if bounds == (8, 8) and next(I) == (8, 0) and I.send(0) == (8, 0):
+        I = x.__calculate__((8, 0), 128 * 8)
+        if next(I) == (8, 0) and I.send(0) == (8, 0):
             raise Success
 
     @TestCase
@@ -4177,8 +4196,8 @@ if __name__ == '__main__':
             blocksize = lambda self: 1024
 
         x = blah(offset=8)
-        bounds, I = x.__calculate__((12, 0))
-        if bounds == (12, 8) and next(I) == (12, 0) and I.send(8 * 4) == (8, 0):
+        I = x.__calculate__((12, 0), 128 * 8)
+        if next(I) == (8, 0) and I.send(0) == (12, 0) and I.send(8 * 4) == (8, 0):
             raise Success
 
     @TestCase
@@ -4188,8 +4207,8 @@ if __name__ == '__main__':
             blocksize = lambda self: 1024
 
         x = blah(offset=8)
-        bounds, I = x.__calculate__((15, 0))
-        if bounds == (15, 8) and next(I) == (15, 0) and I.send(8 * 2) == (13, 0):
+        I = x.__calculate__((15, 0), 128 * 8)
+        if next(I) == (8, 0) and I.send(0) == (15, 0) and I.send(8 * 2) == (13, 0):
             raise Success
 
     @TestCase
@@ -4202,8 +4221,8 @@ if __name__ == '__main__':
         # mathematically we can. seeking to (0, 0), pushes us forward
         # to the next dword at offset 4...which means 16-bits = 4+2
         x = blah(offset=3)
-        bounds, I = x.__calculate__((0, 0))
-        if bounds == (0, -1) and next(I) == (0, 0) and I.send(8 * 2) == (6, 0):
+        I = x.__calculate__((0, 0), 128 * 8)
+        if next(I) == (-1, 0) and I.send(0) == (0, 0) and I.send(8 * 2) == (6, 0):
             raise Success
 
     @TestCase
@@ -4212,8 +4231,8 @@ if __name__ == '__main__':
             length = 16
 
         x = blah(offset=0)
-        bounds, I = x.__calculate__((0, 0))
-        if bounds == (0, 0) and next(I) == (0, 0) and I.send(8 * 16) == (16, 0):
+        I = x.__calculate__((0, 0), 128 * 8)
+        if next(I) == (0, 0) and I.send(0) == (0, 0) and I.send(8 * 16) == (16, 0):
             raise Success
 
     @TestCase
@@ -4222,8 +4241,8 @@ if __name__ == '__main__':
             length = 16
 
         x = blah(offset=4)
-        bounds, I = x.__calculate__((4, 0))
-        if bounds == (4, 4) and next(I) == (4, 0) and I.send(8 * 16) == (16 + 4, 0):
+        I = x.__calculate__((4, 0), 128 * 8)
+        if next(I) == (4, 0) and I.send(0) == (4, 0) and I.send(8 * 16) == (16 + 4, 0):
             raise Success
 
     @TestCase
@@ -4233,8 +4252,20 @@ if __name__ == '__main__':
             blocksize = lambda self: 1024
 
         x = blah(offset=0)
-        bounds, I = x.__calculate__((13, 0))
-        if bounds == (13, 0) and next(I) == (13, 0) and I.send(8) == (12, 0):
+        I = x.__calculate__((13, 0), 128 * 8)
+        if next(I) == (0, 0) and I.send(0) == (13, 0) and I.send(8) == (12, 0):
+            raise Success
+
+    @TestCase
+    def test_partial_calculate_8():
+        class blah(partial):
+            length = 2
+            blocksize = lambda self: 2
+
+        print('-'*10)
+        x = blah(offset=0x7f2c)
+        I = x.__calculate__((0x7f2c, 0), 16)
+        if next(I) == (0x7f2c, 0) and I.send(0) == (0x7f2d, 0) and I.send(8) == (0x7f2c, 0):
             raise Success
 
 if __name__ == '__main__':
