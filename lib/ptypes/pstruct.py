@@ -118,20 +118,15 @@ class __structure_interface__(ptype.container):
         if self.value is None:
             return False
 
-        # otherwise we need to extract the actual and expected sizes.
-        try:
-            size, blocksize = self.size(), self.blocksize()
-        except Exception as E:
-            path = str().join(map("<{:s}>".format, self.backtrace()))
-            Log.warning("type.initializedQ : {:s} : instance.blocksize() raised an exception when attempting to determine the initialization state of the instance : {!s} : {:s}".format(self.instance(), E, path), exc_info=True)
-
-        # if we're under the expected size, then we're uninitialized.
-        else:
-            if size < blocksize:
-                return False
-
         # otherwise we need to check if the fields are initialized at least.
-        return all(self.value[index].initializedQ() for index, _ in enumerate(self._fields_))
+        return len(self._fields_) <= len(self.value) and all(self.value[index].initializedQ() for index, _ in enumerate(self._fields_))
+
+    def __abatedQ(self):
+        size = self.size() if self.initializedQ() else 0
+        return self.blocksize() <= size and len(self.value) < len(self._fields_ or [])
+
+    def __inflatedQ(self):
+        return len(self.value or []) > len(self._fields_ or [])
 
     def __properties__(self):
         result = super(__structure_interface__, self).__properties__()
@@ -139,7 +134,7 @@ class __structure_interface__(ptype.container):
         if self.initializedQ():
             if len(self.value) < len(self._fields_ or []):
                 result['abated'] = True
-            elif len(self.value) > len(self._fields_ or []):
+            elif self.__inflatedQ():
                 result['inflated'] = True
             return result
         return result

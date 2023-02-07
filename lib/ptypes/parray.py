@@ -99,9 +99,7 @@ class __array_interface__(ptype.container):
 
     def __len__(self):
         '''x.__len__() <==> len(x)'''
-        if not self.initializedQ():
-            return self.length
-        return len(self.value)
+        return len(self.value or [])
 
     def insert(self, index, object):
         """Insert ``object`` into ``self`` at the specified ``index``.
@@ -243,6 +241,23 @@ class __array_interface__(ptype.container):
         if prop:
             return u"[{:s}] {:s} {{{:s}}} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, prop, result)
         return u"[{:s}] {:s} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, result)
+
+    def __properties__(self):
+        res = super(__array_interface__, self).__properties__()
+
+        # If we're really not initialized, then there's nothing to do.
+        if self.value is None:
+            return res
+
+        # Otherwise, we need to check our expected length to determine how
+        # we need to modify our properties.
+        if getattr(self, 'length', None) is not None:
+            if self.length < len(self.value):
+                res['inflated'] = True
+            elif self.length > len(self.value):
+                res['abated'] = True
+            return res
+        return res
 
 class type(__array_interface__):
     '''
@@ -442,24 +457,6 @@ class uninitialized(terminated):
 
     def alloc(self, fields=(), **attrs):
         return super(uninitialized, self).alloc(fields, **attrs)
-
-    def __properties__(self):
-        res = super(uninitialized, self).__properties__()
-
-        # If we're really not initialized, then there's nothing to do.
-        if self.value is None:
-            return res
-
-        # Otherwise, we're actually initialized but not entirely and we need
-        # to fix up our properties a bit to clean up the rendering of the instance.
-        # fix up our properties a bit to clean up our rendering of the instance.
-        if self.length is not None:
-            if self.length < len(self.value):
-                res['inflated'] = True
-            elif self.length > len(self.value):
-                res['abated'] = True
-            return res
-        return res
 
     def initializedQ(self):
         '''Returns True if all elements are partial or completely initialized.'''
