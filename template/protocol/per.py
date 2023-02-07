@@ -1,10 +1,7 @@
 '''
 PER-encoding utilities
 '''
-import ptypes
-import math
-
-from . import ber
+import math, ptypes, protocol.ber as ber
 from ptypes import *
 
 ### PER-encoded length

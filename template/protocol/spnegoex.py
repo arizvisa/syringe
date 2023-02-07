@@ -1,10 +1,10 @@
-import ptypes, ndk
+import ptypes, protocol.intsafe as intsafe
 from ptypes import *
-from ndk.datatypes import *
+from protocol.intsafe import *
 
 ### [MS-NEGOEX]
-class AUTH_SCHEME(ndk.GUID): pass
-class CONVERSATION_ID(ndk.GUID): pass
+class AUTH_SCHEME(GUID): pass
+class CONVERSATION_ID(GUID): pass
 
 class ALERT_VECTOR(pstruct.type):
     _fields_ = [

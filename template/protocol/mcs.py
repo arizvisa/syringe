@@ -1,12 +1,8 @@
 '''
 Multipoint communication service protocol (T.125)
 '''
-import logging
-
-import ptypes
+import logging, ptypes, protocol.gcc as gcc, protocol.ber as ber, protocol.per as per
 from ptypes import *
-
-from protocol import gcc, ber, per
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
@@ -101,7 +97,7 @@ class ConnectInitial(ber.SEQUENCE):
 class ConnectResponse(ber.SEQUENCE):
     tag = 102
 
-    class Result(ber.OCTET_STRING):
+    class Result(ber.ENUMERATED):
         def str(self):
             res = self.cast(Result, width=8 * self.size())
             return res.str()
@@ -485,6 +481,15 @@ class Segmentation(pbinary.integer):
         return 2
 
 class SendDataPDU(pstruct.type):
+    '''
+    Microsoft's RDP implementation handles each of the available Send-
+    Data types (SendDataRequest, SendDataIndication, UniformSendDataRequest, and
+    UniformSendDataIndication) with the same handler since they have the exact
+    same structure. Due to this, we implement all of them via this definition
+    and use it as a base-class when assigning each one individually so that we
+    can test against all of them via a single individual type.
+    '''
+
     @pbinary.bigendian
     class _priority_segmentation(pbinary.struct):
         _fields_ = [

@@ -1,9 +1,7 @@
 '''
 Multipoint Application Sharing protocol (T.128)
 '''
-import functools, itertools, types, builtins, operator, sys, six
-
-import ptypes, protocol.gcc as gcc
+import sys, six, ptypes, protocol.gcc as gcc
 from ptypes import *
 
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
@@ -82,6 +80,8 @@ class PDUType(ptype.definition):
             ('demandActive', 1),
             ('requestActive', 2),
             ('serverRedirect', 10),
+
+            ('undocumented9', 9),   # implementation at rdpwd.sys+13022 (SaveClientRandom?)
         ]
 
 class CapabilitySetType(ptype.definition):
@@ -98,6 +98,26 @@ class CapabilitySetType(ptype.definition):
             ('pointerCapabilitySet', 8),
             ('activationCapabilitySet', 7),
             ('shareCapabilitySet', 9),
+
+            ('soundCapabilitySet', 12),
+            ('inputCapabilitySet', 13),
+            ('fontCapabilitySet', 14),
+            ('brushCapabilitySet', 15),
+            ('glyphCacheCapabilitySet', 16),
+            ('offscreenCacheCapabilitySet', 17),
+            ('bitmapCacheHostSupportCapabilitySet', 18),
+            ('bitmapCacheCapabilitySetRevision2', 19),
+            ('virtualChannelCapabilitySet', 20),
+            ('drawNineGridCacheCapabilitySet', 21),
+            ('drawGdiPlusCapabilitySet', 22),
+            ('railCapabilitySet', 23),
+            ('windowCapabilitySet', 24),
+            ('desktopCompositionCapabilitySet', 25),
+            ('multipleFragmentUpdateCapabilitySet', 26),
+            ('largePointerCapabilitySet', 27),
+            ('surfaceCommandsCapabilitySet', 28),
+            ('bitmapCodecsCapabilitySet', 29),
+            ('frameAcknowledgementCapabilityType', 30),
         ]
 
 class PDUType2(ptype.definition):
@@ -106,12 +126,12 @@ class PDUType2(ptype.definition):
     class type(pint.enum, pint.uint8_t):
         _values_ = [
             ('application', 25),
-            ('control', 20),
+            ('control', 20),            # implemented at rdpwd.sys+1252f
             ('font', 11),
             ('flowResponse', 66),
             ('flowStop', 67),
             ('flowTest', 65),
-            ('input', 28),
+            ('input', 28),              # implemented at rdpwd.sys+1251e
             ('mediatedControl', 29),
             ('pointer', 27),
             ('remoteShare', 30),
@@ -120,6 +140,26 @@ class PDUType2(ptype.definition):
             ('updateCapability', 32),
             ('windowActivation', 23),
             ('windowList', 24),
+
+            ('refreshRectangle', 33),   # implemented at rdpwd.sys+1250e
+            ('playSound', 34),
+            ('suppressOutput', 35),     # implemented at rdpwd.sys+124fe
+            ('shutdownRequest', 36),    # implemented at rdpwd.sys+124ee
+            ('shutdownDenied', 37),
+            ('saveSessionInfo', 38),
+            ('fontList', 39),           # implemented at rdpwd.sys+1253f
+            ('fontMap', 40),
+            ('setKeyboardIndicators', 41),
+            ('bitmapCachePersistentList', 43),
+            ('bitmapCacheErrorPDU', 44),
+            ('setKeyboardIMEStatus', 45),
+            ('offscreenCacheErrorPDU', 46),
+            ('setErrorInfoPDU', 47),
+            ('drawNineGridErrorPDU', 48),
+            ('drawGdiPlusErrorPDU', 49),
+            ('arcStatusPDU', 50),
+            ('statusInfoPDU', 54),
+            ('monitorLayoutPDU', 55),
         ]
 
 class PDUTypeFlow(ptype.definition):
@@ -189,6 +229,11 @@ class GeneralCapabilitySet(pstruct.type):
             (1, 'FASTPATH_OUTPUT_SUPPORTED'),
         ]
 
+    def __refreshRectSupport(self):
+        return pint.uint_t if self.blocksize() < 22 else Boolean16
+    def __suppressOutputSupport(self):
+        return pint.uint_t if self.blocksize() < 24 else Boolean16
+
     _fields_ = [
         (OSMajorType, 'osMajorType'),
         (OSMinorType, 'osMinorType'),
@@ -201,8 +246,10 @@ class GeneralCapabilitySet(pstruct.type):
         (Integer16, 'generalCompressionLevel'),
         (Integer16, 'pad2octetsC'),
 
-        (Boolean16, 'refreshRectSupport'),
-        (Boolean16, 'suppressOutputSupport'),
+        #(Boolean16, 'refreshRectSupport'),
+        #(Boolean16, 'suppressOutputSupport'),
+        (__refreshRectSupport, 'refreshRectSupport'),
+        (__suppressOutputSupport, 'suppressOutputSupport'),
     ]
 
 @pbinary.littleendian
@@ -336,6 +383,9 @@ class OrderCapabilitySet(pstruct.type):
             ('frameSupport', 9),
             ('opaqueRectangleSupport', 10),
             ('desktopSaveSupport', 11),
+            #('undefinedOrder12', 12),
+            #('undefinedOrder13', 13),
+            #('undefinedOrder14', 14),
             ('multipleDestinationBltSupport', 15),
             ('multiplePatternBltSupport', 16),
             ('multipleScreenBltSupport', 17),
@@ -344,10 +394,15 @@ class OrderCapabilitySet(pstruct.type):
             ('polygonSCSupport', 20),
             ('polygonCBSupport', 21),
             ('polylineSupport', 22),
+            #('undefinedOrder23', 23),
             ('fastGlyphSupport', 24),
             ('ellipseSCSupport', 25),
             ('ellipseCBSupport', 26),
             ('glyphIndexSupport', 27),
+            #('undefinedOrder28', 28),
+            #('undefinedOrder29', 29),
+            #('undefinedOrder30', 30),
+            #('undefinedOrder31', 31),
         ]
 
     _fields_ = [
@@ -463,6 +518,13 @@ class CombinedCapabilities(pstruct.type):
         return res if 'numberCapabilities' in fields else res.set(numberCapabilities=len(res['capabilitySets']))
 
 ### PDUType definitions
+
+# XXX: Microsoft's ms-rdpbcgr specification didn't describe the following structures
+#      as an enumeration and so they initially weren't properly implemented.  After
+#      realizing this, the definitions were then ported to the T.128 naming scheme.
+#      So don't be surprised if you see mixing-and-matching of ms-rdpbcgr vs T.128
+#      naming schemes.
+
 @pbinary.littleendian
 class PDUShareType(pbinary.struct):
     _fields_ = [
@@ -492,6 +554,14 @@ class ShareControlHeader(pstruct.type):
         res.append("pduSource={:s}".format(self['pduSource'].summary()))
         res.append("pduType={:s}({:d}) protocolVersion={:d}".format(self['pduType'].item('type').str(), self['pduType']['type'], self['pduType']['protocolVersion']))
         return ' '.join(res)
+
+class PACKET_COMPR_(pbinary.enum):
+    width, _values_ = 4, [
+        ('TYPE_8K', 0x0),
+        ('TYPE_64K', 0x1),
+        ('TYPE_RDP6', 0x2),
+        ('TYPE_RDP61', 0x3),
+    ]
 
 class ShareControlPDU(pstruct.type):
     def __shareControlPacket(self):
@@ -639,6 +709,16 @@ class StreamId(pint.enum, Integer8):
         ('streamHighPriority', 0x4),
     ]
 
+@pbinary.littleendian
+class PACKET_(pbinary.flags):
+    _fields_ = [
+        (1, 'FLUSHED'),
+        (1, 'AT_FRONT'),
+        (1, 'COMPRESSED'),
+        (1, 'RESERVED'),
+        (PACKET_COMPR_, 'CompressionTypeMask'),
+    ]
+
 class ShareDataHeader(pstruct.type):
     _fields_ = [
         (ShareId, 'shareId'),
@@ -654,18 +734,18 @@ class ShareDataHeader(pstruct.type):
 
 class ShareDataPacket(pstruct.type):
     def __data(self):
-        res = sum(self[fld].li.size() for fld in ['pduType2','compressedType','compressedLength'])
-        if self['compressedType']['COMPRESSED']:
+        res = sum(self[fld].li.size() for fld in ['pduType2','generalCompressedType','generalCompressedLength'])
+        if self['generalCompressedType']['COMPRESSED']:
             return dyn.block(max(0, self.blocksize() - res))
         return PDUType2.withdefault(self['pduType2'].li.int(), ptype.block, length=max(0, self.blocksize() - res))
 
     def __unparsed(self):
-        res = sum(self[fld].li.size() for fld in ['pduType2','compressedType','compressedLength','data'])
+        res = sum(self[fld].li.size() for fld in ['pduType2','generalCompressedType','generalCompressedLength','data'])
         return dyn.block(max(0, self.blocksize() - res))
 
     _fields_ = [
         (PDUType2.type, 'pduType2'),
-        (Integer8, 'generalCompressedType'),
+        (PACKET_, 'generalCompressedType'),
         (Integer16, 'generalCompressedLength'),
         (__data, 'data'),
         (__unparsed, 'undefined'),  # FIXME: this padding is based on the blocksize because I can't really figure out how the PDUType2's are supposed to be sized
@@ -752,6 +832,24 @@ class UpdatePDU(pstruct.type):
 
     def summary(self):
         return "updateType={:s} updateData={:s}".format(self['updateType'].summary(), self['updateData'].instance())
+
+class RDP_ORDER_(pbinary.flags):
+    _fields_ = [
+        (1, 'TINY'),
+        (1, 'SMALL'),
+        (1, 'LASTBOUNDS'),
+        (1, 'DELTA'),
+        (1, 'CHANGE'),
+        (1, 'BOUNDS'),
+        (1, 'SECONDARY'),
+        (1, 'PRIMARY'),
+    ]
+
+class UpdateOrder(pstruct.type):
+    _fields_ = [
+        (RDP_ORDER_, 'updateHeader'),
+        (Integer16, 'updateSize'),
+    ]
 
 @UpdateType.define
 class UpdateOrdersPDU(pstruct.type):
@@ -923,6 +1021,7 @@ class KeyboardEvent(pstruct.type):
     ]
 
 class InputEvent(pstruct.type):
+    # FIXME: the event might be the wrong structure and misdefined for Microsoft's implementation
     class Choice(pbinary.enum):
         length, _values_ = 3, [
             ('pointingDevice', 0),

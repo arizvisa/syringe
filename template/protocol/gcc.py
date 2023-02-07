@@ -1,10 +1,8 @@
 '''
 Generic Conference Control protocol (T.124)
 '''
-import sys, ptypes
+import sys, ptypes, protocol.ber as ber, protocol.per as per
 from ptypes import *
-
-from protocol import ber, per
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
