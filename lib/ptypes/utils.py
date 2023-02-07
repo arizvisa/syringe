@@ -400,9 +400,10 @@ def memoize(*kargs, **kattrs):
 
     if no memoize arguments were provided, try keying the function's result by _all_ of it's arguments.
     '''
-    F_VARARG = 0x4
-    F_VARKWD = 0x8
-    F_VARGEN = 0x20
+    CO_VARARG = 0x4
+    CO_VARKEYWORDS = 0x8
+    CO_NESTED = 0x10
+    CO_VARGENERATOR = 0x20
     kargs = list(kargs)
     kattrs = tuple((o, a) for o, a in sorted(kattrs.items()))
 
@@ -418,12 +419,12 @@ def memoize(*kargs, **kattrs):
         cache = {}
         co = fn.__code__
         flags, varnames = co.co_flags, iter(co.co_varnames)
-        if (flags & F_VARGEN) != 0:
+        if (flags & CO_VARGENERATOR) != 0:
             raise AssertionEerror("Not able to memoize {!r} generator function".format(fn))
         argnames = islice(varnames, co.co_argcount)
         c_positional = tuple(argnames)
         c_attribute = kattrs
-        c_var = (next(varnames) if flags & F_VARARG else None, next(varnames) if flags & F_VARKWD else None)
+        c_var = (next(varnames) if flags & CO_VARARG else None, next(varnames) if flags & CO_VARKEYWORDS else None)
         if not kargs and not kattrs:
             kargs[:] = itertools.chain(c_positional, filter(None, c_var))
         def key(*args, **kwds):
@@ -483,20 +484,21 @@ def memoize_method(*karguments, **kattributes):
     # Define a utility function for extracting the known parameter names from a function object
     def extract_parameters(F):
         '''Extract the names for all positional parameters and any variable length parameters available for the callable `F`.'''
-        F_VARARG = 0x4
-        F_VARKWD = 0x8
-        F_VARGEN = 0x20
+        CO_VARARG = 0x4
+        CO_VARKEYWORDS = 0x8
+        CO_NESTED = 0x10
+        CO_VARGENERATOR = 0x20
 
         # Check some of the attributes of the code type and verify that it's a proper candidate
         co = F.__code__
         flags, varnames = co.co_flags, iter(co.co_varnames)
-        if (flags & F_VARGEN):
+        if (flags & CO_VARGENERATOR):
             raise TypeError("Unable to memoize a callable ({!s}) that is a generator type.".format(F))
 
         # Extract the positional argument names including any variable argument names
         items = islice(varnames, co.co_argcount)
         positional_arguments = tuple(items)
-        variable_arguments = (next(varnames) if flags & F_VARARG else None, next(varnames) if flags & F_VARKWD else None)
+        variable_arguments = (next(varnames) if flags & CO_VARARG else None, next(varnames) if flags & CO_VARKEYWORDS else None)
 
         # Return the argument names and a tuple of the variable arguments that are available
         return positional_arguments, variable_arguments
@@ -602,6 +604,12 @@ def memoize_method(*karguments, **kattributes):
     # Otherwise our parameters are the arguments that we use to make a key,
     # and we need to need to return a closure to receive the callable to decorate.
     return prepare
+
+def cell(*args):
+    '''Convert arguments into a tuple of cells that reference them.'''
+    if sys.version_info.major < 3:
+        return tuple(((lambda item: lambda : item)(item).func_closure[0]) for item in args)
+    return tuple(((lambda item: lambda : item)(item).__closure__[0]) for item in args)
 
 if not any(hasattr(memoize_method, __attribute__) for __attribute__ in ['func_code', '__code__']):
     import logging
@@ -1620,6 +1628,39 @@ if __name__ == '__main__':
         I = utils.position_calculator(16, base=0, position=(13, 0))
         if next(I) == (13, 0) and I.send(8) == (12, 0):
             raise Success
+
+    @TestCase
+    def test_memoize_closure_0():
+        count = 0
+        @utils.memoize('arg')
+        def f(arg):
+            count += 1
+            return arg
+        x = f(5)
+        if f(5) == x and count == 1:
+            raise Success
+
+    #def fuck():
+    #    count = 0
+    #    def f(arg):
+    #        count += 1
+    #        return arg
+    #    #print(f(5))
+    #    #print(count)
+    #    return f
+    #f=fuck()
+    #print(f.__closure__)
+
+    #copied = cell(*(item.cell_contents for item in f.__closure__))
+    #for x in f.__closure__:
+    #    print(x.cell_contents)
+    #count += 1
+    #for x in dir(f): print(x)
+    #for x in dir(f.__code__):
+    #    if x.startswith('co_'):
+    #        print(x, getattr(f.__code__, x))
+    #print(f.__globals__.keys())
+
 
 if __name__ == '__main__':
     import logging
