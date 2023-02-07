@@ -111,7 +111,7 @@ class SerializationError(ObjectBase):
     def __str__(self):
         return ' : '.join((self.objectname(), self.instance(), self.path(), super(SerializationError, self).__str__()))
 
-class LoadError(SerializationError, exceptions.EnvironmentError):
+class LoadError(SerializationError): #, exceptions.RuntimeError):
     """Error while initializing object from source"""
     def __init__(self, object, consumed=0, **kwds):
         super(LoadError, self).__init__(object, **kwds)
@@ -123,7 +123,7 @@ class LoadError(SerializationError, exceptions.EnvironmentError):
             return '{:s} : {:s} : Unable to consume {:+#x} from source ({:s})'.format(self.instance(), self.path(), consumed, super(LoadError, self).__str__())
         return super(LoadError, self).__str__()
 
-class CommitError(SerializationError, exceptions.EnvironmentError):
+class CommitError(SerializationError): #, exceptions.RuntimeError):
     """Error while committing object to source"""
     def __init__(self, object, written=0, **kwds):
         super(CommitError, self).__init__(object, **kwds)
@@ -135,31 +135,31 @@ class CommitError(SerializationError, exceptions.EnvironmentError):
             return '{:s} : wrote {:+#x} : {:s}'.format(self.instance(), written, self.path())
         return super(CommitError, self).__str__()
 
-class MemoryError(SerializationError, exceptions.MemoryError):
+class MemoryError(SerializationError): #, exceptions.MemoryError):
     """Out of memory or unable to load type due to not enough memory"""
 
 ### errors that happen due to different requests on a ptypes trie
 class RequestError(MethodBaseWithMessage):
     """Error that happens when requesting from a ptypes trie."""
 
-class TypeError(RequestError, exceptions.TypeError):
+class TypeError(RequestError):  #, exceptions.TypeError):
     """Error while generating type or casting to type"""
-class InputError(RequestError, exceptions.ValueError):
+class InputError(RequestError): #, exceptions.ValueError):
     """Source has reported termination of input"""
-class ItemNotFoundError(RequestError, exceptions.ValueError):
+class ItemNotFoundError(RequestError):  #, exceptions.ValueError):
     """Traversal or search was unable to locate requested type or value"""
-class InitializationError(RequestError, exceptions.ValueError):
+class InitializationError(RequestError):    #, exceptions.ValueError):
     """Object is uninitialized"""
 
 ### assertion errors. doing things invalid
-class AssertionError(MethodBaseWithMessage, exceptions.AssertionError):
+class AssertionError(MethodBaseWithMessage):    #, exceptions.AssertionError):
     """Assertion error where the implementation fails a sanity check"""
 
 class UserError(AssertionError):
     """User tried to do something invalid (assertion)"""
 class DeprecationError(AssertionError):
     """Functionality has been deprecated"""
-class ImplementationError(AssertionError, exceptions.NotImplementedError):
+class ImplementationError(AssertionError):  #, exceptions.NotImplementedError):
     """Functionality is currently unimplemented"""
-class SyntaxError(AssertionError, exceptions.SyntaxError):
+class SyntaxError(AssertionError):  #, exceptions.SyntaxError):
     """Syntax of a definition is incorrect"""
