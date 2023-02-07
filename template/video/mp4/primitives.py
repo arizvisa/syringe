@@ -25,6 +25,10 @@ class pQTType(pQTInt):
     def __ne__(self, other):
         return not(self.__eq__(other))
 
+    # Seems that Py3 deletes the following method if you define __eq__ and __ne__.
+    def __hash__(self):
+        return super(pQTType, self).__hash__()
+
     def set(self, value):
         if isinstance(value, (bytes, bytearray)):
             octets = bytearray(value)
