@@ -48,7 +48,7 @@ class CompressedData(ptype.encoded_t):
         compressed_block = self._compress(block)
         print('%s: compressed %x to %x bytes'%(self.__class__.__name__,len(block),len(compressed_block)))
         return super(CompressedData,self).encode(ptype.block(length=len(compressed_block)).set(compressed_block))
-    @ptypes.utils.memoize_method(self=lambda self: self.value, attrs=lambda self: tuple(sorted(self.items())))
+    @ptypes.utils.memoize_method(self=lambda self: self.value, attrs=lambda self: frozenset(self.items()))
     def decode(self, object, **attrs):
         block = object.serialize()
         decompressed_block = self._decompress(block)
