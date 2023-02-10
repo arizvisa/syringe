@@ -523,6 +523,36 @@ def riterate(bitmap):
         yield bool(value)
     return
 
+#def levenshtein(first, second):
+#    '''
+#    Calculate the Levenshtein distance between two strings. ie: The number of transformations required to transform one
+#    string to the other.
+#    '''
+#
+#    if len(first) > len(second):
+#        first, second = second, first
+#
+#    if len(second) == 0:
+#        return len(first)
+#
+#    first_length    = len(first)  + 1
+#    second_length   = len(second) + 1
+#
+#    distance_matrix = [range(second_length) for x in range(first_length)]
+#
+#    for i in range(1, first_length):
+#        for j in range(1, second_length):
+#            deletion     = distance_matrix[i-1][j] + 1
+#            insertion    = distance_matrix[i][j-1] + 1
+#            substitution = distance_matrix[i-1][j-1]
+#
+#            if first[i-1] != second[j-1]:
+#                substitution += 1
+#
+#            distance_matrix[i][j] = min(insertion, deletion, substitution)
+#
+#    return distance_matrix[first_length-1][second_length-1]
+
 def shannon(bitmap):
     '''Calculate the entropy for the bits in a bitmap.'''
     Flog2 = (lambda x: math.log(x, 2)) if sys.version_info[0] < 3 else math.log2

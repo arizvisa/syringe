@@ -1626,26 +1626,6 @@ class container(base):
         state, self.source, self.attributes, self.ignored, self.parent, self.position = state
         super(container, self).__setstate__(state)
 
-class undefined(type):
-    """An empty ptype that is eternally undefined"""
-    def size(self):
-        return self.blocksize()
-    def load(self, **attrs):
-#        self.value = utils.padding.fill(self.blocksize(), self.padding)
-        self.value = b''
-        return self
-    def commit(self, **attrs):
-        return self
-    def initializedQ(self):
-        return False if self.value is None else True
-    def serialize(self):
-#        return utils.padding.fill(self.blocksize(), self.padding)
-        return self.value or b''
-    def summary(self, **options):
-        return '...'
-    def details(self, **options):
-        return self.summary(**options)
-
 class block(type):
     """A ptype that can be accessed as an array"""
     def __getitem__(self, index):
@@ -1688,6 +1668,19 @@ class block(type):
         res = bytearray(self.value)
         res[index] = value
         self.value = bytes(res)
+
+class undefined(block):
+    """An empty ptype that is pretty much always empty...except when it's not."""
+    length = 0
+    def __init__(self, **attrs):
+        attrs.setdefault('value', b'')
+        return super(undefined, self).__init__(**attrs)
+    def initializedQ(self):
+        return True if self.blocksize() <= len(self.value or b'') else False
+    def serialize(self):
+        return self.value or b''
+    def summary(self, **options):
+        return super(undefined, self).summary() if self.value else '...'
 
 #@utils.memoize('cls', newattrs=lambda n:tuple(sorted(n().items())))
 def clone(cls, **newattrs):

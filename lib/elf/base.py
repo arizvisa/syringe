@@ -23,7 +23,7 @@ class signed_long_long(pint.sint64_t): pass
 class unsigned_long_long(pint.uint64_t): pass
 
 class void(ptype.undefined):
-    length = 1
+    pass
 class void_star(ptype.pointer_t):
     _object_ = void
 class uintptr_t(ptype.pointer_t):
