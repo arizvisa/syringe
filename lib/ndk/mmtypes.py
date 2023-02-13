@@ -65,21 +65,55 @@ class SECTION_BASIC_INFORMATION(pstruct.type):
         (ULONG, 'Attributes'),
         (LARGE_INTEGER, 'Size'),
     ]
+pbinary.partial(_objects_=pbinary.flags, _fields_=[(1,'hi'),(31,'no')]).load(source=ptypes.prov.bytes(b'\x80\x00\x00\x01'))
+class SECTION_IMAGE_INFORMATION(pstruct.type, versioned):
+    class _ImageFlags(pbinary.flags):
+        _fields_ = [
+            (1, 'ComPlusNativeReady'),
+            (1, 'ComPlusILOnly'),
+            (1, 'ImageDynamicallyRelocated'),
+            (1, 'ImageMappedFlat'),
+            (1, 'BaseBelow4gb'),
+            (1, 'ComPlusPrefer32bit'),
+            (2, 'Reserved'),
+        ]
+    def __init__(self, **attrs):
+        super(SECTION_IMAGE_INFORMATION, self).__init__(**attrs)
+        integer = ULONG if not getattr(self, 'WIN64', False) else ULONGLONG
+        f = self._fields_ = [
+            (PVOID, 'TransferAddress'),
+            (ULONG, 'StackZeroBits'),
+            (dyn.block(0 if not getattr(self, 'WIN64', False) else 4), 'padding(StackZeroBits)'),
+            (integer, 'MaximumStackSize'),
+            (integer, 'CommittedStackSize'),
+        ]
 
-class SECTION_IMAGE_INFORMATION(pstruct.type):
-    _fields_ = [
-        (PVOID, 'EntryPoint'),
-        (ULONG, 'StackZeroBits'),
-        (ULONG, 'StackReserved'),
-        (ULONG, 'StackCommit'),
-        (ULONG, 'ImageSubsystem'),
-        (WORD, 'SubSystemVersionLow'),
-        (WORD, 'SubSystemVersionHigh'),
-        (ULONG, 'Unknown1'),
-        (ULONG, 'ImageCharacteristics'),
-        (ULONG, 'ImageMachineType'),
-        (dyn.array(ULONG, 3), 'Unknown2'),
-    ]
+        f.extend([
+            (ULONG, 'SubSystemType'),
+            (USHORT, 'SubSystemMinorVersion'),
+            (USHORT, 'SubSystemMajorVersion'),
+        ])
+
+        if not getattr(self, 'WIN64', False):
+            f.extend([
+                (ULONG, 'GpValue'),
+            ])
+        else:
+            f.extend([
+                (USHORT, 'MajorOperatingSystemVersion'),
+                (USHORT, 'MinorOperatingSystemVersion'),
+            ])
+
+        f.extend([
+            (USHORT, 'ImageCharacteristics'),
+            (USHORT, 'DllCharacteristics'),
+            (USHORT, 'Machine'),
+            (UCHAR, 'ImageContainsCode'),
+            (UCHAR, 'ImageFlags'),  # FIXME
+            (ULONG, 'LoaderFlags'),
+            (ULONG, 'ImageFileSize'),
+            (ULONG, 'CheckSum'),
+        ])
 
 @pbinary.littleendian
 class SEGMENT_FLAGS(pbinary.flags):

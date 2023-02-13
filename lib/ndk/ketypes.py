@@ -375,6 +375,26 @@ class KGDTENTRY(pstruct.type):
         (pbinary.bigendian(_Bits), 'Bits'),
     ]
 
+class LDT_ENTRY(pstruct.type):
+    class _Bits(pbinary.flags):
+        _fields_ = [
+            (8, 'BaseMid'),
+            (5, 'Type'),
+            (2, 'Dpl'),
+            (1, 'Pres'),
+            (4, 'LimitHi'),
+            (1, 'Sys'),
+            (1, 'Reserved_0'),
+            (1, 'Default_Big'),
+            (1, 'Granularity'),
+            (8, 'BaseHi'),
+        ]
+    _fields_ = [
+        (USHORT, 'LimitLow'),
+        (USHORT, 'BaseLow'),
+        (pbinary.bigendian(_Bits), 'Bits'),
+    ]
+
 class KGDTENTRY64(pstruct.type):
     class _Bits(pbinary.flags):
         _fields_ = [
