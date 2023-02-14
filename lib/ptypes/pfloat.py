@@ -92,26 +92,33 @@ Example usage:
     print(float(instance))
 """
 import builtins, math
-from . import ptype, pint, bitmap, error
+from . import ptype, pint, bitmap, error, utils
 
 from . import config
 Config = config.defaults
 Log = config.logging.getLogger('.'.join([Config.log.name, 'pfloat']))
 
-def setbyteorder(endianness):
-    if endianness in [config.byteorder.bigendian, config.byteorder.littleendian]:
+def setbyteorder(order):
+    if order in [config.byteorder.bigendian, config.byteorder.littleendian]:
+        result = float_t.byteorder
         for name, definition in globals().items():
-            if definition is not type and isinstance(definition, builtins.type) and issubclass(definition, type) and getattr(definition, 'byteorder', config.defaults.integer.order) != endianness:
-                res = dict(definition.__dict__)
-                res['byteorder'] = endianness
-                globals()[name] = builtins.type(definition.__name__, definition.__bases__, res)     # re-instantiate types
+            if definition is not type and isinstance(definition, builtins.type) and issubclass(definition, type) and getattr(definition, 'byteorder', config.defaults.integer.order) != order:
+                ns = dict(definition.__dict__)
+                ns['byteorder'] = order
+                globals()[name] = builtins.type(definition.__name__, definition.__bases__, ns)     # re-instantiate types
             continue
-        return
-    elif getattr(endianness, '__name__', '').startswith('big'):
+        return result
+    elif isinstance(order, utils.string_types):
+        if order.startswith('big'):
+            return setbyteorder(config.byteorder.bigendian)
+        elif order.startswith('little'):
+            return setbyteorder(config.byteorder.littleendian)
+        raise ValueError("An unknown byteorder was specified ({:s}) for floating-point types.".format(order))
+    elif getattr(order, '__name__', '').startswith('big'):
         return setbyteorder(config.byteorder.bigendian)
-    elif getattr(endianness, '__name__', '').startswith('little'):
+    elif getattr(order, '__name__', '').startswith('little'):
         return setbyteorder(config.byteorder.littleendian)
-    raise ValueError("Unknown integer endianness {!r}".format(endianness))
+    raise ValueError("Unknown floating-point byteorder {!r}".format(order))
 
 def bigendian(ptype):
     '''Will convert a pfloat.type to bigendian form'''

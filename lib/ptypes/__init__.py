@@ -15,12 +15,29 @@ def setsource(provider):
     return provider
 
 ## globally changing the byte order
-def setbyteorder(endianness):
+def setbyteorder(order):
     '''
     Sets the integer byte order to the endianness specified for all non-binary types.
     Can be either config.byteorder.bigendian or config.byteorder.littleendian.
     '''
-    [ module.setbyteorder(endianness) for module in [ptype, pint, pfloat] ]
+    import builtins
+    if order in (config.byteorder.bigendian, config.byteorder.littleendian):
+        [ module.setbyteorder(order) for module in [ptype, pint, pfloat] ]
+        result, Config.integer.order = Config.integer.order, order
+        return result
+
+    elif builtins.isinstance(order, utils.string_types):
+        if order.startswith('big'):
+            return setbyteorder(config.byteorder.bigendian)
+        elif order.startswith('little'):
+            return setbyteorder(config.byteorder.littleendian)
+        raise ValueError("An unknown byteorder was specified ({:s}) for ptypes.".format(order))
+
+    elif getattr(order, '__name__', '').startswith('big'):
+        return setbyteorder(config.byteorder.bigendian)
+    elif getattr(order, '__name__', '').startswith('little'):
+        return setbyteorder(config.byteorder.littleendian)
+    raise ValueError("An unknown byteorder was specified ({:s}) for ptypes.".format(order))
 
 ## some things people people might find useful
 from .ptype import istype, iscontainer, isinstance, undefined

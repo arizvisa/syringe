@@ -287,15 +287,14 @@ class type(ptype.type):
             raise error.InitializationError(self, 'int')
 
         data, order = bytearray(self.serialize()), self.__generalize_byteorder()
-        Ftransform = reversed if order is config.byteorder.littleendian else iter
-        return functools.reduce(lambda agg, item: agg << 8 | item, Ftransform(data), 0)
+        ordered = data[:: -1 if order is config.byteorder.littleendian else +1]
+        return functools.reduce(lambda agg, item: agg << 8 | item, ordered, 0)
 
     def __setvalue__(self, *values, **attrs):
         if not values:
             return super(type, self).__setvalue__(*values, **attrs)
 
         integer, = values
-        Ftransform = iter if self.__generalize_byteorder() is config.byteorder.littleendian else reversed
 
         # First we need to get the values that we were passed within our
         # parameters. If we were given bytes instead of an integer, then
@@ -312,7 +311,8 @@ class type(ptype.type):
             bc, x = bitmap.consume(bc, 8)
             res.append(x)
         res = res + [0] * (self.blocksize() - len(res))   # FIXME: use padding
-        return super(type, self).__setvalue__(bytes(bytearray(Ftransform(res))), **attrs)
+        ordered = res[:: +1 if self.__generalize_byteorder() is config.byteorder.littleendian else -1]
+        return super(type, self).__setvalue__(bytes(bytearray(ordered)), **attrs)
 
     def int(self):
         return self.__getvalue__()

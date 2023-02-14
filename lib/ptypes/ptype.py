@@ -2424,19 +2424,28 @@ class encoded_t(wrapper_t):
 
         return self
 
-def setbyteorder(endianness):
+def setbyteorder(order):
     '''Sets the byte order for any pointer_t
     can be either .bigendian or .littleendian
     '''
     global pointer_t
-    if endianness in (config.byteorder.bigendian, config.byteorder.littleendian):
-        pointer_t._value_.byteorder = config.byteorder.bigendian if endianness is config.byteorder.bigendian else config.byteorder.littleendian
-        return
-    elif getattr(endianness, '__name__', '').startswith('big'):
+    if order in (config.byteorder.bigendian, config.byteorder.littleendian):
+        result, pointer_t._value_.byteorder = pointer_t._value_.byteorder, config.byteorder.bigendian if order is config.byteorder.bigendian else config.byteorder.littleendian
+        return result
+
+    elif builtins.isinstance(order, utils.string_types):
+        if order.startswith('big'):
+            return setbyteorder(config.byteorder.bigendian)
+        elif order.startswith('little'):
+            return setbyteorder(config.byteorder.littleendian)
+        raise ValueError("An unknown byteorder was specified ({:s}) for pointer types.".format(order))
+
+    elif getattr(order, '__name__', '').startswith('big'):
         return setbyteorder(config.byteorder.bigendian)
-    elif getattr(endianness, '__name__', '').startswith('little'):
+
+    elif getattr(order, '__name__', '').startswith('little'):
         return setbyteorder(config.byteorder.littleendian)
-    raise ValueError("Unknown integer endianness {!r}".format(endianness))
+    raise ValueError("An unknown byteorder was specified ({:s}) for pointer types.".format(order))
 
 class pointer_t(encoded_t):
     _object_ = None
@@ -2453,17 +2462,15 @@ class pointer_t(encoded_t):
                 return super(pointer_t._value_, self).__setvalue__(*values, **attrs)
 
             offset, = values
-            bs = self.blocksize()
-            res = bitmap.new(offset, bs * 8)
+            res = bitmap.new(offset, 8 * self.blocksize())
             res = bitmap.data(res, reversed=(self.byteorder is config.byteorder.littleendian))
             return super(pointer_t._value_, self).__setvalue__(res, **attrs)
 
         def __getvalue__(self):
             if self.value is None:
                 raise error.InitializationError(self, 'pointer_t._value_.get')
-            bs = self.blocksize()
-            value = reversed(self.value) if self.byteorder is config.byteorder.littleendian else self.value
-            octets = __izip_longest__(bytearray(value), [8] * len(self.value))
+            bs, value = self.blocksize(), self.value[:: -1 if self.byteorder is config.byteorder.littleendian else -1]
+            octets = __izip_longest__(bytearray(value), [8] * bs)
             res = functools.reduce(bitmap.push, octets, bitmap.zero)
             return bitmap.value(res)
 
@@ -2656,7 +2663,7 @@ if __name__ == '__main__':
                 data = bytearray(x ^ k for x in bytearray(object.serialize()))
                 return super(xor, self).decode(ptype.block(length=len(data)).set(bytes(data)))
 
-        instance = pstr.string(length=len(match)).set(match)
+        instance = ptype.block(length=len(match)).set(match)
 
         x = xor(source=ptypes.prov.bytes(b'\0'*0x100)).l
         x.reference(instance)
