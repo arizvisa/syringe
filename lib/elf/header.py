@@ -262,6 +262,13 @@ class E_FLAGS_ARM(pbinary.flags):
         (8, 'EF_ARM_UNKNOWN'),
         (EF_ARM_GCC_MASK, 'EF_ARM_GCC_MASK'),
     ]
+    def summary(self):
+        gcc_mask_name, unk_name, subunk_name = 'EF_ARM_GCC_MASK', 'EF_ARM_UNKNOWN', 'EF_ARM_GCC_UNKNOWN'
+        gcc_mask, unknown = self[gcc_mask_name], self[unk_name]
+        flags = [field for field in ['EF_ARM_BE8', 'EF_ARM_GCC_LEGACY'] if self[field]]
+        subunknown, subflags = gcc_mask[subunk_name], [field for field in ['EF_ARM_ABI_UNKNOWN', 'EF_ARM_ABI_FLOAT_HARD', 'EF_ARM_ABI_FLOAT_SOFT'] if gcc_mask[field]]
+        summary = "({:#0{:d}x},{:d}) :> {:s}=({:#0{:d}x},{:d}){:s}".format(gcc_mask.int(), 2 + gcc_mask.bits() // 4, gcc_mask.bits(), subunk_name, subunknown, 2 + (9+3) // 4, 9, " {:s}".format(' '.join(subflags)) if subflags else '')
+        return "EF_ARM_ABI={:#0{:d}x} EF_ARM_GCC_ALIGN={:d}{:s}{:s} {:s}={:s}".format(self['EF_ARM_ABI'], 2 + 2, self['EF_ARM_GCC_ALIGN'], " {:s}".format(' '.join(flags)) if flags else '', " {:s}={:#0{:d}x}".format(unk_name, unknown, 2+2) if unknown else '', gcc_mask_name, summary if gcc_mask.int() else "({:#0{:d}x},{:d})".format(gcc_mask.int(), 2 + gcc_mask.bits() // 4, gcc_mask.bits()))
 
 @E_FLAGS.define
 class E_FLAGS_MIPS(pbinary.flags):
