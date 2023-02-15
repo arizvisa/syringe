@@ -344,10 +344,10 @@ defaults.display.show_module_name = False
 defaults.display.show_parent_name = False
 defaults.display.hexdump.width = 16
 defaults.display.hexdump.threshold = 8
-defaults.display.threshold.summary = 80
+defaults.display.threshold.summary = 132
 defaults.display.threshold.details = 8
-defaults.display.threshold.summary_message = ' ..skipped ~{leftover} bytes.. '
-defaults.display.threshold.details_message = ' ..skipped {leftover} rows, {skipped} bytes.. '
+defaults.display.threshold.summary_message = ' ...total {size} bytes... '
+defaults.display.threshold.details_message = ' ...skipped {leftover} rows, total {size} bytes.. '
 defaults.display.mangle_with_attributes = False
 
 # array types

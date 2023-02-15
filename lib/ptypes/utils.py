@@ -249,13 +249,13 @@ def printable(data, nonprintable=u'.'):
     """Return a string of only printable characters"""
     return functools.reduce(lambda agg, item: agg + (bytearray([item]).decode(sys.getdefaultencoding() if hasattr(sys, 'getdefaultencoding') else 'latin1') if item >= 0x20 and item < 0x7f else nonprintable), bytearray(data), u'')
 
-def hexrow(value, offset=0, width=16, breaks=[8]):
+def hexrow(value, offset=0, width=16, breaks=[8], offset_width=4):
     """Returns ``value as a formatted hexadecimal str"""
     value = bytearray(islice(value, width))
     extra = width - len(value)
 
     ## left
-    left = "{:04x}".format(offset)
+    left = "{:0{:d}x}".format(offset, offset_width)
 
     ## middle
     res = [ "{:02x}".format(item) for item in value ]
@@ -282,6 +282,7 @@ def hexdump(value, offset=0, width=16, rows=None, **kwds):
     """
 
     rows = kwds.pop('rows', kwds.pop('lines', None))
+    kwds.setdefault('offset_width', len("{:x}".format(offset + len(value))))
     value = iter(value)
 
     getRow = lambda o: hexrow(data, offset=o, **kwds)
@@ -299,7 +300,7 @@ def hexdump(value, offset=0, width=16, rows=None, **kwds):
         res.append( getRow(ofs) )
     return '\n'.join(res)
 
-def emit_repr(data, width=0, message=' .. skipped {leftover} chars .. ', padding=' ', **formats):
+def emit_repr(data, width=0, message=' ... total {size} bytes ... ', padding=' ', **formats):
     """Return a string replaced with ``message`` if larger than ``width``
 
     Message can contain the following format operands:
@@ -307,28 +308,25 @@ def emit_repr(data, width=0, message=' .. skipped {leftover} chars .. ', padding
     charwidth = width of each character
     bytewidth = number of bytes that can fit within width
     length = number of bytes displayed
-    leftover = approximate number of bytes skipped
     **format = extra format specifiers for message
     """
-    size = len(data)
-    charwidth = len(r'\xFF')
-    bytewidth = width // charwidth
-    leftover = size - bytewidth
+    size = formats.setdefault('size', len(data))
+    charwidth = formats.setdefault('charwidth', len(r'\xFF'))
+    bytewidth = formats.setdefault('bytewidth', width // charwidth)
 
     hexify = lambda data: str().join(map(r"\x{:02x}".format, bytearray(data)))
 
     if width <= 0 or bytewidth >= len(data):
         return hexify(data)
 
-    # FIXME: the skipped/leftover bytes are being calculated incorrectly..
-    msg = message.format(size=size, charwidth=charwidth, width=width, leftover=leftover, **formats)
-
     # figure out how many bytes we can print
-    bytefrac, bytewidth = math.modf((width - len(msg)) * 1.0 / charwidth)
+    formatted = message.format(**formats)
+    bytefrac, bytewidth = math.modf((width - len(formatted)) * 1.0 / charwidth)
     padlength = math.trunc(charwidth * bytefrac)
 
-    msg = padding * math.trunc(padlength / 2.0 + 0.5) + msg + padding * math.trunc(padlength / 2)
-    left, right = data[:math.trunc(bytewidth / 2 + 0.5)], data[size - math.trunc(bytewidth / 2):]
+    # build the string that we'll slice our message into
+    msg = padding * math.trunc(padlength / 2.0 + 0.5) + formatted + padding * math.trunc(padlength / 2)
+    left, right = data[:math.trunc(bytewidth / 2 + 0.5)], data[len(data) - math.trunc(bytewidth / 2):]
     return hexify(left) + msg + hexify(right)
 
 def emit_hexrows(data, height, message, offset=0, width=16, **attrs):
@@ -346,6 +344,7 @@ def emit_hexrows(data, height, message, offset=0, width=16, **attrs):
     half = math.trunc(height / 2.0)
     leftover = (count - half * 2)
     skipped = leftover * width
+    attrs.setdefault('offset_width', len("{:x}".format(offset + size)))
 
     # display everything
     if height <= 0 or leftover <= 0:
@@ -362,6 +361,29 @@ def emit_hexrows(data, height, message, offset=0, width=16, **attrs):
     o2 = width * (count - half)
     for o in range(0, half * width, width):
         yield hexrow(data[o + o2 : o + o2 + width], o + o1 + o2, **attrs)
+    return
+
+def valueiterator(value, direction=+1):
+    '''iterates through all the values in the speciied direction yielding the bytes and their size (not in that order).'''
+    for item in value[::direction]:
+        if isinstance(item.value, bytes):
+            yield len(item.value), item.value
+
+        elif not hasattr(item, 'blockbits'):
+            for size, value in valueiterator(item.value, direction):
+                yield size, value
+            continue
+
+        else:
+            yield item.size(), item.serialize()
+        continue
+    return
+
+def valueaccumulate(value, direction, offset=0):
+    '''iterate through a list yielding the current offset and the bytes that got us there'''
+    for size, value in valueiterator(value, direction):
+        yield offset + size, value
+        offset += size
     return
 
 def attributes(instance):

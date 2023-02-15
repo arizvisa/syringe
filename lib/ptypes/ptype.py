@@ -227,7 +227,7 @@ Example pointer_t usage:
         def _calculate_(self, number):
             return number + 0x100
 """
-import sys, builtins, functools, itertools, types
+import sys, builtins, functools, itertools, types, operator
 import time
 
 from . import bitmap, provider, utils, error
@@ -613,20 +613,33 @@ class __interface__(object):
         if self.value is None:
             return u"???"
 
-        data = self.serialize()
+        threshold = options.pop('threshold', Config.display.threshold.summary)
+        message = options.pop('threshold_message', Config.display.threshold.summary_message)
+        #threshold = options.pop('width', threshold) # 'threshold' maps to 'width' for emit_repr
+
         try: size = self.size()
         except Exception: size = self.blocksize()
+
+        if threshold < 0 or size < threshold:
+            data = self.serialize()
+            return u'"{:s}"'.format(utils.emit_repr(data[:size], **options))
+
+        if builtins.isinstance(self.value, bytes) or size < threshold:
+            data = self.serialize() if self.initializedQ() else self.value
+
+        # if there's too much data, the slice it together from both sides
+        else:
+            lefti, righti = utils.valueaccumulate(self.value, +1), utils.valueaccumulate(self.value, -1)
+            leftitems = [next(lefti)[1]] + [item for _, item in itertools.takewhile(lambda offset_data: offset_data[0] < threshold, lefti)]
+            rightitems = [next(righti)[1]] + [item for _, item in itertools.takewhile(lambda offset_data: offset_data[0] < threshold, righti)]
+            data = bytes().join([bytes().join(leftitems), bytes().join([item for item in rightitems][::-1])])
+            options['size'] = size
 
         options.setdefault('offset', self.getoffset())
 
         # if larger than threshold...
-        threshold = options.pop('threshold', Config.display.threshold.summary)
-        message = options.pop('threshold_message', Config.display.threshold.summary_message)
-        if threshold > 0 and size > threshold:
-            threshold = options.pop('width', threshold) # 'threshold' maps to 'width' for emit_repr
-            res = utils.emit_repr(data[:size], threshold, message, **options)
-        else:
-            res = utils.emit_repr(data[:size], **options)
+        assert(threshold > 0 and size > threshold)
+        res = utils.emit_repr(data, threshold, message, **options)
         return u'"{:s}"'.format(res)
 
     #@utils.memoize('self', self='parent', args=lambda item: (item[0],) if len(item) > 0 else (), kwds=lambda item: item.get('type', ()))
@@ -1534,13 +1547,11 @@ class container(base):
         threshold = options.pop('threshold', Config.display.threshold.summary)
         message = options.pop('threshold_message', Config.display.threshold.summary_message)
         if self.value is not None:
-            def blocksizeorelse(self):
-                try: res = self.blocksize()
-                except Exception: res = 0
-                return res
-
-            #data = ''.join([item.serialize() if item.initializedQ() else '?'*blocksizeorelse(item)] for item in self.value)
-            data = b''.join(item.serialize() if item.initializedQ() else b'' for item in self.value)
+            lefti, righti = utils.valueaccumulate(self.value, +1), utils.valueaccumulate(self.value, -1)
+            leftitems = [next(lefti)[1]] + [item for _, item in itertools.takewhile(lambda offset_data: offset_data[0] < threshold, lefti)]
+            rightitems = [next(righti)[1]] + [item for _, item in itertools.takewhile(lambda offset_data: offset_data[0] < threshold, righti)]
+            data = bytes().join([bytes().join(leftitems), bytes().join([item for item in rightitems][::-1])])
+            options['size'] = self.size()
             return u"\"{:s}\"".format(utils.emit_repr(data, threshold, message, **options)) if len(data) > 0 else u"???"
         return u"???"
 
