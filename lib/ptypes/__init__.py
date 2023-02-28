@@ -40,7 +40,7 @@ def setbyteorder(order):
     raise ValueError("An unknown byteorder was specified ({:s}) for ptypes.".format(order))
 
 ## some things people people might find useful
-from .ptype import istype, iscontainer, isinstance, undefined
+from .ptype import istype, iscontainer, isinstance, undefined, clone
 from .utils import hexdump
 
 if __name__ == '__main__':
