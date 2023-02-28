@@ -164,6 +164,8 @@ class _char_t(pint.type):
         return res if len(res) else data
 
     def int(self):
+        if self.value is None:
+            return 0
         return super(_char_t, self).__getvalue__()
 
     def summary(self, **options):
@@ -423,6 +425,9 @@ class string(ptype.type):
         try:
             res = self.__getvalue__()
 
+        except ptypes.error.InitializationError:
+            return super(string, self).summary(**options)
+
         except UnicodeDecodeError:
             Log.debug('{:s}.summary : {:s} : Unable to decode unicode string. Rendering as hexdump instead.'.format(self.classname(), self.instance()))
             return super(string, self).summary(**options)
@@ -540,6 +545,9 @@ class szstring(string):
     def summary(self, **options):
         try:
             res = self.__getvalue__()
+
+        except ptypes.error.InitializationError:
+            return super(szstring, self).summary(**options)
 
         except UnicodeDecodeError:
             Log.debug('{:s}.summary : {:s} : Unable to decode unicode string. Rendering as hexdump instead.'.format(self.classname(), self.instance()))

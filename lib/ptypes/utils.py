@@ -364,10 +364,14 @@ def emit_hexrows(data, height, message, offset=0, width=16, **attrs):
     return
 
 def valueiterator(value, direction=+1):
-    '''iterates through all the values in the speciied direction yielding the bytes and their size (not in that order).'''
+    '''iterates through all the values in the specified direction yielding the bytes and their size (not in that order).'''
     for item in value[::direction]:
         if isinstance(item.value, bytes):
             yield len(item.value), item.value
+
+        # If we encounter None, then the rest of this item should be uninitialized.
+        elif item.value is None:
+            break
 
         elif not hasattr(item, 'blockbits'):
             for size, value in valueiterator(item.value, direction):

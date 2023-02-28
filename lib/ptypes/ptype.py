@@ -1069,6 +1069,7 @@ class type(base):
         if not self.initializedQ():
             res = self.blocksize()
 
+            # FIXME: this should definitely be clamped to a maximum size
             try:
                 parent = self.getparent(encoded_t)
             except error.ItemNotFoundError:

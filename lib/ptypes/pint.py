@@ -315,6 +315,8 @@ class type(ptype.type):
         return super(type, self).__setvalue__(bytes(bytearray(ordered)), **attrs)
 
     def int(self):
+        if self.value is None:
+            return 0
         return self.__getvalue__()
     get = int
 

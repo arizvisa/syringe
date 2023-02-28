@@ -362,7 +362,8 @@ class type(__structure_interface__):
                 continue
             offset = self.getoffset(getattr(item, '__name__', None) or name)
             instance = utils.repr_instance(item.classname(), item.name() or name)
-            value = u'???' if item.value is None else item.summary(**options)
+            initialized = item.initializedQ() if isinstance(item, ptype.container) else item.value is not None
+            value = item.summary(**options) if initialized else u'???'
             properties = ','.join(u"{:s}={!r}".format(k, v) for k, v in item.properties().items())
             result.append(u"[{:x}] {:s}{:s} {:s}".format(offset, instance, u" {{{:s}}}".format(properties) if properties else u"", value))
             offset += item.size()
