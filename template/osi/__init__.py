@@ -33,7 +33,7 @@ class layers(parray.terminated):
         except (AttributeError,NotImplementedError):
             pass
 
-        self.leftover -= last.size()
+        self.leftover = self.blocksize() - last.size() if self.leftover is None else self.leftover - last.size()
         return dyn.block(self.leftover)
 
     def isTerminator(self, value):
