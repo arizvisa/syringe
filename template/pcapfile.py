@@ -104,12 +104,6 @@ class Packet(pstruct.type):
 class List(parray.infinite):
     _object_ = Packet
 
-    def summary(self):
-        l = len(self)
-        if l == 1:
-            return '..1 packet..'
-        return '..%d packets..'% l
-
     def within(self, start, end):
         for item in self:
             dt = item['header'].datetime()
@@ -134,11 +128,10 @@ class File(pstruct.type):
     ]
 
 if __name__ == '__main__':
-    import ptypes,libpcap,osi
-    s = ptypes.file('~/work/nezzwerk/pcap/win-2008.updates.restart.pcap')
-    a = libpcap.File(source=s)
-    b = a.l
-    c = b['packets']
-
-    packet = osi.default
-    z = [x['data'].cast(packet) for x in c]
+    import ptypes, pcapfile, osi
+    packet = osi.packet
+    source = ptypes.setsource(ptypes.provider.file(sys.argv[1], 'rb'))
+    file = pcapfile.File(source=source)
+    file = file.l
+    items = file['packets'] if file['packets'][-1].initializedQ() else file['packets'][:-1]
+    z = [item['data'].cast(packet) for item in items]
