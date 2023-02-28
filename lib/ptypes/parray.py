@@ -330,8 +330,8 @@ class type(__array_interface__):
                 else:
                     Log.info("type.load : {:s} : Unable to load array due to an unknown element type ({!s}).".format(self.instance(), object))
             return super(type, self).load(**attrs)
-        except error.LoadError as E:
-            raise error.LoadError(self, exception=E)
+        except error.LoadError:
+            raise error.LoadError(self)
         raise error.AssertionError(self, 'type.load')
 
     def __setvalue__(self, *values, **attrs):
@@ -424,8 +424,8 @@ class terminated(type):
                         Log.info("terminated.load : {:s} : Added a dynamic element with a {:d} length to a terminated array : {:s}".format(self.instance(), size, item.instance()))
                     offset += size
 
-        except (Exception, error.LoadError) as E:
-            raise error.LoadError(self, exception=E)
+        except (Exception, error.LoadError):
+            raise error.LoadError(self)
 
         return self
 
@@ -488,7 +488,7 @@ class infinite(uninitialized):
         item = self.new(self._object_, __name__=str(index), offset=offset)
         try:
             item.load(**attrs)
-        except (error.LoadError, error.InitializationError) as E:
+        except (error.LoadError, error.InitializationError):
             path = str().join(map("<{:s}>".format, self.backtrace()))
             Log.info("infinite.__next_element : {:s} : Unable to read terminal element {:s} : {:s}".format(self.instance(), item.instance(), path))
         return item
@@ -552,14 +552,14 @@ class infinite(uninitialized):
                     offset += size
                     current += size
 
-            except (Exception, error.LoadError) as E:
+            except (Exception, error.LoadError):
                 if self.parent is not None:
                     path = str().join(map("<{:s}>".format, self.backtrace()))
                     if len(self.value):
                         Log.warning("infinite.load : {:s} : Stopped reading at element {:s} : {:s}".format(self.instance(), self.value[-1].instance(), path), exc_info=True)
                     else:
                         Log.warning("infinite.load : {:s} : Stopped reading before load : {:s}".format(self.instance(), path), exc_info=True)
-                raise error.LoadError(self, exception=E)
+                raise error.LoadError(self)
         return self
 
     def loadstream(self, **attr):
@@ -600,11 +600,11 @@ class infinite(uninitialized):
                     offset += size
                     current += size
 
-            except error.LoadError as E:
+            except error.LoadError:
                 if self.parent is not None:
                     path = str().join(map("<{:s}>".format, self.backtrace()))
                     Log.warning("infinite.loadstream : {:s} : Stopped reading at element {:s} : {:s}".format(self.instance(), item.instance(), path))
-                raise error.LoadError(self, exception=E)
+                raise error.LoadError(self)
             pass
 
         # Read everything until we have a load error, because that's what this
@@ -640,7 +640,7 @@ class block(uninitialized):
                     item = item.load()
 
                 except error.LoadError as E:
-                    #E = error.LoadError(self, exception=E)
+                    #E = error.LoadError(self)
                     o = current + item.blocksize()
 
                     # if we error'd while decoding too much, then let user know

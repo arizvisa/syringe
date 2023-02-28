@@ -515,13 +515,13 @@ class disorderly(proxied):
                 self.offset, offset = self.offset + size, offset + amount
                 successful.append(item)
 
-        except error.ConsumeError:
+        except error.ConsumeError as E:
             Log.warning("{:s} : store : Unable to write {:d} bytes to offset {:#x} of object {:s}.".format(cls.__name__, amount, lslice, item.instance()))
-            raise
+            raise E
 
         except Exception as E:
             Log.warning("{:s} : store : Unable to write {:d} bytes to offset {:#x} of unknown object {!s}.".format(cls.__name__, amount, lslice, item))
-            raise
+            raise E
 
         # FIXME: Not sure if I'm supposed to trap and raise an exception or whatever if this fails?
         if self.autocommit is not None:
@@ -561,8 +561,8 @@ class memoryview(backed):
             view = builtins.memoryview(data)
             result = super(memoryview, self).store(view)
 
-        except Exception as E:
-            raise error.StoreError(self, self.offset, len(data), exception=E)
+        except Exception:
+            raise error.StoreError(self, self.offset, len(data))
         return result
 
 class array(backed):
@@ -609,9 +609,9 @@ class fileobj(bounded):
         try:
             result = self.file.read(amount)
 
-        except OverflowError as E:
+        except OverflowError:
             self.file.seek(offset)
-            raise error.ConsumeError(self, offset, amount, len(result), exception=E)
+            raise error.ConsumeError(self, offset, amount, len(result))
 
         if result == b'' and amount > 0:
             raise error.ConsumeError(self, offset, amount, len(result))
@@ -627,9 +627,9 @@ class fileobj(bounded):
         try:
             result = self.file.write(data)
 
-        except Exception as E:
+        except Exception:
             self.file.seek(offset)
-            raise error.StoreError(self, offset, len(data), exception=E)
+            raise error.StoreError(self, offset, len(data))
         return result
 
     @utils.mapexception(any=error.ProviderError)
@@ -1062,7 +1062,7 @@ try:
             '''x.__repr__() <=> repr(x)'''
             return "{:s} -> pid:{:#x} ({:d})".format(super(memorybase, self).__repr__(), self._pid, self._pid)
 
-except OSError as E:
+except OSError:
     Log.info("{:s} : Skipping defining any linux-based providers (`LinuxProcessId`) due to being on a non-linux platform ({:s}).".format(__name__, sys.platform))
 
 try:
@@ -1070,8 +1070,8 @@ try:
 
     try:
         k32 = ctypes.WinDLL('kernel32.dll')
-    except Exception as E:
-        raise OSError(E)
+    except Exception:
+        raise OSError
 
     # Define the ctypes parameters for the windows api used by win32error
     k32.GetLastError.restype = ctypes.c_uint32
@@ -1137,8 +1137,10 @@ try:
             # FIXME: instead of failing on an incomplete read, perform a partial read
             res = k32.ReadProcessMemory(self.handle, self.address, buffer, amount, ctypes.pointer(NumberOfBytesRead))
             if (res == 0) or (NumberOfBytesRead.value != amount):
-                e = ValueError("Unable to read pid({:x})[{:08x}:{:08x}].".format(self.handle, self.address, self.address + amount))
-                raise error.ConsumeError(self, self.address, amount, NumberOfBytesRead.value)
+                try:
+                    raise ValueError("Unable to read pid({:x})[{:08x}:{:08x}].".format(self.handle, self.address, self.address + amount))
+                except Exception:
+                    raise error.ConsumeError(self, self.address, amount, NumberOfBytesRead.value)
 
             self.address += amount
             return builtins.memoryview(buffer).tobytes()
@@ -1154,8 +1156,10 @@ try:
 
             res = k32.WriteProcessMemory(self.handle, self.address, buffer, len(value), ctypes.pointer(NumberOfBytesWritten))
             if (res == 0) or (NumberOfBytesWritten.value != len(value)):
-                e = OSError("Unable to write to pid({:x})[{:08x}:{:08x}].".format(self.id, self.address, self.address + len(value)))
-                raise error.StoreError(self, self.address, len(value), written=NumberOfBytesWritten.value, exception=e)
+                try:
+                    raise OSError("Unable to write to pid({:x})[{:08x}:{:08x}].".format(self.id, self.address, self.address + len(value)))
+                except Exception:
+                    raise error.StoreError(self, self.address, len(value), written=NumberOfBytesWritten.value)
 
             self.address += len(value)
             return NumberOfBytesWritten.value
@@ -1239,8 +1243,10 @@ try:
                 None
             )
             if (result == 0) or (resultAmount.value == 0 and amount > 0):
-                e = OSError(win32error.getLastErrorTuple())
-                raise error.ConsumeError(self, self.offset, amount, resultAmount.value, exception=e)
+                try:
+                    raise OSError(win32error.getLastErrorTuple())
+                except Exception:
+                    raise error.ConsumeError(self, self.offset, amount, resultAmount.value)
 
             if resultAmount.value == amount:
                 self.offset += resultAmount.value
@@ -1259,8 +1265,10 @@ try:
                 None
             )
             if (result == 0) or (resultWritten.value != len(value)):
-                e = OSError(win32error.getLastErrorTuple())
-                raise error.StoreError(self, self.offset, len(value), resultWritten.value, exception=e)
+                try:
+                    raise OSError(win32error.getLastErrorTuple())
+                except Exception:
+                    raise error.StoreError(self, self.offset, len(value), resultWritten.value)
             self.offset += resultWritten.value
             return resultWritten.value
 
@@ -1520,7 +1528,7 @@ try:
             try:
                 result = self.client.DataSpaces.Virtual.Read(self.offset, amount)
 
-            except RuntimeError as E:
+            except RuntimeError:
                 raise StopIteration("Unable to read {:+d} bytes from address {:x}".format(amount, self.offset))
             return builtins.bytes(result)
 

@@ -405,9 +405,9 @@ class string(ptype.type):
 
             # If the provider gave us an error, then recast it as a load
             # error due to being an exception while loading a block
-            except (StopIteration, error.ProviderError) as E:
+            except (StopIteration, error.ProviderError):
                 self.source.seek(offset + self.size())
-                raise error.LoadError(self, consumed=blocksize, exception=E)
+                raise error.LoadError(self, consumed=blocksize)
         return result
 
     def __deserialize_block__(self, block):
@@ -507,9 +507,9 @@ class szstring(string):
 
             # If the provider gave us an error, then recast it as a load
             # error due to being an exception while loading a block
-            except (StopIteration, error.ProviderError) as E:
+            except (StopIteration, error.ProviderError):
                 self.source.seek(offset + self.size())
-                raise error.LoadError(self, consumed=self.size(), exception=E)
+                raise error.LoadError(self, consumed=self.size())
         return result
 
     def str(self):

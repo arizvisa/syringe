@@ -411,8 +411,8 @@ class type(base):
             try:
                 consumer.consume(suboffset)
                 result = self.__deserialize_consumer__(consumer)
-            except (StopIteration, error.ProviderError) as E:
-                raise error.LoadError(self, exception=E)
+            except (StopIteration, error.ProviderError):
+                raise error.LoadError(self)
         return result
 
     def load(self, **attrs):
@@ -1724,7 +1724,7 @@ class terminatedarray(__array_interface__):
             return super(terminatedarray, self).__deserialize_consumer__(consumer, generator)
 
         # terminated arrays can also stop when out-of-data
-        except StopIteration as E:
+        except StopIteration:
             item = self.value[-1]
             path = str().join(map("<{:s}>".format, self.backtrace()))
             Log.info("terminatedarray.__deserialize_consumer__ : {:s} : Terminated at {:s}<{:x}:+??>\n\t{:s}".format(self.instance(), item.typename(), item.getoffset(), path))
@@ -1814,7 +1814,7 @@ class blockarray(terminatedarray):
             if total < 0:
                 Log.info("blockarray.__deserialize_consumer__ : {:s} : Read {:d} extra bits during deserialization.".format(self.instance(), -total))
 
-        except StopIteration as E:
+        except StopIteration:
             # FIXME: fix this error: total bits, bits left, byte offset: bit offset
             Log.warning("blockarray.__deserialize_consumer__ : {:s} : Incomplete read at {!s} while consuming {:d} bits.".format(self.instance(), position, item.blockbits()))
         return self
@@ -1994,8 +1994,8 @@ class partial(ptype.container):
             source, offset, self.value = self.source, self.getoffset(), [self.__object__()]
             try:
                 object = self.__load_byteorder(offset, (source.consume(1) for index in itertools.count()))
-            except (StopIteration, error.ProviderError) as E:
-                raise error.LoadError(self, exception=E)
+            except (StopIteration, error.ProviderError):
+                raise error.LoadError(self)
             finally:
                 self.setoffset(offset)
             return self
@@ -2010,8 +2010,8 @@ class partial(ptype.container):
                 source.store(data)
             return self
 
-        except (StopIteration, error.ProviderError) as E:
-            raise error.CommitError(self, exception=E)
+        except (StopIteration, error.ProviderError):
+            raise error.CommitError(self)
 
     def alloc(self, *args, **attrs):
         '''Load a pbinary.partial using the provider.empty source'''
@@ -2020,8 +2020,8 @@ class partial(ptype.container):
             self.object.alloc(*args, **attrs)
             return self
 
-        except (StopIteration, error.ProviderError) as E:
-            raise error.LoadError(self, exception=E)
+        except (StopIteration, error.ProviderError):
+            raise error.LoadError(self)
 
     def bits(self):
         return 8 * self.size()

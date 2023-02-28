@@ -953,9 +953,9 @@ class base(generic):
 
             # if we got an exception from the provider, then recast it
             # as a load error since the block was not read completely.
-            except (StopIteration, error.ProviderError) as E:
+            except (StopIteration, error.ProviderError):
                 source.seek(offset + blocksize)
-                raise error.LoadError(self, consumed=blocksize, exception=E)
+                raise error.LoadError(self, consumed=blocksize)
         return self
 
     def commit(self, **attrs):
@@ -967,8 +967,8 @@ class base(generic):
                 source.store(data)
             return self
 
-        except (StopIteration, error.ProviderError) as E:
-            raise error.CommitError(self, exception=E)
+        except (StopIteration, error.ProviderError):
+            raise error.CommitError(self)
 
     def collect(self, *args, **kwds):
         global encoded_t
@@ -1454,7 +1454,7 @@ class container(base):
                 Log.debug("container.load : {:s} : Cropped to {{{:x}:{:+x}}} : {!r}".format(self.instance(), ofs, s, E))
 
             # and then re-raise because there's no more data left...
-            raise error.LoadError(self, exception=E)
+            raise error.LoadError(self)
         return self
 
     def commit(self, **attrs):
@@ -2149,8 +2149,8 @@ class wrapper_t(type):
         '''Re-assigns the contents of the wrapper_t'''
         try:
             self.__deserialize_block__(data)
-        except (StopIteration, error.ProviderError) as E:
-            raise error.LoadError(self, consumed=len(data), exception=E)
+        except (StopIteration, error.ProviderError):
+            raise error.LoadError(self, consumed=len(data))
         return
 
     __object__ = None
@@ -2190,8 +2190,8 @@ class wrapper_t(type):
             block = res.serialize()
             try:
                 self.__deserialize_block__(block)
-            except (StopIteration, error.ProviderError) as E:
-                raise error.LoadError(self, consumed=len(block), exception=E)
+            except (StopIteration, error.ProviderError):
+                raise error.LoadError(self, consumed=len(block))
             return
 
         # update our value with the type that we assigned
@@ -2232,8 +2232,8 @@ class wrapper_t(type):
         # If we got a LoadError or similar, then we need to recast the
         # exception as a ConsumeError since this method is used to
         # deserialize a block for our wrapped type.
-        except (StopIteration, error.ProviderError) as E:
-            raise error.ConsumeError(self, self.getoffset(), len(block), amount=self.object.size(), exception=E)
+        except (StopIteration, error.ProviderError):
+            raise error.ConsumeError(self, self.getoffset(), len(block), amount=self.object.size())
         return self
 
     # forwarded methods
@@ -3236,7 +3236,7 @@ if __name__ == '__main__':
         class container(ptype.container): pass
         a = container().set(ptype.type,ptype.type)
         try: a.set(5,10,20)
-        except error.AssertionError as E:
+        except error.AssertionError:
             raise Success
         raise Failure
 

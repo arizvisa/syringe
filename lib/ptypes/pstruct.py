@@ -316,7 +316,7 @@ class type(__structure_interface__):
                     if current is not None:
                         try:
                             res = self.blocksize()
-                        except Exception as E:
+                        except Exception:
                             path = str().join(map("<{:s}>".format, self.backtrace()))
                             Log.debug("type.load : {:s} : Custom blocksize raised an exception at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, item.instance(), path), exc_info=True)
                         else:
@@ -327,8 +327,8 @@ class type(__structure_interface__):
                         current += bs
                     offset += bs
 
-            except error.LoadError as E:
-                raise error.LoadError(self, exception=E)
+            except error.LoadError:
+                raise error.LoadError(self)
 
             # add any missing elements with a 0 blocksize
             count = len(self._fields_ or []) - len(self.value)
