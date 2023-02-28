@@ -1528,8 +1528,9 @@ try:
             try:
                 result = self.client.DataSpaces.Virtual.Read(self.offset, amount)
 
+            # Unable to read {:+d} bytes from address {:x}".format(amount, self.offset))
             except RuntimeError:
-                raise StopIteration("Unable to read {:+d} bytes from address {:x}".format(amount, self.offset))
+                raise error.ConsumeError(self, self.offset, amount)
             return builtins.bytes(result)
 
         def store(self, data):

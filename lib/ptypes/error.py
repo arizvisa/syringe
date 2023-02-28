@@ -87,8 +87,8 @@ class StoreError(ProviderError):
     def __str__(self):
         identity, offset, amount, written = self.stored
         if written > 0:
-            return 'StoreError({!s}) : Unable to store bytes ({:x}:{:+x}) : Wrote only {:+d} bytes'.format(type(identity), offset, amount, written)
-        return 'StoreError({!s}) : Unable to store bytes ({:x}:{:+x})'.format(type(identity), offset, amount)
+            return 'StoreError({!s}) : Only stored {:+#x} of {:+#x} bytes to {:#x}.'.format(type(identity), written, amount, offset)
+        return 'StoreError({!s}) : Error storing {:+#x} bytes to {:#x}.'.format(type(identity), amount, offset)
 class ConsumeError(ProviderError):
     """Error while attempting to consume some number of bytes"""
     def __init__(self, identity, offset, desired, amount=0, **kwds):
@@ -97,8 +97,8 @@ class ConsumeError(ProviderError):
     def __str__(self):
         identity, offset, desired, amount = self.consumed
         if amount > 0:
-            return 'ConsumeError({!s}) : Unable to consume bytes ({:x}:{:+x}) : Read only {:+d} bytes'.format(type(identity), offset, desired, amount)
-        return 'ConsumeError({!s}) : Unable to consume bytes ({:x}:{:+x})'.format(type(identity), offset, desired)
+            return 'ConsumeError({!s}) : Only consumed {:+#x} of {:+#x} bytes from {:#x}.'.format(type(identity), amount, desired, offset)
+        return 'ConsumeError({!s}) : Error consuming {:+#x} bytes from {:#x}.'.format(type(identity), desired, offset)
 
 ### errors that can happen during deserialization or serialization
 class SerializationError(ObjectBase):
@@ -114,25 +114,29 @@ class SerializationError(ObjectBase):
 class LoadError(SerializationError, exceptions.EnvironmentError):
     """Error while initializing object from source"""
     def __init__(self, object, consumed=0, **kwds):
+        self.loaded = kwds.pop('offset', None), consumed
         super(LoadError, self).__init__(object, **kwds)
-        self.loaded = consumed,
 
     def __str__(self):
-        consumed, = self.loaded
-        if consumed > 0:
-            return '{:s} : {:s} : Unable to consume {:+#x} from source ({:s})'.format(self.instance(), self.path(), consumed, super(LoadError, self).__str__())
+        offset, consumed = self.loaded
+        if offset is not None and consumed > 0:
+            return '{:s} : {:s} : Only {:+#x} bytes were loaded from offset {:#x} of source.'.format(self.instance(), self.path(), consumed, offset)
+        elif consumed > 0:
+            return '{:s} : {:s} : Only {:+#x} bytes were loaded from source.'.format(self.instance(), self.path(), consumed)
         return super(LoadError, self).__str__()
 
 class CommitError(SerializationError, exceptions.EnvironmentError):
     """Error while committing object to source"""
     def __init__(self, object, written=0, **kwds):
+        self.committed = kwds.pop('offset', None), written
         super(CommitError, self).__init__(object, **kwds)
-        self.committed = written,
 
     def __str__(self):
-        written, = self.committed
-        if written > 0:
-            return '{:s} : wrote {:+#x} : {:s}'.format(self.instance(), written, self.path())
+        offset, written = self.committed
+        if offset is not None and written > 0:
+            return '{:s} : Only {:+#x} bytes were committed to offset {:#x} of source'.format(self.instance(), offset, written)
+        elif written > 0:
+            return '{:s} : Only {:+#x} bytes were committed to source.'.format(self.instance(), written)
         return super(CommitError, self).__str__()
 
 class MemoryError(SerializationError, exceptions.MemoryError):

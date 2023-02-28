@@ -407,7 +407,7 @@ class string(ptype.type):
             # error due to being an exception while loading a block
             except (StopIteration, error.ProviderError):
                 self.source.seek(offset + self.size())
-                raise error.LoadError(self, consumed=blocksize)
+                raise error.LoadError(self, offset=offset, consumed=blocksize)
         return result
 
     def __deserialize_block__(self, block):
@@ -509,7 +509,7 @@ class szstring(string):
             # error due to being an exception while loading a block
             except (StopIteration, error.ProviderError):
                 self.source.seek(offset + self.size())
-                raise error.LoadError(self, consumed=self.size())
+                raise error.LoadError(self, offset=offset, consumed=self.size())
         return result
 
     def str(self):

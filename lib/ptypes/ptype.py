@@ -953,6 +953,13 @@ class base(generic):
 
             # if we got an exception from the provider, then recast it
             # as a load error since the block was not read completely.
+            except error.ConsumeError as E:
+                source.seek(offset + blocksize)
+                provider, offset, requested, successful = E.consumed
+                raise error.LoadError(self, successful, offset=offset)
+
+            # if we got an exception while deserializing, then recast it
+            # as a load error since the block was interrupted.
             except (StopIteration, error.ProviderError):
                 source.seek(offset + blocksize)
                 raise error.LoadError(self, consumed=blocksize)
@@ -966,6 +973,10 @@ class base(generic):
                 source.seek(ofs)
                 source.store(data)
             return self
+
+        except error.StoreError as E:
+            provider, offset, requested, successful = E.stored
+            raise error.CommitError(self, successful, offset=offset)
 
         except (StopIteration, error.ProviderError):
             raise error.CommitError(self)
@@ -1056,7 +1067,7 @@ class type(base):
         blocksize = self.blocksize()
         if len(block) < blocksize:
             self.value = block[:blocksize]
-            raise StopIteration(self.name(), len(block))
+            raise StopIteration(self, len(block), blocksize)
 
         # all is good.
         self.value = block[:blocksize]
@@ -1350,13 +1361,10 @@ class container(base):
 
         # log any information about deserialization errors
         if total < expected:
-            path = str().join(map("<{:s}>".format, self.backtrace()))
-            Log.warning("container.__deserialize_block__ : {:s} : Container less than expected blocksize : {:#x} < {:#x} : {{{:s}}}".format(self.instance(), total, expected, path))
+            Log.warning("container.__deserialize_block__ : {:s} : Deserialized container size ({:#x}) is less than the expected blocksize ({:#x}).".format(self.instance(), total, expected))
 
         elif total > expected:
-            path = str().join(map("<{:s}>".format, self.backtrace()))
-            Log.debug("container.__deserialize_block__ : {:s} : Container larger than expected blocksize : {:#x} > {:#x} : {{{:s}}}".format(self.instance(), total, expected, path))
-            raise error.ConsumeError(self, self.getoffset(), expected, amount=total)
+            Log.warning("container.__deserialize_block__ : {:s} : Deserialized container size ({:#x}) is larger than the expected blocksize ({:#x}).".format(self.instance(), total, expected))
         return self
 
     def serialize(self):
@@ -1454,7 +1462,7 @@ class container(base):
                 Log.debug("container.load : {:s} : Cropped to {{{:x}:{:+x}}} : {!r}".format(self.instance(), ofs, s, E))
 
             # and then re-raise because there's no more data left...
-            raise error.LoadError(self)
+            raise error.LoadError(self, consumed=s, offset=ofs)
         return self
 
     def commit(self, **attrs):

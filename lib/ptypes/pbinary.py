@@ -412,7 +412,7 @@ class type(base):
                 consumer.consume(suboffset)
                 result = self.__deserialize_consumer__(consumer)
             except (StopIteration, error.ProviderError):
-                raise error.LoadError(self)
+                raise error.LoadError(self, consumed=0, offset=offset)  # FIXME: we should track the current bit we're at along with the number of bits
         return result
 
     def load(self, **attrs):
@@ -1726,8 +1726,7 @@ class terminatedarray(__array_interface__):
         # terminated arrays can also stop when out-of-data
         except StopIteration:
             item = self.value[-1]
-            path = str().join(map("<{:s}>".format, self.backtrace()))
-            Log.info("terminatedarray.__deserialize_consumer__ : {:s} : Terminated at {:s}<{:x}:+??>\n\t{:s}".format(self.instance(), item.typename(), item.getoffset(), path))
+            Log.info("terminatedarray.__deserialize_consumer__ : {:s} : Terminated at {:s}<{:x}:+??>".format(self.instance(), item.typename(), item.getoffset()))
 
         return self
 
@@ -1995,7 +1994,7 @@ class partial(ptype.container):
             try:
                 object = self.__load_byteorder(offset, (source.consume(1) for index in itertools.count()))
             except (StopIteration, error.ProviderError):
-                raise error.LoadError(self)
+                raise error.LoadError(self, consumed=0, offset=offset)     # FIXME: we should be able to track how many bits we've consumed
             finally:
                 self.setoffset(offset)
             return self
@@ -2011,7 +2010,7 @@ class partial(ptype.container):
             return self
 
         except (StopIteration, error.ProviderError):
-            raise error.CommitError(self)
+            raise error.CommitError(self, written=0, offset=self.getoffset())   # FIXME: we should know how much we've written
 
     def alloc(self, *args, **attrs):
         '''Load a pbinary.partial using the provider.empty source'''
@@ -2021,7 +2020,7 @@ class partial(ptype.container):
             return self
 
         except (StopIteration, error.ProviderError):
-            raise error.LoadError(self)
+            raise error.LoadError(self)     # FIXME: pretty sure this shouldn't happen with alloc
 
     def bits(self):
         return 8 * self.size()

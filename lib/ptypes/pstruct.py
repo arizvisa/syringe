@@ -122,8 +122,7 @@ class __structure_interface__(ptype.container):
         try:
             size, blocksize = self.size(), self.blocksize()
         except Exception as E:
-            path = str().join(map("<{:s}>".format, self.backtrace()))
-            Log.warning("type.initializedQ : {:s} : instance.blocksize() raised an exception when attempting to determine the initialization state of the instance : {!s} : {:s}".format(self.instance(), E, path), exc_info=True)
+            Log.warning("type.initializedQ : {:s} : instance.blocksize() raised an exception when attempting to determine the initialization state of the instance : {!s}".format(self.instance(), E), exc_info=True)
 
         # if we're under the expected size, then we're uninitialized.
         else:
@@ -275,8 +274,7 @@ class type(__structure_interface__):
         lowername = name.lower()
         if lowername in self.__fastindex__ and self.__fastindex__[lowername] < len(self.value):
             _, name = name, u"{:s}_{:x}".format(name, (offset - self.getoffset()) if Config.pstruct.use_offset_on_duplicate else len(self.value))
-            path = str().join(map("<{:s}>".format, self.backtrace()))
-            Log.warning("type.load : {:s} : Duplicate element name {!r}. Using generated name {!r} : {:s}".format(self.instance(), _, name, path))
+            Log.warning("type.load : {:s} : Duplicate element name {!r} required using its generated name {!r}.".format(self.instance(), _, name))
 
         res = self.new(cons, __name__=name, offset=offset, **attrs)
         current = len(self.value)
@@ -317,12 +315,10 @@ class type(__structure_interface__):
                         try:
                             res = self.blocksize()
                         except Exception:
-                            path = str().join(map("<{:s}>".format, self.backtrace()))
-                            Log.debug("type.load : {:s} : Custom blocksize raised an exception at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, item.instance(), path), exc_info=True)
+                            Log.debug("type.load : {:s} : Custom blocksize raised an exception at offset {:#x}, field {!r}.".format(self.instance(), current, item.instance()), exc_info=True)
                         else:
                             if current + bs > res:
-                                path = str().join(map("<{:s}>".format, self.backtrace()))
-                                Log.info("type.load : {:s} : Custom blocksize caused structure to terminate at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, item.instance(), path))
+                                Log.info("type.load : {:s} : Custom blocksize caused structure to terminate at offset {:#x}, field {!r}.".format(self.instance(), current, item.instance()))
                                 break
                         current += bs
                     offset += bs

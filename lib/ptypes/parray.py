@@ -489,8 +489,7 @@ class infinite(uninitialized):
         try:
             item.load(**attrs)
         except (error.LoadError, error.InitializationError):
-            path = str().join(map("<{:s}>".format, self.backtrace()))
-            Log.info("infinite.__next_element : {:s} : Unable to read terminal element {:s} : {:s}".format(self.instance(), item.instance(), path))
+            Log.info("infinite.__next_element : {:s} : Unable to read terminal element {:s}.".format(self.instance(), item.instance()))
         return item
 
     def isTerminator(self, value):
@@ -554,12 +553,21 @@ class infinite(uninitialized):
 
             except (Exception, error.LoadError):
                 if self.parent is not None:
-                    path = str().join(map("<{:s}>".format, self.backtrace()))
                     if len(self.value):
-                        Log.warning("infinite.load : {:s} : Stopped reading at element {:s} : {:s}".format(self.instance(), self.value[-1].instance(), path), exc_info=True)
+                        Log.warning("infinite.load : {:s} : Stopped reading at element {:s}.".format(self.instance(), self.value[-1].instance()), exc_info=True)
                     else:
-                        Log.warning("infinite.load : {:s} : Stopped reading before load : {:s}".format(self.instance(), path), exc_info=True)
+                        Log.warning("infinite.load : {:s} : Stopped reading before load.".format(self.instance()), exc_info=True)
                 raise error.LoadError(self)
+        return self
+
+    def __deserialize_block__(self, block):
+        try:
+            super(infinite, self).__deserialize_block__(block)
+        except (StopIteration, error.ProviderError) as E:
+            if not self.initializedQ():
+                raise E
+            uninitialized = [item.blocksize() for item in itertools.takewhile(lambda item: not item.initializedQ(), self.value[::-1])]
+            Log.warning("infinite.__deserialize_block__ : {:s} : Consumed {:d}{:+d} elements for infinite-sized-array with the size being {:#x}{:+#x} for the total blocksize ({:+#x}).".format(self.instance(), len(self.value) - len(uninitialized), len(uninitialized), self.size(), sum(uninitialized), self.blocksize()))
         return self
 
     def loadstream(self, **attr):
@@ -602,8 +610,7 @@ class infinite(uninitialized):
 
             except error.LoadError:
                 if self.parent is not None:
-                    path = str().join(map("<{:s}>".format, self.backtrace()))
-                    Log.warning("infinite.loadstream : {:s} : Stopped reading at element {:s} : {:s}".format(self.instance(), item.instance(), path))
+                    Log.warning("infinite.loadstream : {:s} : Stopped reading at element {:s}.".format(self.instance(), item.instance()))
                 raise error.LoadError(self)
             pass
 
@@ -645,8 +652,7 @@ class block(uninitialized):
 
                     # if we error'd while decoding too much, then let user know
                     if o > self.blocksize():
-                        path = str().join(map("<{:s}>".format, item.backtrace()))
-                        Log.warning("block.load : {:s} : Reached end of blockarray at {:s} : {:s}".format(self.instance(), item.instance(), path))
+                        Log.warning("block.load : {:s} : Reached end of blockarray at {:s}.".format(self.instance(), item.instance()))
                         self.value.append(item)
 
                     # otherwise add the incomplete element to the array
@@ -671,8 +677,7 @@ class block(uninitialized):
 
                 # if our child element pushes us past the blocksize
                 if current + size >= self.blocksize():
-                    path = str().join(map("<{:s}>".format, item.backtrace()))
-                    Log.debug("block.load : {:s} : Terminated at {:s} : {:s}".format(self.instance(), item.instance(), path))
+                    Log.debug("block.load : {:s} : Terminated at {:s}.".format(self.instance(), item.instance()))
                     self.value.append(item)
                     break
 
