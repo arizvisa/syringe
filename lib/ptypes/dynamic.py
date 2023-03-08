@@ -123,17 +123,21 @@ def blockarray(type, size, **kwds):
         Log.error("blockarray : {:s} : Invalid argument size={:d} cannot be < 0. Defaulting to 0".format(t.typename(), size))
         size = 0
 
+    getinitargs = lambda self: (type, size)
+
     class blockarray(parray.block):
         _object_ = type
         def blocksize(self):
             return size
 
         def classname(self):
-            t = type.typename() if ptype.istype(type) else type.__name__
+            t = type.typename() if ptype.istype(type) else getattr(type, '__qualname__', t.__name__)
             return "dynamic.blockarray({:s}, {:d})".format(t, self.blocksize())
-    blockarray.__module__ = __name__
-    blockarray.__name__ = 'blockarray'
-    blockarray.__getinitargs__ = lambda s: (type, size)
+
+    blockarray.__getinitargs__ = getinitargs
+    blockarray.__module__, blockarray.__name__ = __name__, 'blockarray'
+    if hasattr(blockarray, '__qualname__'):
+        blockarray.__qualname__ = 'blockarray({:d})'.format(size)
     return blockarray
 
 def padding(size, **kwds):
@@ -154,6 +158,7 @@ def padding(size, **kwds):
             res = abs((offset % denomination) - denomination)
             return res % denomination
         return 0
+
     getinitargs = lambda self: (type, kwds)
 
     # if padding is undefined and represents empty space
@@ -175,6 +180,8 @@ def padding(size, **kwds):
             return "dynamic.padding({:d}, size={:d})".format(size, res)
 
     result.repr, result.blocksize, result.__getinitargs__ = repr, blocksize, getinitargs
+    if hasattr(result, '__qualname__'):
+        result.__qualname__ = 'padding'
     result.__module__, result.__name__ = __name__, 'padding'
     return result
 
@@ -216,6 +223,8 @@ def align(size, **kwds):
 
     result.repr, result.blocksize, result.__getinitargs__ = repr, blocksize, getinitargs
     result.__module__, result.__name__ = __name__, 'align'
+    if hasattr(result, '__qualname__'):
+        result.__qualname__ = 'align'
     return result
 
 ## FIXME: might want to raise an exception or warning if we have too large of an array
@@ -240,7 +249,7 @@ def array(type, count, **kwds):
         Log.warning("dynamic.array : {:s} : Requested argument count={:d} is larger than configuration max_count={:d}.".format(t.typename(), count, Config.parray.max_count))
 
     def classname(self):
-        return "dynamic.array({:s}, {:s})".format(type.__name__, str(self.length))
+        return "dynamic.array({:s}, {!s})".format(getattr(type, '__qualname__', type.__name__), self.length)
 
     kwds.setdefault('classname', classname)
     kwds.setdefault('length', count)
@@ -514,7 +523,7 @@ def pointer(target, *optional_type, **attrs):
         raise TypeError("{:s}.pointer takes exactly 1 or 2 arguments ({:d} given)".format(__name__, 1 + len(optional_type)))
     type = ptype.pointer_t._value_ if len(optional_type) == 0 or optional_type[0] is None else optional_type[0]
     def classname(self):
-        return "dynamic.pointer({:s})".format(target.typename() if ptype.istype(target) else target.__name__)
+        return "dynamic.pointer({:s})".format(target.typename() if ptype.istype(target) else getattr(target, '__qualname__', target.__name__))
 #    attrs.setdefault('classname', classname)
     t = ptype.pointer_t._value_ if type is None else type
     res = ptype.clone(t, **attrs)
@@ -531,7 +540,7 @@ def rpointer(target, *optional, **attrs):
         raise TypeError("{:s}.rpointer takes exactly 1 - 3 arguments ({:d} given)".format(__name__, 1 + len(optional)))
     object = (lambda self: list(self.walk())[-1]) if len(optional) == 0 or optional[0] is None else optional[0]
     def classname(self):
-        return "dynamic.rpointer({:s}, ...)".format(target.typename() if ptype.istype(target) else target.__name__)
+        return "dynamic.rpointer({:s}, ...)".format(target.typename() if ptype.istype(target) else getattr(target, '__qualname__', target.__name__))
 #    attrs.setdefault('classname', classname)
     t = ptype.pointer_t._value_ if len(optional) == 1 or optional[1] is None else optional[1]
     res = ptype.clone(t, **attrs)
@@ -546,13 +555,15 @@ def opointer(target, *optional, **attrs):
     """
     if len(optional) > 2:
         raise TypeError("{:s}.opointer takes exactly 1 - 3 arguments ({:d} given)".format(__name__, 1 + len(optional)))
-    calculate = (lambda self, offset: offset) if len(optional) == 0 or optional[0] is None else optional[0]
+
+    calculate = (lambda self, offset: offset) if len(optional) == 0 or optional[0] is None else (lambda self, offset, base=optional[0]: base + offset) if isinstance(optional[0], integer_types) else optional[0]
+    calculate_name = '' if len(optional) == 0 or optional[0] is None else "{:+#x}".format(optional[0]) if isinstance(optional[0], integer_types) else getattr(optional[0], '__qualname__', optional[0].__name__)
     def classname(self):
-        return "dynamic.opointer({:s}, ...)".format(target.typename() if ptype.istype(target) else target.__name__)
-#    attrs.setdefault('classname', classname)
-    t = ptype.pointer_t._value_ if len(optional) == 1 or optional[1] is None else optional[1]
-    res = ptype.clone(t, **attrs)
-    return ptype.clone(ptype.opointer_t, _object_=target, _calculate_=calculate, _value_=res)
+        calcname = calculate_name if calculate_name else "{:+#x}".format(calculate(self, 0))
+        return "dynamic.opointer({:s}, {:s})".format(target.typename() if ptype.istype(target) else getattr(target, '__qualname__', target.__name__), calcname)
+
+    backing = ptype.clone(ptype.pointer_t._value_ if len(optional) == 1 or optional[1] is None else optional[1], **attrs)
+    return ptype.clone(ptype.opointer_t, _object_=target, _calculate_=calculate, _value_=backing, classname=classname)
 
 if __name__ == '__main__':
     class Result(Exception): pass

@@ -556,11 +556,12 @@ class __interface__(object):
     @classmethod
     def typename(cls):
         """Return the name of the ptype"""
-        if getattr(cls, '__module__', ''):
+        module, qualname = getattr(cls, '__module__', ''), getattr(cls, '__qualname__', cls.__name__)
+        if module:
             if Config.display.show_module_name:
-                return '.'.join([cls.__module__, cls.__name__])
-            return '.'.join([cls.__module__.rsplit('.', 1)[-1], cls.__name__])
-        return cls.__name__
+                return '.'.join([module, qualname])
+            return '.'.join([module.rsplit('.', 1)[-1], qualname])
+        return qualname
     def classname(self):
         """Return the dynamic classname. Can be overwritten."""
         return self.typename()
@@ -1716,6 +1717,7 @@ def clone(cls, **newattrs):
 
     if newattrs.get('__name__', None) is None:
         newattrs['__name__'] = cls.__name__
+        newattrs.setdefault('__qualname__', cls.__qualname__) if hasattr(cls, '__qualname__') else None
 
     if hasattr(cls, '__module__'):
         newattrs.setdefault('__module__', cls.__module__)
@@ -2173,14 +2175,14 @@ class wrapper_t(type):
             if self._value_ and not istype(self._value_):
                 Log.info("wrapper_t.object : {:s} : Using wrapper_t._value_{:s} as a closure for instantiatiation of object.".format(self.instance(), '' if self._value_.__name__ == '_value_' else " ({:s})".format(self._value_.__name__)))
             res = self._value_ or type
-            name = "wrapped<{:s}>".format(res.typename() if istype(res) else res.__name__)
+            name = "wrapped<{:s}>".format(res.typename() if istype(res) else getattr(res, '__qualname__', res.__name__))
             self.__object__ = self.new(res, __name__=name, offset=0, source=provider.proxy(self))
 
         # Check if wrapper_t.__object__ is a different type than self._value_ but not a callable or a property
         elif not builtins.isinstance(cls._value_, (types.FunctionType, types.MethodType, property)) and self._value_ and not builtins.isinstance(self.__object__, self._value_):
             t, res = self._value_, self.__object__
             Log.warning("wrapper_t.object : {:s} : Casting object with incompatible type {:s} to wrapper_t._value_ ({:s}).".format(self.instance(), res.instance(), t.typename()))
-            name = "wrapped<{:s}>".format(t.typename() if istype(res) else t.__name__)
+            name = "wrapped<{:s}>".format(t.typename() if istype(res) else getattr(t, '__qualname__', t.__name__))
             self.__object__ = res.cast(t, __name__=name, offset=0, source=provider.proxy(self))
 
         # Otherwise, we can simply return it
@@ -2235,7 +2237,7 @@ class wrapper_t(type):
     def __deserialize_block__(self, block):
         self.__value__ = block
         try:
-            self.object.load(offset=0, source=provider.proxy(self))
+            self.object.load(offset=0, source=provider.proxy(self)) if block is not None else None
 
         # If we got a LoadError or similar, then we need to recast the
         # exception as a ConsumeError since this method is used to
@@ -2275,7 +2277,8 @@ class wrapper_t(type):
             return "{:s}<{:s}>".format(self.typename(), self.__object__.classname())
         if self._value_ is None:
             return "{:s}<?>".format(self.typename())
-        return "{:s}<{:s}>".format(self.typename(), self._value_.typename() if istype(self._value_) else self._value_.__name__)
+        value = self._value_
+        return "{:s}<{:s}>".format(self.typename(), value.typename() if istype(value) else getattr(value, '__qualname__', value.__name__))
 
     def contains(self, offset):
         left = self.getoffset()
@@ -2525,8 +2528,11 @@ class pointer_t(encoded_t):
     num = number = int
 
     def classname(self):
-        targetname = force(self._object_, self).typename() if istype(self._object_) else getattr(self._object_, '__name__', 'None')
-        return "{:s}<{:s}>".format(self.typename(), targetname)
+        object = getattr(self, '_object_', undefined) or undefined
+        if self.initializedQ():
+            return "{:s}<{:s}>".format(self.typename(), self.dereference().classname())
+        objectname = force(object, self).typename() if istype(object) else object.__qualname__ if hasattr(object, '__qualname__') else getattr(object, '__name__', 'None')
+        return "{:s}<{:s}>".format(self.typename(), objectname)
 
     def summary(self, **options):
         if self.value is None:
@@ -2548,13 +2554,13 @@ class rpointer_t(pointer_t):
     _baseobject_ = None
 
     def classname(self):
+        baseobject, object = self._baseobject_, getattr(self, '_object_', None)
         if self.initializedQ():
-            baseobject = self._baseobject_
-            basename = baseobject.classname() if builtins.isinstance(self._baseobject_, base) else baseobject.__name__ if baseobject else 'None'
-            return "{:s}({:s}, {:s})".format(self.typename(), self.object.classname(), basename)
-        res = getattr(self, '_object_', undefined) or undefined
-        objectname = force(res, self).typename() if istype(res) else res.__name__
-        return "{:s}({:s}, ...)".format(self.typename(), objectname)
+            root = force(baseobject, self)
+            return "{:s}<{:s}>".format(self.typename(), self.dereference().classname())
+        basename = baseobject.classname() if builtins.isinstance(baseobject, base) else getattr(baseobject, '__qualname__', baseobject.__name__) if baseobject else 'None'
+        objectname = force(object, self).typename() if istype(object) else object.__qualname__ if hasattr(object, '__qualname__') else getattr(object, '__name__', 'None')
+        return "{:s}({:s}, {:s})".format(self.typename(), objectname, basename)
 
     def dereference(self, **attrs):
         root = force(self._baseobject_, self)
@@ -2574,11 +2580,10 @@ class opointer_t(pointer_t):
     _calculate_ = lambda self, value: value
 
     def classname(self):
-        calcname = self._calculate_.__name__
+        calcname, object = getattr(self._calculate_, '__qualname__', self._calculate_.__name__), getattr(self, '_object_', None)
         if self.initializedQ():
-            return "{:s}({:s}, {:s})".format(self.typename(), self.object.classname(), calcname)
-        res = getattr(self, '_object_', undefined) or undefined
-        objectname = force(res, self).typename() if istype(res) else res.__name__
+            return "{:s}<{:s}>".format(self.typename(), self.dereference().classname())
+        objectname = force(object, self).typename() if istype(object) else object.__qualname__ if hasattr(object, '__qualname__') else getattr(object, '__name__', 'None')
         return "{:s}({:s}, {:s})".format(self.typename(), objectname, calcname)
 
     def dereference(self, **attrs):
