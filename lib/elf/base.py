@@ -65,23 +65,6 @@ class ElfXX_BaseOff(ptype.rpointer_t):
 
 class ElfXX_BaseAddr(ptype.opointer_t):
     '''Always a virtual address relative to base of file.'''
-    @classmethod
-    def typename(cls):
-        return cls.__name__
-
-    def classname(self):
-        try: object = self._object_() if callable(self._object_) else self._object_
-        except Exception: object = self._object_
-
-        try: type = object.classname() if ptypes.isinstance(object) else object.typename()
-        except Exception: pass
-        else: return "{:s}<{:s}>".format(self.typename(), type)
-
-        if hasattr(object, '__name__'):
-            type = object.__name__
-            return "{:s}<{:s}>".format(self.typename(), type)
-        return super(ElfXX_BaseAddr, self).classname()
-
     def _calculate_(self, offset):
         base = self.getparent(ElfXX_File)
         return base.getoffset() + offset
