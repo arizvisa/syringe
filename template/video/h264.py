@@ -2,6 +2,9 @@ from ptypes import *
 
 v = 0       # FIXME: this file format is busted
 
+# https://www.zerodayinitiative.com/advisories/ZDI-11-303/
+# https://www.zerodayinitiative.com/advisories/ZDI-12-079/
+
 class seq_parameter_set_rbsp(pbinary.struct):
     class __pic_order_type_1(pbinary.struct):
         _fields_ = [
