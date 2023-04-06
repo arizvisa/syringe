@@ -659,8 +659,12 @@ class __interface__(object):
         if not len(args) and 'type' not in kwds:
             return kwds.get('default', self.parent) if self.parent is None else self.parent
 
-        query = args if len(args) else (kwds['type'],)
-        match = lambda self: lambda query: any(((builtins.isinstance(q, builtins.type) and builtins.isinstance(self, q)) or self.parent is q) for q in query)
+        # figure out whether we're doing an exact match or a type match
+        [query] = args if args else [kwds['type']]
+        if isinstance(query) or query is None:
+            match = lambda self: lambda query: self.parent is query
+        else:
+            match = lambda self: lambda query: builtins.isinstance(self, query)
 
         # check to see if user actually queried for self
         if match(self)(query):
@@ -680,9 +684,7 @@ class __interface__(object):
             return kwds['default']
 
         # otherwise, we can bail since it wasn't found.
-        chain = str().join("<{:s}>".format(node.instance()) for node in self.traverse(edges=parents))
-        res = (q.typename() if istype(q) else str(q) for q in query)
-        raise error.ItemNotFoundError(self, 'base.getparent', message="The requested match ({:s}) was not found while traversing from {:s} : {:s}".format(', '.join(res), self.instance(), chain))
+        raise error.ItemNotFoundError(self, 'base.getparent', message="The requested match ({!r}) was not found while traversing from {:s}.".format(query, self.instance()))
     def backtrace(self, fn=utils.operator.methodcaller('instance')):
         """
         Return a backtrace to the root element applying ``fn`` to each parent
@@ -3746,6 +3748,71 @@ if __name__ == '__main__':
         tests.append((not x.value[1].initializedQ() and x.value[1].size() == 3 and x.value[1].serialize() == b'\0\0\0\0'))
         tests.append((not properties.get('underload', False) and properties.get('uninitialized', False)))
         if all(tests):
+            raise Success
+
+    @TestCase
+    def test_getparent_instance():
+        class d(pstruct.type): _fields_ = [(pint.uint32_t, 'd')]
+        class c(pstruct.type): _fields_ = [(d, 'c')]
+        class b(pstruct.type): _fields_ = [(c, 'b')]
+        class a(pstruct.type): _fields_ = [(b, 'a')]
+
+        x = a().a
+        v = x['a']['b']['c']['d']
+        res = v.getparent(x)
+        if builtins.isinstance(res, b):
+            raise Success
+
+    @TestCase
+    def test_getparent_top():
+        class d(pstruct.type): _fields_ = [(pint.uint32_t, 'd')]
+        class c(pstruct.type): _fields_ = [(d, 'c')]
+        class b(pstruct.type): _fields_ = [(c, 'b')]
+        class a(pstruct.type): _fields_ = [(b, 'a')]
+
+        x = a().a
+        v = x['a']['b']['c']['d']
+        res = v.getparent(None)
+        if res.parent is None and builtins.isinstance(res, a):
+            raise Success
+
+    @TestCase
+    def test_getparent_types():
+        class d(pstruct.type): _fields_ = [(pint.uint32_t, 'd')]
+        class c(pstruct.type): _fields_ = [(d, 'c')]
+        class b(pstruct.type): _fields_ = [(c, 'b')]
+        class a(pstruct.type): _fields_ = [(b, 'a')]
+
+        x = a().a
+        v = x['a']['b']['c']['d']
+        res = v.getparent((a,b,c))
+        if builtins.isinstance(res, c):
+            raise Success
+
+    @TestCase
+    def test_getparent_type_1():
+        class d(pstruct.type): _fields_ = [(pint.uint32_t, 'd')]
+        class c(pstruct.type): _fields_ = [(d, 'c')]
+        class b(pstruct.type): _fields_ = [(c, 'b')]
+        class a(pstruct.type): _fields_ = [(b, 'a')]
+
+        x = a().a
+        v = x['a']['b']['c']['d']
+        res = v.getparent(a)
+        if res.parent is None and builtins.isinstance(res, a):
+            raise Success
+
+    @TestCase
+    def test_getparent_type_2():
+        class d(pstruct.type): _fields_ = [(pint.uint32_t, 'd')]
+        class c(pstruct.type): _fields_ = [(d, 'c')]
+        class b(pstruct.type): _fields_ = [(c, 'b')]
+        class a(pstruct.type): _fields_ = [(b, 'a')]
+
+        x = a().a
+        v = x['a']['b']['c']['d']
+        res = v.getparent(b)
+        if builtins.isinstance(res, b):
             raise Success
 
 if __name__ == '__main__':
