@@ -42,7 +42,7 @@ class IMAGE_IMPORT_NAME_TABLE_ORDINAL64(_IMAGE_IMPORT_NAME_TABLE_ORDINAL):
 class _IMAGE_IMPORT_NAME_TABLE_NAME(pbinary.struct):
     def dereference(self):
         """Dereferences Name into it's IMAGE_IMPORT_HINT structure"""
-        parent = self.getparent(IMAGE_IMPORT_DIRECTORY)
+        parent = self.getparent((IMAGE_IMPORT_DIRECTORY,IMAGE_DELAYLOAD_DIRECTORY))
         offset = CalculateRelativeAddress(parent, self['Name'])
         return self.p.p.new(IMAGE_IMPORT_HINT, __name__='ImportName', offset=offset)
 
@@ -51,7 +51,7 @@ class _IMAGE_IMPORT_NAME_TABLE_NAME(pbinary.struct):
 
     def GetName(self):
         """Returns (Import Hint, Import String)"""
-        if self['Name'] != 0:
+        if not self['OrdinalFlag'] and self['Name']:
             res = self.dereference().li
             return (res.Hint(), res.String())
         return (0, None)
