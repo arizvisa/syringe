@@ -135,7 +135,7 @@ class IMAGE_IMPORT_DESCRIPTOR(pstruct.type):
         return res
 
     _fields_ = [
-        (virtualaddress(lambda s: IMAGE_IMPORT_NAME_TABLE64 if s.getparent(Header)['OptionalHeader'].is64() else IMAGE_IMPORT_NAME_TABLE, type=dword), 'INT'),  # FIXME
+        (virtualaddress(lambda self: IMAGE_IMPORT_NAME_TABLE64 if self.getparent(Header)['OptionalHeader'].is64() else IMAGE_IMPORT_NAME_TABLE, type=dword), 'INT'),  # FIXME
         (TimeDateStamp, 'TimeDateStamp'),
         (dword, 'ForwarderChain'),
         (virtualaddress(pstr.szstring, type=dword), 'Name'),
@@ -234,7 +234,7 @@ class IMAGE_DELAYLOAD_DIRECTORY_ENTRY(pstruct.type):
         (virtualaddress(pstr.szstring), 'Name'),
         (virtualaddress(dword), 'ModuleHandle'),
         (virtualaddress(__IAT), 'DIAT'),
-        (lambda s: virtualaddress(IMAGE_IMPORT_NAME_TABLE64) if self.getparent(Header)['OptionalHeader'].is64() else virtualaddress(IMAGE_IMPORT_NAME_TABLE), 'DINT'),
+        (lambda self: virtualaddress(IMAGE_IMPORT_NAME_TABLE64) if self.getparent(Header)['OptionalHeader'].is64() else virtualaddress(IMAGE_IMPORT_NAME_TABLE), 'DINT'),
         (virtualaddress(__IAT), 'BDIAT'),
         (virtualaddress(__IAT), 'UDAT'),
         (TimeDateStamp, 'TimeStamp'),
