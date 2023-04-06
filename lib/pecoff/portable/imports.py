@@ -231,12 +231,12 @@ class IMAGE_DELAYLOAD_DIRECTORY_ENTRY(pstruct.type):
         return res
     _fields_ = [
         (dword, 'Attributes'),
-        (virtualaddress(pstr.szstring), 'Name'),
-        (virtualaddress(dword), 'ModuleHandle'),
-        (virtualaddress(__IAT), 'DIAT'),
-        (lambda self: virtualaddress(IMAGE_IMPORT_NAME_TABLE64) if self.getparent(Header)['OptionalHeader'].is64() else virtualaddress(IMAGE_IMPORT_NAME_TABLE), 'DINT'),
-        (virtualaddress(__IAT), 'BDIAT'),
-        (virtualaddress(__IAT), 'UDAT'),
+        (virtualaddress(pstr.szstring, type=dword), 'Name'),
+        (virtualaddress(dword, type=dword), 'ModuleHandle'),
+        (virtualaddress(__IAT, type=dword), 'DIAT'),
+        (lambda self: virtualaddress(IMAGE_IMPORT_NAME_TABLE64, type=dword) if self.getparent(Header)['OptionalHeader'].is64() else virtualaddress(IMAGE_IMPORT_NAME_TABLE, type=dword), 'DINT'),
+        (virtualaddress(__IAT, type=dword), 'BDIAT'),
+        (virtualaddress(__IAT, type=dword), 'UDAT'),
         (TimeDateStamp, 'TimeStamp'),
     ]
 
