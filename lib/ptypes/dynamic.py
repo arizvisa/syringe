@@ -408,7 +408,7 @@ class union(__union_interface__):
         return self
 
     def serialize(self):
-        object, = self.value[0]
+        [object] = self.value
         return object.serialize()
 
     def load(self, **attrs):
