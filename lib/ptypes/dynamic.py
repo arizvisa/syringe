@@ -80,7 +80,7 @@ Example usage:
             (dyn.clone(pstr.wstring, length=8), 'widestring'),
         ]
 """
-import itertools
+import itertools, traceback
 from . import ptype, parray, pstruct, error, utils, bitmap, provider, pint
 
 __all__ = 'block,blockarray,align,array,clone,pointer,rpointer,opointer,union'.split(',')
@@ -103,6 +103,9 @@ def block(size, **kwds):
     if size < 0:
         t = ptype.block(length=size)
         Log.error("block : {:s} : Invalid argument size={:d} cannot be < 0. Defaulting to 0".format(t.typename(), size))
+        Log.error("block : {:s} : Traceback (most recent call last):".format(t.typename()))
+        stack = [item.split('\n') for item in traceback.format_list(traceback.extract_stack()[:-1])]
+        [Log.error("block : {:s} : {:s}".format(t.typename(), item.rstrip())) for item in itertools.chain(*stack)]
         size = 0
 
     def classname(self):
@@ -121,6 +124,9 @@ def blockarray(type, size, **kwds):
     if size < 0:
         t = parray.block(_object_=type)
         Log.error("blockarray : {:s} : Invalid argument size={:d} cannot be < 0. Defaulting to 0".format(t.typename(), size))
+        Log.error("blockarray : {:s} : Traceback (most recent call last):".format(t.typename()))
+        stack = [item.split('\n') for item in traceback.format_list(traceback.extract_stack()[:-1])]
+        [Log.error("blockarray : {:s} : {:s}".format(t.typename(), item.rstrip())) for item in itertools.chain(*stack)]
         size = 0
 
     getinitargs = lambda self: (type, size)
@@ -239,6 +245,9 @@ def array(type, count, **kwds):
     if count < 0:
         t = parray.type(_object_=type, length=count)
         Log.error("dynamic.array : {:s} : Invalid argument count={:d} cannot be < 0. Defaulting to 0.".format(t.typename(), count))
+        Log.error("dynamic.array : {:s} : Traceback (most recent call last):".format(t.typename()))
+        stack = [item.split('\n') for item in traceback.format_list(traceback.extract_stack()[:-1])]
+        [Log.error("dynamic.array : {:s} : {:s}".format(t.typename(), item.rstrip())) for item in itertools.chain(*stack)]
         count = 0
 
     if Config.parray.max_count > 0 and count > Config.parray.max_count:
