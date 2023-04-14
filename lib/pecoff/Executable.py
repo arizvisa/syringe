@@ -1,4 +1,4 @@
-import logging, operator, functools, itertools, array, ptypes
+import logging, traceback, operator, functools, itertools, array, ptypes
 from ptypes import *
 
 from .headers import *
@@ -921,6 +921,14 @@ class File(pstruct.type, ptype.boundary):
         dos = self['Header'].li
         if dos['e_lfanew'].int() == self.blocksize():
             return Next
+
+        # If the entire header is zero, then we assume that this is a PE because
+        # only Micro$oft does stupid shit like this with compiled help files.
+        elif dos['e_lfanew'].int() == dos.filesize() == 0:
+            cls, log = self.__class__, logging.getLogger(__name__)
+            log.warning("{:s} : Assuming a {:s} header immediately follows {:s} due to the calculated size from {:s} and the value for {:s}.{:s} being 0.".format('.'.join([cls.__module__, cls.__name__]), 'PECOFF', dos.instance(), dos.instance(), dos.classname(), 'e_lfanew'))
+            return Next
+
         return dyn.block(dos.filesize() - self.blocksize())
 
     def __NotLoaded(self):
