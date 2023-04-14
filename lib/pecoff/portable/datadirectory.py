@@ -1,4 +1,4 @@
-import sys, ptypes
+import sys, ptypes, itertools, logging, traceback
 from ptypes import pstruct, parray, ptype, pbinary, pstr, dyn
 from ..headers import *
 
@@ -18,8 +18,24 @@ class IMAGE_DIRECTORY_ENTRY_IMPORT(AddressEntry):
 class IMAGE_DIRECTORY_ENTRY_RESOURCE(AddressEntry):
     #_object_ = resources.IMAGE_RESOURCE_DIRECTORY
     class _object_(resources.IMAGE_RESOURCE_DIRECTORY):
-        _fields_ = resources.IMAGE_RESOURCE_DIRECTORY._fields_[:]
-        _fields_.append((lambda s: dyn.block(s.blocksize() - (s.value[-1].getoffset()+s.value[-1].blocksize()-s.value[0].getoffset())), 'ResourceData'))
+        def __ResourceData(self):
+            first, last = self.value[0], self.value[-1]
+            lastoffset, lastsize = last.getoffset(), last.blocksize()
+            start, stop = first.getoffset(), last.getoffset() + last.blocksize()
+            blocksize, expected = self.blocksize(), stop - start
+
+            # If the IMAGE_DIRECTORY_ENTRY is lying about the size of its data,
+            # then warn the user about it and correct it to the minimum.
+            if expected > blocksize and self.p and self.p.p:
+                directory = self.getparent(headers.IMAGE_DATA_DIRECTORY)
+                log = logging.getLogger(__name__)
+                log.warning("{:s} : Ignoring size ({:#x}) inside {:s} entry as it is smaller than the minimum size of {:s} ({:#x}).".format(__name__, blocksize, directory.instance(), self.instance(), expected))
+                log.warning("{:s} : Traceback (most recent call last):".format(__name__))
+                stack = [item.split('\n') for item in traceback.format_list(traceback.extract_stack()[:-1])]
+                [log.warning("{:s} : {:s}".format(__name__, item.rstrip())) for item in itertools.chain(*stack)]
+            return dyn.block(max(expected, blocksize) - expected)
+
+        _fields_ = resources.IMAGE_RESOURCE_DIRECTORY._fields_[:] + [(__ResourceData, 'ResourceData')]
 
 class IMAGE_DIRECTORY_ENTRY_EXCEPTION(AddressEntry):
     _object_ = exceptions.IMAGE_EXCEPTION_DIRECTORY
@@ -47,7 +63,7 @@ class IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG(AddressEntry):
     def _object_(self):
         res = self.getparent(Header)['OptionalHeader'].li
         res = loader.IMAGE_LOAD_CONFIG_DIRECTORY64 if res.is64() else loader.IMAGE_LOAD_CONFIG_DIRECTORY32
-        #return dyn.clone(res, blocksize=lambda s, cb=self['Size'].li.int(): cb)
+        #return dyn.clone(res, blocksize=lambda self, cb=self['Size'].li.int(): cb)
         return res
 
 class IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT(OffsetEntry):
