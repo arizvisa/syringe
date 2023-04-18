@@ -114,8 +114,8 @@ class IMAGE_DOS_HEADER(pstruct.type):
         t = dyn.array(IMAGE_DOS_HEADER.Relocation, res.int())
         return dyn.rpointer(t, self, uint16)
 
-    #e_cparhdr << 4
-    #e_cp << 9
+    # e_cparhdr * pow(2,4)
+    # e_cp * pow(2,9)
     _fields_ = [
         ( e_magic, 'e_magic' ),
         ( uint16, 'e_cblp' ),       # bytes in last page / len mod 512 / UsedBytesInLastPage
@@ -128,18 +128,18 @@ class IMAGE_DOS_HEADER(pstruct.type):
         ( uint16, 'e_sp' ),         # sp / sp of image / InitialSP
         ( uint16, 'e_csum' ),       # checksum / checksum (ignored) / Checksum
         ( uint16, 'e_ip' ),         # ip / ip of entry / InitialIP
-        ( uint16, 'e_cs' ),         # cs / cs of entry / InitialrmwwelativeIp
-        ( __e_lfarlc, 'e_lfarlc' ), # relocation table
+        ( uint16, 'e_cs' ),         # cs / cs of entry / InitialRelativeCS
+        ( __e_lfarlc, 'e_lfarlc' ), # relocation table / address of relocation table / AddressOfRelocationTable
 
-        ( uint16, 'e_ovno'),        # overlay number
+        ( uint16, 'e_ovno'),        # overlay number / overlay # / OverlayNumber
         #( uint32, 'EXE_SYM_TAB'),  # from inc/exe.inc
 
         # all the data below here changes based on the linker:
         #    Borland, ARJ, LZEXE, PKLITE, LHARC, LHA, CRUNCH, BSA, LARC, etc..
         ( __e_oem, 'e_oem'),        # oem and reserved data
-        ( __e_lfanew, 'e_lfanew'),
-        ( __e_rlc, 'e_rlc' ),       # relocations?
-        ( __e_parhdr, 'e_parhdr'),
+        ( __e_lfanew, 'e_lfanew'),  # new exe header / offset of executable header / AddressOfNewExeHeader
+        ( __e_rlc, 'e_rlc' ),       # relocations...sometimes?
+        ( __e_parhdr, 'e_parhdr'),  # padding according to number of paragraphs for header size
     ]
 
 ### What file format the next header is

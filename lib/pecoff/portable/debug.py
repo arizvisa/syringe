@@ -158,7 +158,6 @@ class CV_INFO_PDB70(pstruct.type):
             path = '/'.join([self['PdbFileName'].str(), sympath])
             return urllib.basejoin(baseuri if baseuri.endswith('/') else "{:s}/".format(baseuri), path)
 
-
 @IMAGE_DEBUG_DIRECTORY_DATA.define
 class IMAGE_DEBUG_DATA_CODEVIEW(pstruct.type):
     type = IMAGE_DEBUG_TYPE_.byname('CODEVIEW')
@@ -297,6 +296,20 @@ class IMAGE_DEBUG_DATA_VC_FEATURE(pstruct.type):
         (DWORD, 'guardN'),
     ]
 IMAGE_DEBUG_TYPE_VC_FEATURE = IMAGE_DEBUG_DATA_VC_FEATURE
+
+## IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS
+class IMAGE_DLLCHARACTERISTICS_EX_(pbinary.flags):
+    _fields_ = [
+        (9, 'UNKNOWN'),
+        (1, 'FORWARD_CFI_COMPAT'),
+        (5, 'RESERVED'),
+        (1, 'CET_COMPAT'),
+    ]
+
+@IMAGE_DEBUG_DIRECTORY_DATA.define
+class IMAGE_DEBUG_DATA_EX_DLLCHARACTERISTICS(pbinary.littleendian(IMAGE_DLLCHARACTERISTICS_EX_)):
+    type = IMAGE_DEBUG_TYPE_.byname('EX_DLLCHARACTERISTICS')
+IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS = IMAGE_DEBUG_DATA_EX_DLLCHARACTERISTICS
 
 ## IMAGE_DEBUG_TYPE_POGO
 class LTCG_ENTRY(pstruct.type):
