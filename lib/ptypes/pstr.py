@@ -389,7 +389,7 @@ class string(ptype.type):
             res, length = encoding.decode(data)
         except UnicodeDecodeError:
             Log.warning('{:s}.str : {:s} : Unable to decode {:s} to {:s}. Defaulting to unencoded string.'.format(self.classname(), self.instance(), self._object_.typename(), encoding.name))
-            res, length = data.decode(encoding.name, errors='replace')
+            return data.decode(encoding.name, errors='replace')
         return res
 
     def get(self):
@@ -425,7 +425,7 @@ class string(ptype.type):
         try:
             res = self.__getvalue__()
 
-        except ptypes.error.InitializationError:
+        except error.InitializationError:
             return super(string, self).summary(**options)
 
         except UnicodeDecodeError:
@@ -546,7 +546,7 @@ class szstring(string):
         try:
             res = self.__getvalue__()
 
-        except ptypes.error.InitializationError:
+        except error.InitializationError:
             return super(szstring, self).summary(**options)
 
         except UnicodeDecodeError:
