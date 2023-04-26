@@ -184,16 +184,15 @@ if __name__ == '__main__':
 
     # if the user wants to use the tagVS_FIXEDFILEINFO structure, then we'll
     # just initialize the property dictionary here.
-    ffi = vi['Value']
+    ffi, properties = vi['Value'], {}
     if opts.use_fixedfileinfo:
-        properties = {}
         properties['ProductVersion'] = ffi['dwProductVersion'].str()
         properties['FileVersion'] = ffi['dwFileVersion'].str()
         properties['Platform'] = ffi['dwFileOS'].item('PLATFORM').str()
         properties['OperatingSystem'] = ffi['dwFileOS'].item('OS').str()
         properties['FileType'] = ffi['dwFileType'].str()
         properties['FileSubtype'] = ffi['dwFileSubType'].str()
-        properties['OriginalFilename'] = filename
+        properties['OriginalFilename'] = os.path.basename(filename)
 
     # otherwise we just extract the properties from the string table
     else:
@@ -239,8 +238,18 @@ if __name__ == '__main__':
             sys.exit(1)
         properties = {item['szKey'].str() : item['Value'].str() for item in stringTable}
 
+        # now we'll add the VS_FIXEDFILEINFO fields to our list of properties.
+        fixedproperties = properties.setdefault('VS_FIXEDFILEINFO', {})
+        fixedproperties['dwProductVersion'] = ffi['dwProductVersion'].str()
+        fixedproperties['dwFileVersion'] = ffi['dwFileVersion'].str()
+        fixedproperties['dwFileOS'] = {'PLATFORM': ffi['dwFileOS'].item('PLATFORM').str(), 'OS': ffi['dwFileOS'].item('OS').str()}
+        fixedproperties['dwFileType'] = ffi['dwFileType'].str()
+        fixedproperties['dwFileSubtype'] = {'langID': "{:x}".format(ffi['dwFileSubtype']['langID']), 'charsetID': "{:x}".format(ffi['dwFileSubType']['charsetID'])}
+        fixedproperties['dwFileDateMS'] = "{:x}".format(ffi['dwFileDateMS'])
+        fixedproperties['dwFileDateLS'] = "{:x}".format(ffi['dwFileDateLS'])
+
     properties.setdefault('__path__', filename)
-    properties.setdefault('__name__', os.path.split(filename)[1])
+    properties.setdefault('__name__', os.path.basename(filename))
     properties.setdefault('__machine__', pe['FileHeader']['Machine'].str())
 
     # if we were asked to dump the available properties, then do just that.
@@ -251,7 +260,8 @@ if __name__ == '__main__':
 
     # format the path according to the filesystem encoding
     res = sys.getfilesystemencoding()
-    encoded = { attribute : property for attribute, property in properties.items() }
+    make_object = lambda name, dictionary: type(name, (object,), {key : (make_object(key, value) if isinstance(value, dict) else value) for key, value in dictionary.items()})
+    encoded = { attribute : (make_object(attribute, property) if isinstance(property, dict) else property) for attribute, property in properties.items() }
 
     path = opts.format.format(**encoded)
     if path.endswith(os.path.sep):
