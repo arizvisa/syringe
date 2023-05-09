@@ -1,7 +1,7 @@
 import logging,os
 import _PyDbgEng
-from . import internalstate,task
-import pecoff,ndk,match
+from . import internalstate,task,match
+import pecoff,ndk
 
 class addressspace(object):
     offset = 0

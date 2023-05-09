@@ -4,7 +4,7 @@ logging.root=logging.RootLogger(logging.INFO)
 from . import dbgeng
 
 if __name__ == '__main__':
-    import dbgeng,match
+    import dbgeng, dbgeng.match as match
 
     if False:
         a = dbgeng.local()
