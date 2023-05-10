@@ -299,6 +299,9 @@ def setup_ssl(socket, arguments):
         print('warning: ignoring request for SSL support due to an error importing the necessary libraries.')
         return socket
 
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS)
+    context.set_ciphers('ALL:@SECLEVEL=1')  # I FUCKING HATE INFOSEC PEOPLE
+
     python_ssl_is_fucking_stupid = {}
 
     if arguments.keyfile:
@@ -347,8 +350,11 @@ def setup_ssl(socket, arguments):
             hardlink(certfile.name, arguments.certificatepath)
             print("wrote certificate data to {:s}.".format(arguments.certificatepath))
 
+        [ file.flush() for file in [keyfile, certfile] ]
         if WIN32: [ file.close() for file in [keyfile, certfile] ]
-        wrap_the_bitch_using_filenames_because_python_is_fucking_stupid = ssl.wrap_socket(socket, server_side=True, keyfile=keyfile.name, certfile=certfile.name)
+
+        context.load_cert_chain(keyfile=keyfile.name, certfile=certfile.name)
+        wrap_the_bitch_using_filenames_because_python_is_fucking_stupid = context.wrap_socket(socket, server_side=True)
         if WIN32: keyfile, certfile = (open(file.name) for file in [keyfile, certfile])
     return wrap_the_bitch_using_filenames_because_python_is_fucking_stupid
 
