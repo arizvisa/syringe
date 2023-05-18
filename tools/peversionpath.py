@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import itertools,logging,optparse,os.path,locale,datetime,math
+import itertools,logging,optparse,os.path,locale,datetime,math,json
 import ptypes,pecoff
 from ptypes import *
 
@@ -59,21 +59,21 @@ class help(optparse.OptionParser):
         optparse.OptionParser.__init__(self)
         self.usage = '%prog EXECUTABLE'
 
-        self.add_option('', '--dump-names', default=False, action='store_true', help='dump the name tables available under the VERSION_INFO resource directory')
+        self.add_option('', '--dump-names', default=False, action='store_true', help='dump the name tables available under the VERSION_INFO resource directory as JSON')
         self.add_option('', '--name', default=None, type='int', help='use the specified name when searching through the resource directory')
-        self.add_option('', '--dump-resources', default=False, action='store_true', help='dump the languages for the resources available under the VERSION_INFO resource directory')
+        self.add_option('', '--dump-resources', default=False, action='store_true', help='dump the languages for the resources available under the VERSION_INFO resource directory as JSON')
         self.add_option('', '--resource', default=None, type='int', help='use the specified language when searching through the resource directory')
 
         # VS_FIXEDFILEINFO
         self.add_option('-u', '--use-fixedfileinfo', default=False, action='store_true', help='use the VS_FIXEDFILEINFO structure instead of the string table')
 
         # VS_VERSIONINFO
-        self.add_option('', '--list-lgcp', default=False, action='store_true', help='dump the language-id/codepage pairs that are available')
+        self.add_option('', '--list-lgcp', default=False, action='store_true', help='dump the language-id/codepage pairs that are available as JSON')
         self.add_option('-l', '--language-id', dest='lgid', default=None, type='int', help='use the specified language-id when locating the correct string table')
         self.add_option('-c', '--codepage', default=None, type='int', help='use the specified codepage when locating the correct stringtable')
 
         # fields
-        self.add_option('-d', '--dump', default=False, action='store_true', help='dump the discovered properties that can be used for FORMAT')
+        self.add_option('-d', '--dump', default=False, action='store_true', help='dump the discovered properties that can be used for FORMAT as JSON')
         self.add_option('-f', '--format', default='{__name__}/{ProductVersion}/{OriginalFilename}', type='str', help='output the specified format (defaults to {__name__}/{ProductVersion}/{OriginalFilename})')
         self.description = 'Extract the version information from the resource directory of the specified EXECUTABLE and write it to stdout using FORMAT.'
 
@@ -117,7 +117,7 @@ if __name__ == '__main__':
         sys.exit(1)
     if opts.dump_names:
         six.print_('Dumping the name table entries from the resource directory as requested by user:', file=sys.stderr)
-        six.print_('\n'.join(map("{!s}".format, resource_Names.iterate())), file=sys.stdout)
+        six.print_(json.dumps([item for item in resource_Names.iterate()]), file=sys.stdout)
         sys.exit(0)
 
     # parse the resource languages from the resource name
@@ -137,7 +137,7 @@ if __name__ == '__main__':
         sys.exit(1)
     if opts.dump_resources:
         six.print_('Dumping the languages for the resource entries from the resource name table as requested by user:', file=sys.stderr)
-        six.print_('\n'.join(map("{!s}".format, resource_Languages.iterate())), file=sys.stdout)
+        six.print_(json.dumps([item for item in resource_Languages.iterate()]), file=sys.stdout)
         sys.exit(0)
 
     # grab the version record from the resource language
@@ -179,7 +179,7 @@ if __name__ == '__main__':
     lgcpids = extractLgCpIds(vi)
     if opts.list_lgcp:
         six.print_('Dumping language/codepage identifiers as requested by user:', file=sys.stderr)
-        six.print_('\n'.join(map("{!s}".format, lgcpids)), file=sys.stdout)
+        six.print_(json.dumps([{"language": lg, "codepage": cp} for lg, cp in lgcpids]), file=sys.stdout)
         sys.exit(0)
 
     # if the user wants to use the tagVS_FIXEDFILEINFO structure, then we'll
@@ -266,7 +266,7 @@ if __name__ == '__main__':
     # if we were asked to dump the available properties, then do just that.
     if opts.dump:
         six.print_('Dumping the available properties as requested by user:', file=sys.stderr)
-        six.print_('\n'.join(map("{!s}".format, properties.items())), file=sys.stdout)
+        six.print_(json.dumps(properties), file=sys.stdout)
         sys.exit(0)
 
     # format the path according to the filesystem encoding
