@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import itertools,logging,optparse,os.path,locale
+import itertools,logging,optparse,os.path,locale,datetime,math
 import ptypes,pecoff
 from ptypes import *
 
@@ -239,18 +239,29 @@ if __name__ == '__main__':
         properties = {item['szKey'].str() : item['Value'].str() for item in stringTable}
 
         # now we'll add the VS_FIXEDFILEINFO fields to our list of properties.
-        fixedproperties = properties.setdefault('VS_FIXEDFILEINFO', {})
-        fixedproperties['dwProductVersion'] = ffi['dwProductVersion'].str()
-        fixedproperties['dwFileVersion'] = ffi['dwFileVersion'].str()
-        fixedproperties['dwFileOS'] = {'PLATFORM': ffi['dwFileOS'].item('PLATFORM').str(), 'OS': ffi['dwFileOS'].item('OS').str()}
-        fixedproperties['dwFileType'] = ffi['dwFileType'].str()
-        fixedproperties['dwFileSubtype'] = {'langID': "{:x}".format(ffi['dwFileSubtype']['langID']), 'charsetID': "{:x}".format(ffi['dwFileSubType']['charsetID'])}
-        fixedproperties['dwFileDateMS'] = "{:x}".format(ffi['dwFileDateMS'])
-        fixedproperties['dwFileDateLS'] = "{:x}".format(ffi['dwFileDateLS'])
+        fixedproperties = properties.setdefault(u'VS_FIXEDFILEINFO', {})
+        fixedproperties[u'dwProductVersion'] = ffi['dwProductVersion'].str()
+        fixedproperties[u'dwFileVersion'] = ffi['dwFileVersion'].str()
+        fixedproperties[u'dwFileOS'] = {u'PLATFORM': ffi['dwFileOS'].item('PLATFORM').str(), u'OS': ffi['dwFileOS'].item('OS').str()}
+        fixedproperties[u'dwFileType'] = ffi['dwFileType'].str()
+        fixedproperties[u'dwFileSubtype'] = {u'langID': "{:x}".format(ffi['dwFileSubtype']['langID']), u'charsetID': "{:x}".format(ffi['dwFileSubType']['charsetID'])}
+        fixedproperties[u'dwFileDateMS'] = "{:x}".format(ffi['dwFileDateMS'])
+        fixedproperties[u'dwFileDateLS'] = "{:x}".format(ffi['dwFileDateLS'])
 
-    properties.setdefault('__path__', filename)
-    properties.setdefault('__name__', os.path.basename(filename))
-    properties.setdefault('__machine__', pe['FileHeader']['Machine'].str())
+    properties.setdefault(u'__path__', filename)
+    properties.setdefault(u'__name__', os.path.basename(filename))
+    properties.setdefault(u'__machine__', pe['FileHeader']['Machine'].str())
+
+    # add the timestamps for creation, modification, and access.
+    timeformat = lambda ts: u"{:02d}{:02d}{:02d}".format(ts.hour, ts.minute, ts.second)
+    dateformat = lambda ts: u"{:04d}{:02d}{:02d}".format(ts.year, ts.month, ts.day)
+
+    # we discard the microseconds here with math.trunc so that the isoformat length is constant
+    ctime, mtime, atime = (datetime.datetime.fromtimestamp(math.trunc(F(filename))) for F in [os.path.getctime, os.path.getmtime, os.path.getatime])
+    ctimestamp, mtimestamp, atimestamp = (datetime.datetime.fromtimestamp(F(filename)) for F in [os.path.getctime, os.path.getmtime, os.path.getatime])
+    properties.setdefault(u'__ctime__', {u'datetime' : 'T'.join(format(ctime) for format in [dateformat, timeformat]), u'date': dateformat(ctime), u'time': timeformat(ctime), u'iso': ctime.isoformat(), u'year': "{:04d}".format(ctime.year), u'month': "{:02d}".format(ctime.month), u'day': "{:02d}".format(ctime.day), u'hour': "{:02d}".format(ctime.hour), u'minute': "{:02d}".format(ctime.minute), u'second': "{:02d}".format(ctime.second), u'usecond': "{:06d}".format(ctimestamp.microsecond)})
+    properties.setdefault(u'__mtime__', {u'datetime' : 'T'.join(format(mtime) for format in [dateformat, timeformat]), u'date': dateformat(mtime), u'time': timeformat(mtime), u'iso': mtime.isoformat(), u'year': "{:04d}".format(mtime.year), u'month': "{:02d}".format(mtime.month), u'day': "{:02d}".format(mtime.day), u'hour': "{:02d}".format(mtime.hour), u'minute': "{:02d}".format(mtime.minute), u'second': "{:02d}".format(mtime.second), u'usecond': "{:06d}".format(mtimestamp.microsecond)})
+    properties.setdefault(u'__atime__', {u'datetime' : 'T'.join(format(atime) for format in [dateformat, timeformat]), u'date': dateformat(atime), u'time': timeformat(atime), u'iso': atime.isoformat(), u'year': "{:04d}".format(atime.year), u'month': "{:02d}".format(atime.month), u'day': "{:02d}".format(atime.day), u'hour': "{:02d}".format(atime.hour), u'minute': "{:02d}".format(atime.minute), u'second': "{:02d}".format(atime.second), u'usecond': "{:06d}".format(atimestamp.microsecond)})
 
     # if we were asked to dump the available properties, then do just that.
     if opts.dump:
