@@ -631,8 +631,10 @@ class __interface__(object):
         # if there's too much data, the slice it together from both sides
         else:
             lefti, righti = utils.valueaccumulate(self.value, +1), utils.valueaccumulate(self.value, -1)
-            leftitems = [next(lefti)[1]] + [item for _, item in itertools.takewhile(lambda offset_data: offset_data[0] < threshold, lefti)]
-            rightitems = [next(righti)[1]] + [item for _, item in itertools.takewhile(lambda offset_data: offset_data[0] < threshold, righti)]
+            _, leftbytes = next(lefti, (0, b''))
+            leftitems = [leftbytes] + [item for _, item in itertools.takewhile(lambda offset_data: offset_data[0] < threshold, lefti)]
+            _, rightbytes = next(righti, (0, b''))
+            rightitems = [rightbytes] + [item for _, item in itertools.takewhile(lambda offset_data: offset_data[0] < threshold, righti)]
             data = bytes().join([bytes().join(leftitems), bytes().join([item for item in rightitems][::-1])])
             options['size'] = size
 
@@ -1560,8 +1562,10 @@ class container(base):
         message = options.pop('threshold_message', Config.display.threshold.summary_message)
         if self.value is not None:
             lefti, righti = utils.valueaccumulate(self.value, +1), utils.valueaccumulate(self.value, -1)
-            leftitems = [next(lefti)[1]] + [item for _, item in itertools.takewhile(lambda offset_data: offset_data[0] < threshold, lefti)]
-            rightitems = [next(righti)[1]] + [item for _, item in itertools.takewhile(lambda offset_data: offset_data[0] < threshold, righti)]
+            _, leftbytes = next(lefti, (0, b''))
+            leftitems = [leftbytes] + [item for _, item in itertools.takewhile(lambda offset_data: offset_data[0] < threshold, lefti)]
+            _, rightbytes = next(righti, (0, b''))
+            rightitems = [rightbytes] + [item for _, item in itertools.takewhile(lambda offset_data: offset_data[0] < threshold, righti)]
             data = bytes().join([bytes().join(leftitems), bytes().join([item for item in rightitems][::-1])])
             options['size'] = self.size()
             return u"\"{:s}\"".format(utils.emit_repr(data, threshold, message, **options)) if len(data) > 0 else u"???"
