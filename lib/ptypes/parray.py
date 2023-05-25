@@ -339,7 +339,7 @@ class type(__array_interface__):
         if not values:
             return self
 
-        value, = values
+        [value] = values
         if self.initializedQ() and len(self) == len(value):
             return super(type, self).__setvalue__(*value)
         else:
@@ -392,8 +392,9 @@ class terminated(type):
 
     def alloc(self, *fields, **attrs):
         if not fields:
+            attrs.setdefault('length', 0)
             return super(terminated, self).alloc(**attrs)
-        items, = fields
+        [items] = fields
         attrs.setdefault('length', len(items))
         return super(terminated, self).alloc(items, **attrs)
 
