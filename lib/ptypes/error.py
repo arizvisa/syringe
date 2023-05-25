@@ -97,7 +97,7 @@ class ConsumeError(ProviderError):
     def __str__(self):
         identity, offset, desired, amount = self.consumed
         if amount > 0:
-            return 'ConsumeError({!s}) : Only consumed {:+#x} of {:+#x} bytes from {:#x}.'.format(type(identity), amount, desired, offset)
+            return 'ConsumeError({!s}) : Only consumed {:+#x} of desired {:+#x} bytes from offset {:+#x}.'.format(type(identity), amount, desired, offset)
         return 'ConsumeError({!s}) : Error consuming {:+#x} bytes from {:#x}.'.format(type(identity), desired, offset)
 
 ### errors that can happen during deserialization or serialization
