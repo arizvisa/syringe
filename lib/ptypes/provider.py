@@ -205,7 +205,7 @@ class proxied(bounded):
         return recurse(iterable, left, right)
 
 ## core providers
-class empty(base):
+class empty(bounded):
     '''Empty provider. Returns only zeroes.'''
     offset = 0
     def seek(self, offset):
@@ -219,6 +219,8 @@ class empty(base):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
         Log.info("{:s}.store : Tried to write {:d} bytes to a read-only medium.".format(type(self).__name__, len(data)))
         return len(data)
+    def size(self):
+        return 0
 
 class proxy(proxied):
     """Provider that will read or write its data to/from the specified ptype.
