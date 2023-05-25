@@ -106,7 +106,7 @@ class backed(bounded):
 
     def seek(self, offset):
         '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
-        res, self.__offset = 0, offset
+        res, self.__offset = self.__offset, offset
         return res
 
     @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError, error.UserError))
@@ -266,12 +266,17 @@ class proxy(proxied):
 #        if self.autoload is not None:
 #            Log.debug("{:s}.consume : Autoloading : {:s} : {!r}".format(type(self).__name__, self._object.instance(), self._object.source))
 
-        if amount >= 0 and left >= 0 and right <= len(buf):
+        if (amount > 0 and left >= 0 and right <= len(buf)) or not amount:
             result = buf[left : right]
             self.offset += amount
             return result
 
-        raise error.ConsumeError(self, left, amount, amount=right - len(buf))
+        elif left < len(buf):
+            result = buf[left:]
+            return result
+
+        available = len(buf) - left
+        raise error.ConsumeError(self, left, right - available, amount)
 
     @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError,))
     def store(self, data):
@@ -453,8 +458,9 @@ class disorderly(proxied):
 
     def __traverse__(self, left, right):
         total = sum(object.size() for object in self.contiguous)
-        if left < 0 or total < right:
+        if left < 0 or (left != right and total <= left):
             raise error.ConsumeError(self, left, right - left, amount=right - total)
+        right = min(total, right)
 
         index, stop = bisect.bisect_right(self.tree, left) - 1, left
         iterable = (self.index[offset] for offset in self.tree[index:])
@@ -483,7 +489,8 @@ class disorderly(proxied):
             data = item.serialize() if self.autoload is None else item.load(**self.autoload).serialize()
             # FIXME: if our item changes size during autoload, then our tree is out-of-sync
             result.extend(data[lslice : rslice])
-        self.offset += len(result)
+        if len(result) == amount:
+            self.offset += len(result)
         return builtins.bytes(result)
 
     def store(self, data):
@@ -1781,7 +1788,7 @@ if __name__ == '__main__':
 
 if __name__ == '__main__':
     import ptypes, os, random, tempfile, builtins
-    from ptypes import parray, pint, pbinary, provider
+    from ptypes import ptype,parray, pint, pbinary, provider
 
     from builtins import *
 
@@ -2200,6 +2207,278 @@ if __name__ == '__main__':
 
     except ImportError:
         Log.warning("{:s} : Skipping the `WindowsProcessId` provider tests.".format(__name__))
+
+    import os, tempfile
+
+    @TestCase
+    def test_boundaries_file_readexact():
+        filename = tempfile.mktemp()
+        with open(filename, 'wb') as out:
+            out.write(b'1234')
+
+        source = provider.file(filename, 'rb')
+        start = source.seek(0)
+        try:
+            if start == 0 and source.consume(4) == b'1234' and source.seek(4) == 4:
+                raise Success
+        finally:
+            source.close(), os.unlink(filename)
+        raise Failure
+
+    @TestCase
+    def test_boundaries_file_readsmall():
+        filename = tempfile.mktemp()
+        with open(filename, 'wb') as out:
+            out.write(b'1234')
+
+        source = provider.file(filename, 'rb')
+        start = source.seek(0)
+        try:
+            if start == 0 and source.consume(16) == b'1234' and source.seek(4) == 0:
+                raise Success
+        finally:
+            source.close(), os.unlink(filename)
+        raise Failure
+
+    @TestCase
+    def test_boundaries_file_readoob():
+        filename = tempfile.mktemp()
+        with open(filename, 'wb') as out:
+            out.write(b'1234')
+
+        source = provider.file(filename, 'rb')
+        start = source.seek(4)
+        try:
+            source.consume(1)
+
+        except error.ConsumeError:
+            if start == 0 and source.seek(4) == 4:
+                raise Success
+        finally:
+            source.close(), os.unlink(filename)
+        raise Failure
+
+    @TestCase
+    def test_boundaries_file_readedge():
+        filename = tempfile.mktemp()
+        with open(filename, 'wb') as out:
+            out.write(b'1234')
+
+        source = provider.file(filename, 'rb')
+        start = source.seek(4)
+        try:
+            if source.consume(0) == b'':
+                raise Success
+        finally:
+            source.close(), os.unlink(filename)
+        raise Failure
+
+    @TestCase
+    def test_boundaries_file_readedgeoob():
+        filename = tempfile.mktemp()
+        with open(filename, 'wb') as out:
+            out.write(b'1234')
+
+        source = provider.file(filename, 'rb')
+        start = source.seek(64)
+        try:
+            if source.consume(0) == b'':
+                raise Success
+        finally:
+            source.close(), os.unlink(filename)
+        raise Failure
+
+    @TestCase
+    def test_boundaries_bytes_readexact():
+        source = provider.bytes(b'1234')
+        start = source.seek(0)
+        if start == 0 and source.consume(4) == b'1234' and source.seek(4) == 4:
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_boundaries_bytes_readsmall():
+        source = provider.bytes(b'1234')
+        start = source.seek(0)
+        if start == 0 and source.consume(16) == b'1234' and source.seek(4) == 0:
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_boundaries_bytes_readoob():
+        source = provider.bytes(b'1234')
+        start = source.seek(4)
+        try:
+            source.consume(1)
+        except error.ConsumeError:
+            if start == 0 and source.seek(4) == 4:
+                raise Success
+        raise Failure
+
+    @TestCase
+    def test_boundaries_bytes_readedge():
+        source = provider.bytes(b'1234')
+        start = source.seek(4)
+        if source.consume(0) == b'':
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_boundaries_bytes_readedgeoob():
+        source = provider.bytes(b'1234')
+        start = source.seek(64)
+        if source.consume(0) == b'':
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_boundaries_proxy_readexact():
+        block = ptype.type().set(b'1234')
+        source = provider.proxy(block)
+        start = source.seek(0)
+        if start == 0 and source.consume(4) == b'1234' and source.seek(4) == 4:
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_boundaries_proxy_readsmall():
+        block = ptype.type().set(b'1234')
+        source = provider.proxy(block)
+        start = source.seek(0)
+        if start == 0 and source.consume(16) == b'1234' and source.seek(4) == 0:
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_boundaries_proxy_readoob():
+        block = ptype.type().set(b'1234')
+        source = provider.proxy(block)
+        start = source.seek(4)
+        try:
+            source.consume(1)
+        except error.ConsumeError:
+            if start == 0 and source.seek(4) == 4:
+                raise Success
+        raise Failure
+
+    @TestCase
+    def test_boundaries_proxy_readedge():
+        block = ptype.type().set(b'1234')
+        source = provider.proxy(block)
+        start = source.seek(4)
+        if source.consume(0) == b'':
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_boundaries_proxy_readedgeoob():
+        block = ptype.type().set(b'1234')
+        source = provider.proxy(block)
+        start = source.seek(64)
+        if source.consume(0) == b'':
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_boundaries_disorder1_readexact():
+        contiguous = [ptype.block().set(b'1234')]
+        source = provider.disorderly(contiguous)
+        start = source.seek(0)
+        if start == 0 and source.consume(4) == b'1234' and source.seek(4) == 4:
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_boundaries_disorder1_readsmall():
+        contiguous = [ptype.block().set(b'1234')]
+        source = provider.disorderly(contiguous)
+        start = source.seek(0)
+        if start == 0 and source.consume(16) == b'1234' and source.seek(4) == 0:
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_boundaries_disorder1_readoob():
+        contiguous = [ptype.block().set(b'1234')]
+        source = provider.disorderly(contiguous)
+        start = source.seek(4)
+        try:
+            source.consume(1)
+        except error.ConsumeError:
+            if start == 0 and source.seek(4) == 4:
+                raise Success
+        raise Failure
+
+    @TestCase
+    def test_boundaries_disorder1_readedge():
+        contiguous = [ptype.block().set(b'1234')]
+        source = provider.disorderly(contiguous)
+        start = source.seek(4)
+        if source.consume(0) == b'':
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_boundaries_disorder1_readedgeoob():
+        contiguous = [ptype.block().set(b'1234')]
+        source = provider.disorderly(contiguous)
+        start = source.seek(64)
+        if source.consume(0) == b'':
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_boundaries_disorder2_readexact():
+        s = b'1234'
+        contiguous = [ptype.block().set(s[index : index + 1]) for index, _ in enumerate(s)]
+        source = provider.disorderly(contiguous)
+        start = source.seek(0)
+        if start == 0 and source.consume(4) == b'1234' and source.seek(4) == 4:
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_boundaries_disorder2_readsmall():
+        s = b'1234'
+        contiguous = [ptype.block().set(s[index : index + 1]) for index, _ in enumerate(s)]
+        source = provider.disorderly(contiguous)
+        start = source.seek(0)
+        if start == 0 and source.consume(16) == b'1234' and source.seek(4) == 0:
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_boundaries_disorder2_readoob():
+        s = b'1234'
+        contiguous = [ptype.block().set(s[index : index + 1]) for index, _ in enumerate(s)]
+        source = provider.disorderly(contiguous)
+        start = source.seek(4)
+        try:
+            source.consume(1)
+        except error.ConsumeError:
+            if start == 0 and source.seek(4) == 4:
+                raise Success
+        raise Failure
+
+    @TestCase
+    def test_boundaries_disorder2_readedge():
+        s = b'1234'
+        contiguous = [ptype.block().set(s[index : index + 1]) for index, _ in enumerate(s)]
+        source = provider.disorderly(contiguous)
+        start = source.seek(4)
+        if source.consume(0) == b'':
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_boundaries_disorder2_readedgeoob():
+        s = b'1234'
+        contiguous = [ptype.block().set(s[index : index + 1]) for index, _ in enumerate(s)]
+        source = provider.disorderly(contiguous)
+        start = source.seek(64)
+        if source.consume(0) == b'':
+            raise Success
+        raise Failure
 
 if __name__ == '__main__' and 0:
     from ptypes import ptype, parray, pstruct, pint, provider
