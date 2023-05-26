@@ -1135,7 +1135,7 @@ class type(base):
         """Set entire type equal to ``value`` if defined."""
         if not values: return self
 
-        value, = values
+        [value] = values
         if not builtins.isinstance(value, (bytes, bytearray)):
             raise error.TypeError(self, 'type.set', message="provided value {!r} is not serialized data".format(value.__class__))
 
@@ -1678,7 +1678,7 @@ class block(type):
         """Set entire type equal to ``value``"""
         if not values:
             return super(block, self).__setvalue__(*values, **attrs)
-        value, = values
+        [value] = values
         self.length = len(value)
         return super(block, self).__setvalue__(value, **attrs)
 
@@ -1915,7 +1915,7 @@ class definition(object):
         # if we didn't get a default value, then we need to handle the
         # case specially so that we can raise an exception.
         if len(args) < 2:
-            type, = args
+            [type] = args
             res = cls.__get__(type, None, **kwargs)
             if not res:
                 raise KeyError(type)
@@ -1947,7 +1947,7 @@ class definition(object):
 
         # if we weren't given a default value, then we'll simply return None.
         if len(args) < 2:
-            key, = args
+            [key] = args
             res = cls.lookup(key, None, **attributes)
 
         # otherwise use it to get a type back.
@@ -1968,7 +1968,7 @@ class definition(object):
 
         # if we weren't given a default value, then we need to figure that out ourselves.
         if len(args) < 2:
-            key, = args
+            [key] = args
             return cls.lookup(key, None, **missingattributes) or (clone(cls.__default__(**missingattributes), **missingattributes) if missingattributes else cls.__default__(**missingattributes))
 
         # otherwise, we can just extract it and use it if the key wasn't found
@@ -2260,7 +2260,7 @@ class wrapper_t(type):
         if not values:
             return self
 
-        value, = values
+        [value] = values
         res = self.object.set(value, **attrs)
         self.object.commit(offset=0, source=provider.proxy(self))
         return self
@@ -2490,7 +2490,7 @@ class pointer_t(encoded_t):
             if not values:
                 return super(pointer_t._value_, self).__setvalue__(*values, **attrs)
 
-            offset, = values
+            [offset] = values
             res = bitmap.new(offset, 8 * self.blocksize())
             res = bitmap.data(res, reversed=(self.byteorder is config.byteorder.littleendian))
             return super(pointer_t._value_, self).__setvalue__(res, **attrs)
@@ -2557,44 +2557,44 @@ class pointer_t(encoded_t):
 
 class rpointer_t(pointer_t):
     """a pointer_t that's at an offset relative to a specific object"""
-    _baseobject_ = None
 
     def classname(self):
-        baseobject, object = self._baseobject_, getattr(self, '_object_', None)
+        baseobject, object = getattr(self, '_baseobject_', None), getattr(self, '_object_', None)
         if self.initializedQ():
-            root = force(baseobject, self)
             return "{:s}<{:s}>".format(self.typename(), self.dereference().classname())
-        basename = baseobject.classname() if builtins.isinstance(baseobject, base) else getattr(baseobject, '__qualname__', baseobject.__name__) if baseobject else 'None'
+        basename = 'None' if baseobject is None else baseobject.classname() if builtins.isinstance(baseobject, base) else getattr(baseobject, '__qualname__', baseobject.__name__)
         objectname = force(object, self).typename() if istype(object) else object.__qualname__ if hasattr(object, '__qualname__') else getattr(object, '__name__', 'None')
-        return "{:s}({:s}, {:s})".format(self.typename(), objectname, basename)
+        return "{:s}({:s}, {:s})".format(self.typename(), objectname, basename or '')
 
     def dereference(self, **attrs):
-        root = force(self._baseobject_, self)
-        base = root.getoffset() if isinstance(root) else root().getoffset()
+        baseobject = getattr(self, '_baseobject_', None)
+        root = None if baseobject is None else force(baseobject, self)
+        base = 0 if root is None else root.getoffset() if isinstance(root) else root().getoffset()
         res = self.decode(self.object)
         attrs.setdefault('offset', base + res.get())
         return super(rpointer_t, self).dereference(**attrs)
 
     def __getstate__(self):
-        return super(rpointer_t, self).__getstate__(), self._baseobject_
+        return super(rpointer_t, self).__getstate__(), getattr(self, '_baseobject_', None)
+
     def __setstate__(self, state):
-        state, self._baseobject_, = state
+        [state, self._baseobject_] = state
         super(rpointer_t, self).__setstate__(state)
 
 class opointer_t(pointer_t):
     """a pointer_t that's calculated via a user-provided function that takes an integer value as an argument"""
-    _calculate_ = lambda self, value: value
 
     def classname(self):
-        calcname, object = getattr(self._calculate_, '__qualname__', self._calculate_.__name__), getattr(self, '_object_', None)
+        calculate, object = getattr(self, '_calculate_', None), getattr(self, '_object_', None)
+        calcname = '' if calculate is None else getattr(calculate, '__qualname__', calculate.__name__)
         if self.initializedQ():
             return "{:s}<{:s}>".format(self.typename(), self.dereference().classname())
         objectname = force(object, self).typename() if istype(object) else object.__qualname__ if hasattr(object, '__qualname__') else getattr(object, '__name__', 'None')
-        return "{:s}({:s}, {:s})".format(self.typename(), objectname, calcname)
+        return "{:s}({:s}, {:s})".format(self.typename(), objectname, calcname or '...')
 
     def dereference(self, **attrs):
-        res = self.decode(self.object)
-        attrs.setdefault('offset', self._calculate_(res.get()))
+        res, calculate = self.decode(self.object), getattr(self, '_calculate_', lambda value: value)
+        attrs.setdefault('offset', calculate(res.get()))
         return super(opointer_t, self).dereference(**attrs)
 
 class boundary(base):
