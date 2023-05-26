@@ -42,8 +42,6 @@ class Sector(ptype.definition):
     cache = {}
 
 class Pointer(ptype.opointer_t):
-    def _calculate_(self, index):
-        raise NotImplementedError
     def _object_(self):
         return dyn.block(self._uSectorSize)
     def summary(self, **options):
