@@ -83,7 +83,7 @@ Example usage:
     print(len(instance))
 """
 import itertools
-from . import ptype, utils, error
+from . import ptype, utils, error, provider
 
 __all__ = 'type,terminated,infinite,block'.split(',')
 
@@ -400,6 +400,7 @@ class terminated(type):
 
     def load(self, **attrs):
         try:
+            attrs.setdefault('length', 0) if isinstance(self.source, provider.empty) else None
             with utils.assign(self, **attrs):
                 forever = itertools.count() if self.length is None else range(self.length)
                 offset, self.value = self.getoffset(), []
