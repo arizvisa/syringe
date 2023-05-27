@@ -180,6 +180,30 @@ class rfc4122(pstruct.type):
         d5 = ''.join( map('{:02x}'.format, bytearray(_[2:])) )
         return '{{{:s}}}'.format('-'.join([d1, d2, d3, d4, d5]))
 
+    def __format__(self, spec):
+        if self.value is None or not spec:
+            return super(rfc4122, self).__format__(spec)
+
+        prefix, spec, sizes = spec[:-1], spec[-1:], [4, 2, 2, 2, 8]
+        if not prefix and spec in 'xX':
+            iterable = ((integer, size) for integer, size in zip(self.iterate(), sizes))
+            return '-'.join("{:0{:d}{:s}}".format(integer, 2 * size, spec) for integer, size in iterable)
+        elif prefix in {'#', '#0'} and spec in 'xX':
+            iterable = ((integer, size) for integer, size in zip(self.iterate(), sizes))
+            integers, sizes = zip(*iterable)
+            res = functools.reduce(lambda agg, index: agg * pow(2, 8 * sizes[index]) + integers[index], range(len(integers)), 0)
+            return "{:{:s}{:d}{:s}}".format(res, prefix, 2 + 2 * sum(sizes), spec)
+        elif spec in 'xXdon':
+            iterable = ((integer, size) for integer, size in zip(self.iterate(), sizes))
+            integers, sizes = zip(*iterable)
+            res = functools.reduce(lambda agg, index: agg * pow(2, 8 * sizes[index]) + integers[index], range(len(integers)), 0)
+            return "{:{:s}{:s}}".format(res, prefix, spec)
+        elif spec in 's':
+            iterable = ((integer, size) for integer, size in zip(self.iterate(), sizes))
+            res = "{{{:s}}}".format('-'.join("{:0{:d}X}".format(integer, 2 * size) for integer, size in iterable))
+            return "{:{:s}s}".format(res, prefix)
+        return super(rfc4122, self).__format__(prefix + spec)
+
 class GUID(rfc4122):
     _fields_ = [
         (Ftransform(__type), __fieldname) for Ftransform, (__type, __fieldname) in zip([pint.littleendian, pint.littleendian, pint.littleendian, pint.bigendian], rfc4122._fields_)
