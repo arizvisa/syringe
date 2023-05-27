@@ -2,8 +2,9 @@ import ptypes
 from ptypes import *
 from . import intsafe
 
-import functools, operator, itertools, types, math
+import sys, functools, operator, itertools, types, math, logging
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
+logger = logging.getLogger(__name__)
 
 ### Primitive types
 class ULONG(pint.uint32_t): pass
@@ -67,6 +68,9 @@ Sector.default = Sector.lookup(None)
 class SectorType(pint.enum, DWORD):
     def summary(self):
         return super(SectorType, self).summary() if self.has(self.int()) else "{:#010x}".format(self.int())
+    def alloc(self, *args, **attributes):
+        res = super(SectorType, self).alloc(*args, **attributes)
+        return res.set(0xffffffff)
 SectorType._values_ = [(item.__name__, type) for type, item in Sector.cache.items() if type is not None]
 Pointer._value_ = SectorType
 
@@ -253,12 +257,37 @@ class uByteOrder(pint.enum, USHORT):
             return ptypes.config.byteorder.littleendian
         elif res == 0xfeff:
             return ptypes.config.byteorder.bigendian
-        cls = self.__class__
-        raise ValueError("{:s}: Unsupported value set for enumeration \"uByteOrder\". {:s}".format('.'.join((cls.__module__, cls.__name__)), self.summary()))
+        cls, order = self.__class__, ptypes.Config.integer.order
+        logger.debug("{:s}: Using default byteorder ({!s}) as an unsupported value was set for enumeration \"uByteOrder\" : {:s}".format('.'.join((cls.__module__, cls.__name__)), order.__name__, self.summary()))
+        return order
+
+    def set(self, order):
+        if isinstance(order, (sys.maxint.__class__, (sys.maxint + 1).__class__) if hasattr(sys, 'maxint') else int):
+            return super(uByteOrder, self).set(order)
+        elif not order.startswith(('big', 'little')):
+            return super(uByteOrder, self).set(order)
+        return self.set('BigEndian') if order.startswith('big') else self.set('LittleEndian')
+
+    def alloc(self, *args, **attrs):
+        res = super(uByteOrder, self).alloc(*args, **attrs)
+        return res.set(sys.byteorder)
 
 class Header(pstruct.type):
     class _abSig(ptype.block):
-        length = 8
+        length, _constant_ = 8, b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'
+        def default(self):
+            res, bytes = self.copy(), self._constant_
+            return res.set(bytes)
+        def valid(self):
+            return self.serialize() == self._constant_
+        def alloc(self, *args, **attrs):
+            res = super(Header._abSig, self).alloc(*args, **attrs)
+            return res.set(self._constant_)
+        def properties(self):
+            res = super(Header._abSig, self).properties()
+            if self.initializedQ():
+                res['valid'] = self.valid()
+            return res
 
     _fields_ = [
         (_abSig, 'abSig'),
@@ -268,6 +297,16 @@ class Header(pstruct.type):
         (USHORT, 'uMajorVersion'),      # Major version (3 or 4)
         (uByteOrder, 'uByteOrder'),    # 0xfffe -- little-endian
     ]
+
+    def alloc(self, **fields):
+        fields.setdefault('uByteOrder', uByteOrder)
+        fields.setdefault('abSig', self._abSig)
+        res = super(Header, self).alloc(**fields)
+        res if 'uMinorVersion' in fields else res['uMinorVersion'].set(0x3e)
+        res if 'uMajorVersion' in fields else res['uMajorVersion'].set(2)
+        res if 'uByteOrder' in fields else res['uByteOrder'].set('BigEndian')
+        return res
+
     def summary(self):
         Fhex = bytes.hex if hasattr(bytes, 'hex') else operator.methodcaller('encode', 'hex')
         res = []
@@ -279,8 +318,8 @@ class Header(pstruct.type):
 
     def Version(self):
         major, minor = (self[fld].int() for fld in ['uMajorVersion', 'uMinorVersion'])
-        mantissa = pow(10, math.floor(1. + math.log10(minor)))
-        return major + minor / mantissa
+        mantissa = pow(10, math.floor(1. + math.log10(minor))) if minor else 0
+        return major + (minor / mantissa if mantissa else 0)
 
     def ByteOrder(self):
         return self['uByteOrder'].ByteOrder()
@@ -290,6 +329,10 @@ class HeaderSectorShift(pstruct.type):
         (USHORT, 'uSectorShift'),       # Major version | 3 -> 0x9 | 4 -> 0xc
         (USHORT, 'uMiniSectorShift'),   # 6
     ]
+    def alloc(self, **fields):
+        fields.setdefault('uSectorShift', 9)
+        fields.setdefault('uMiniSectorShift', 6)
+        return super(HeaderSectorShift, self).alloc(**fields)
     def summary(self):
         fields = ['uSectorShift', 'uMiniSectorShift']
         return ' '.join("{:s}={:d} ({:#x})".format(fld, self[fld].int(), pow(2, self[fld].int())) for fld in fields)
@@ -430,8 +473,8 @@ class DirectoryEntry(pstruct.type):
         try:
             result.li if result.value is None else result
         except Exception as E:
-            exc, logger = E.__class__, __import__('logging').getLogger(__name__)
-            logger.warning("Ignoring {:s} that was raised during load: {}".format('.'.join([exc.__module__, exc.__name__]), result))
+            exception = E.__class__
+            logger.warning("Ignoring {:s} that was raised during load: {}".format('.'.join([exception.__module__, exception.__name__]), result), exc_info=True)
         return result
 
     def enumerate(self):
@@ -566,29 +609,35 @@ class File(pstruct.type):
         # Store the sector size attributes
         info = self['SectorShift'].li
         sectorSize = info.SectorSize()
-        self._uSectorSize = self.attributes['_uSectorSize'] = sectorSize
+        if info['uSectorShift'].int():
+            self._uSectorSize = self.attributes['_uSectorSize'] = sectorSize
         self._uSectorCount = self.attributes['_uSectorCount'] = sectorSize // Pointer().blocksize()
 
         # Store the mini-sector size attributes
         miniSectorSize = info.MiniSectorSize()
-        self._uMiniSectorSize = self.attributes['_uMiniSectorSize'] = miniSectorSize
+        if info['uMiniSectorShift'].int():
+            self._uMiniSectorSize = self.attributes['_uMiniSectorSize'] = miniSectorSize
         self._uMiniSectorCount = self.attributes['_uMiniSectorCount'] = miniSectorSize // Pointer().blocksize()
 
         return dyn.block(6)
 
     def __Data(self):
+        if not getattr(self, '_uSectorSize', 0):
+            return FileSectors
         self.Sector = dyn.block(self._uSectorSize, __name__='Sector')
-        return dyn.clone(FileSectors, blocksize=lambda _, cb=self.source.size() - self._uSectorSize: cb)
+        if isinstance(self.source, ptypes.provider.bounded):
+            return dyn.clone(FileSectors, blocksize=lambda _, cb=self.source.size() - self._uSectorSize: cb)
+        return FileSectors
 
     def __Table(self):
-        total, size = self._uSectorSize, sum(self[fld].li.size() for fld in ['Header', 'SectorShift', 'reserved', 'Fat', 'MiniFat', 'DiFat'])
+        total, size = getattr(self, '_uSectorSize', 0), sum(self[fld].li.size() for fld in ['Header', 'SectorShift', 'reserved', 'Fat', 'MiniFat', 'DiFat'])
 
         # Figure out how many pointers can fit into whatever number of bytes are left
-        leftover = (total - size) // Pointer().blocksize()
+        leftover = max(0, total - size) // Pointer().blocksize()
         return dyn.clone(DIFAT, length=leftover)
 
     def __padding(self):
-        total, size = self._uSectorSize, sum(self[fld].li.size() for fld in ['Header', 'SectorShift', 'reserved', 'Fat', 'MiniFat', 'DiFat', 'Table'])
+        total, size = getattr(self, '_uSectorSize', 0), sum(self[fld].li.size() for fld in ['Header', 'SectorShift', 'reserved', 'Fat', 'MiniFat', 'DiFat', 'Table'])
         return dyn.block(max(0, total - size))
 
     _fields_ = [
@@ -602,6 +651,31 @@ class File(pstruct.type):
         (__padding, 'padding(Table)'),
         (__Data, 'Data'),
     ]
+
+    def alloc(self, **fields):
+        fields.setdefault('Header', Header)
+        fields.setdefault('SectorShift', HeaderSectorShift)
+        res = super(File, self).alloc(**fields)
+
+        # Extract the sector shifts used for the sector sizes.
+        info = res['SectorShift']
+
+        # Calculate the sector size attributes.
+        sectorSize = info.SectorSize()
+        if info['uSectorShift'].int():
+            res._uSectorSize = res.attributes['_uSectorSize'] = sectorSize
+        res._uSectorCount = res.attributes['_uSectorCount'] = sectorSize // Pointer().blocksize()
+
+        # Calculate the mini-sector size attributes.
+        miniSectorSize = info.MiniSectorSize()
+        if info['uMiniSectorShift'].int():
+            res._uMiniSectorSize = res.attributes['_uMiniSectorSize'] = miniSectorSize
+        res._uMiniSectorCount = res.attributes['_uMiniSectorCount'] = miniSectorSize // Pointer().blocksize()
+
+        # Initialize the DIFAT table if it wasn't explicitly specified.
+        if 'Table' not in fields:
+            res['Table'].set([0xffffffff] * len(res['Table']))
+        return res
 
     @ptypes.utils.memoize(self=lambda self: self)
     def DiFat(self):
