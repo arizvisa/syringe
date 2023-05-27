@@ -566,12 +566,37 @@ class enum(type):
             return super(enum, self).__format__(spec)
 
         prefix, spec = spec[:-1], spec[-1:]
-        if spec in 's':
+        if not prefix and spec in 's':
             res = self.get()
             integer = "{:#0{:d}x}".format(res, 2 + 2 * self.size())
             string = self.__byvalue__(res, None)
-            summary = "{:s}({:s})".format(string, integer) if string else integer
+            summary = integer if string is None else "{:s}({:s})".format(string, integer)
             return "{:{:s}{:s}}".format(summary, prefix, spec)
+
+        elif spec in 's':
+            res, extra, newprefix = self.get(), 2 if prefix.startswith('#') else 0, prefix[1:] if prefix.startswith('#') else prefix
+            integer = "{:{:s}0{:d}x}".format(res, '#' if extra else '', extra + 2 * self.size())
+            string = self.__byvalue__(res, None)
+            res = integer if string is None else string
+            return "{:{:s}{:s}}".format(res, newprefix, spec)
+
+        elif spec in 'don':
+            res = self.get()
+            string, integer = self.__byvalue__(res, None), "{:{:s}{:s}}".format(res, prefix, spec)
+            return integer if string is None else "{:s}({:s})".format(string, integer)
+
+        elif prefix in {'', '#', '#0'} and spec in 'xX':
+            res, extra = self.get(), 2 if prefix.startswith('#') else 0
+            integer = "{:{:s}{:d}{:s}}".format(res, prefix if prefix.endswith('0') else "{:s}0".format(prefix), extra + 2 * self.size(), spec)
+            string = self.__byvalue__(res, None)
+            return integer if string is None else "{:s}({:s})".format(string, integer)
+
+        elif spec in 'xX':
+            res, extra = self.get(), 2 if prefix.startswith('#') else 0
+            integer = "{:{:s}{:s}}".format(res, prefix, spec)
+            string = self.__byvalue__(res, None)
+            return integer if string is None else "{:s}({:s})".format(string, integer)
+
         return super(enum, self).__format__(prefix + spec)
 
 # update our current state
