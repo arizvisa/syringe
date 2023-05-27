@@ -172,13 +172,13 @@ class rfc4122(pstruct.type):
         return '{????????-????-????-????-????????????}'
 
     def str(self):
-        d1 = '{:08x}'.format(self['Data1'].int())
-        d2 = '{:04x}'.format(self['Data2'].int())
-        d3 = '{:04x}'.format(self['Data3'].int())
+        time_low = '{:08x}'.format(self['Data1'].int())
+        time_mid = '{:04x}'.format(self['Data2'].int())
+        time_hi_and_version = '{:04x}'.format(self['Data3'].int())
         _ = self['Data4'].serialize()
-        d4 = ''.join( map('{:02x}'.format, bytearray(_[:2])) )
-        d5 = ''.join( map('{:02x}'.format, bytearray(_[2:])) )
-        return '{{{:s}}}'.format('-'.join([d1, d2, d3, d4, d5]))
+        clock_seq = ''.join( map('{:02x}'.format, bytearray(_[:2])) )   # clock_seq_hi_and_reserved, clock_seq_low
+        node = ''.join( map('{:02x}'.format, bytearray(_[2:])) )
+        return '{{{:s}}}'.format('-'.join([time_low, time_mid, time_hi_and_version, clock_seq, node]))
 
     def __format__(self, spec):
         if self.value is None or not spec:
