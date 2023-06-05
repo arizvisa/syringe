@@ -831,7 +831,8 @@ class File(pstruct.type):
         return self.new(Directory, __name__='Directory', blocksize=lambda sz=sectors.size(): sz, source=source).l
 
 ### Specific stream types
-class Stream(ptype.definition): cache = {}
+class DirectoryStream(ptype.definition):
+    cache = {}
 
 class ClipboardFormatOrAnsiString(pstruct.type):
     def __FormatOrAnsiString(self):
@@ -1030,7 +1031,7 @@ class CompObjHeader(pstruct.type):
         (dyn.array(DWORD, 4), 'Reserved3'),
     ]
 
-@Stream.define
+@DirectoryStream.define
 class CompObjStream(pstruct.type):
     type = '\x01CompObj'
     _fields_ = [
@@ -1046,19 +1047,18 @@ class CompObjStream(pstruct.type):
 
 if __name__ == '__main__':
     import sys, ptypes, office.storage as storage
-    filename = 'test.xls'
-    filename = 'plant_types.ppt'
     filename = sys.argv[1]
     ptypes.setsource(ptypes.prov.file(filename, mode='r'))
 
-    z = storage.File()
-    z = z.l
-    print(z['Header'])
-    print(z['Fat'])
-    print(z['MiniFat'])
-    print(z['DiFat'])
-    difat = z.DiFat()
-    fat = z.Fat()
-    minifat = z.MiniFat()
+    store = storage.File()
+    store = store.l
+    print(store['Header'])
+    print(store['Fat'])
+    print(store['MiniFat'])
+    print(store['DiFat'])
 
-    D = z.Directory()
+    difat = store.DiFat()
+    fat = store.Fat()
+    minifat = mfat = store.MiniFat()
+    directory = store.Directory()
+    print(directory)
