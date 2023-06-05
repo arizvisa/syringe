@@ -416,13 +416,16 @@ class DirectoryEntry(pstruct.type):
         return "Name:{!r} {:s} SECT:{:x} SIZE:{:x} {:s}".format(self.Name(), self['Type'].summary(), self['sectLocation'].int(), self['qwSize'].int(), self['clsid'].summary())
 
     def Name(self):
+        '''Return the name of the directory entry as a string.'''
         res = (1 + self['uName'].int()) // 2
         return u''.join(item.str() for item in self['Name'][0 : res]).rstrip(u'\0')
 
     def Id(self):
+        '''Return the CLSID for the contents referenced by the directory entry.'''
         return self['clsid']
 
     def Size(self):
+        '''Return the size of the contents for the directory entry.'''
         res = self['qwSize']
         return res.int()
 
@@ -495,6 +498,21 @@ class DirectoryEntry(pstruct.type):
         for _, item in p.stores(self):
             yield item
         return
+
+    def chain(self):
+        '''Return the chain of sectors or minisectors containing the contents of the directory entry.'''
+        F = self.getparent(File)
+
+        # If the entry is a root type, then it will always be in the fat.
+        if self['Type']['Root']:
+            return F.chain(self['sectLocation'].int())
+
+        # If the size of the entry is smaller than the minisector cutoff, then use the minifat.
+        elif self['qwSize'].int() < F['MiniFat']['ulMiniSectorCutoff'].int():
+            return F.minichain(self['sectLocation'].int())
+
+        # Otherwise it's in the fat like most things and we just need to return it.
+        return F.chain(self['sectLocation'].int())
 
 class Directory(parray.block):
     _object_ = DirectoryEntry
@@ -772,6 +790,7 @@ class File(pstruct.type):
         return (minisectors[index] for index in chain)
 
     def directorysectors(self):
+        '''Return the fat sectors associated with the Directory as a list.'''
         fat, directory = self.Fat(), self['Fat']['sectDirectory'].int()
         iterable = fat.chain(directory)
         return [sector.cast(Directory) for sector in self.fatsectors(iterable)]
