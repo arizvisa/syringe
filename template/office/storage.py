@@ -514,6 +514,16 @@ class DirectoryEntry(pstruct.type):
         # Otherwise it's in the fat like most things and we just need to return it.
         return F.chain(self['sectLocation'].int())
 
+    def stream(self):
+        '''Return true if the directory entry is stored by the fat as a regular stream backed by regular sectors.'''
+        F = self.getparent(File)
+        return self['qwSize'].int() >= F['MiniFat']['ulMiniSectorCutoff'].int() or self['Type']['Root']
+
+    def ministream(self):
+        '''Return true if the directory entry is stored by the minifat as a stream backed by minisectors.'''
+        F = self.getparent(File)
+        return self['qwSize'].int() < F['MiniFat']['ulMiniSectorCutoff'].int() and not self['Type']['Root']
+
 class Directory(parray.block):
     _object_ = DirectoryEntry
     def blocksize(self):
