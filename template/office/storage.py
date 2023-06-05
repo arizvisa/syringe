@@ -426,9 +426,12 @@ class DirectoryEntry(pstruct.type):
         res = self['qwSize']
         return res.int()
 
-    def Data(self, type=None, clamp=True):
-        """Return the contents of the directory entry.
-        If clamp is True, then resize the returned sectors according to the size specified in the directory entry.
+    def Data(self, *type, **clamp):
+        """Return the contents of the directory entry as the given type or DirectoryEntryData.
+        If no type is given, the DirectoryStream definition will be used with the name of the directory entry.
+        If clamp is not specified or true, then the type being returned will be sized according to the directory entry.
+        If clamp is not true, then the type being returned will be sized according to the number of sectors it occupies.
+        Any other keywords will be applied as attributes to the returned instance if a type was specified.
         """
         F = self.getparent(File)
 
@@ -451,11 +454,17 @@ class DirectoryEntry(pstruct.type):
             clamped = self.new(DirectoryEntryData, length=self['qwSize'].int(), source=source)
             backing = self.new(DirectoryEntryData, length=data.size(), source=source)
 
+            # Figure out the correct datatype to use depending on the parameter
+            # or by searching the DirectoryStream definitions with the stream name.
+            streamname = self['Name'].str()
+            [datatype] = type if len(type) else [DirectoryStream.lookup(streamname, None)]
+
             # Load the correct child type from whatever was requested.
-            if clamp:
-                res = clamped if type is None else self.new(type, source=ptypes.provider.proxy(clamped.l, autocommit={}))
+            iterable = (clamp.pop(kwarg) for kwarg in ['clamp', 'clamped'] if kwarg in clamp)
+            if next(iterable, True):
+                res = clamped if datatype is None else self.new(datatype, source=ptypes.provider.proxy(clamped.l, autocommit={}), **clamp)
             else:
-                res = backing if type is None else self.new(type, source=source)
+                res = backing if datatype is None else self.new(datatype, source=source, **clamp)
             result = res
 
         # Ignore any exceptions if we received any and just return what we got.
