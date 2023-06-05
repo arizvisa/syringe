@@ -130,8 +130,9 @@ class AllocationTable(parray.type):
         while len(chain) > 1:
             index = chain.pop(0)
             sector, value = self[index], chain[0]
-            result.append(sector.set(value))
-        result.append(self[chain.pop()].set('ENDOFCHAIN'))
+            sector.set(value), result.append(index)
+        index = chain.pop(0)
+        self[index].set('ENDOFCHAIN'), result.append(index)
         assert(not chain)
         return result
 
@@ -142,16 +143,17 @@ class AllocationTable(parray.type):
         return (index for index in range(start, len(self)) if Ffilter(self[index]))
 
     def reduce(self, chain, amount, type='FREESECT'):
-        '''Reduce a chain by releasing the specified number of sectors and returning them uncommitted.'''
+        '''Reduce a chain by releasing the specified number of sectors, leaving them uncommitted, and returning the new smaller chain.'''
         chain = [index for index in chain]
         result = self.link(chain[:-amount] if amount else chain)
         released = chain[-amount:] if amount else []
-        return result + [self[index].set(type) for index in released]
+        [self[index].set(type) for index in released]
+        return result
 
     def grow(self, chain, amount, available=None):
-        '''Grow a chain by adding the specified number of sectors that are available and returning them uncommitted.'''
+        '''Grow a chain by adding the specified count of sectors from available, leaving then uncommitted, and returning the new larger chain.'''
         chain = [index for index in chain]
-        source = (index for index in available) if available else self.available()
+        source = self.available() if available is None else (index for index in available)
         additional = (index for _, index in zip(range(amount), source))
         return self.link(chain + [index for index in additional])
 
