@@ -230,7 +230,7 @@ class MINIFAT(AllocationTable):
 
     def _object_(self):
         p, index = self.getparent(File), len(self.value)
-        count, table = self._uSectorSize // self._uMiniSectorSize, self.__minitable__ if hasattr(self, '__minitable__') else [item for item in p.minisectors()]
+        count, table = self._uSectorSize // self._uMiniSectorSize, self.__minitable__ if hasattr(self, '__minitable__') else [item for item in p.__ministream_sectors__()]
         sector = table[index // count] if index // count < len(table) else None
         return dyn.clone(self.Pointer, _object_=dyn.block(self._uMiniSectorSize), __index__=index % count, __sector__=sector, __minisource__=ptypes.provider.disorderly(table))
 
@@ -735,7 +735,7 @@ class File(pstruct.type):
         iterable = fat.chain(start)
         sectors = [sector for sector in self.fatsectors(iterable)]
         source = ptypes.provider.disorderly(sectors, autocommit={})
-        minisectors = [item for item in self.minisectors()]
+        minisectors = [item for item in self.__ministream_sectors__()]
         return self.new(MINIFAT, __minitable__=minisectors, recurse=self.attributes, length=count * self._uSectorCount, source=source).load(**attrs)
 
     @ptypes.utils.memoize(self=lambda self: self, attrs=lambda attrs:frozenset(map(tuple, attrs.items())))
@@ -746,8 +746,8 @@ class File(pstruct.type):
         source = ptypes.provider.disorderly(sectors, autocommit={})
         return self.new(FAT, recurse=self.attributes, length=len(sectors) * self._uSectorCount, source=source).load(**attrs)
 
-    def difatsectors(self):
-        '''Return all the difat sectors within the document as a list.'''
+    def __difat_sectors__(self):
+        '''Return a list of the sectors that compose the difat.'''
         items = [self['Table']]
 
         # If there's nothing to continue with, then we're done.
@@ -761,8 +761,8 @@ class File(pstruct.type):
             items.append(table)
         return items
 
-    def __fatsectors(self):
-        '''Return all the fat sectors within the document as a list.'''
+    def __fat_sectors__(self):
+        '''Return a list of the sectors that compose the file allocation table.'''
         count, difat = self['Fat']['csectFat'].int(), self.DiFat()
 
         # Iterate through the entire difat and collect each table
@@ -771,36 +771,41 @@ class File(pstruct.type):
             result.append(items.d.l)
         return result
 
-    def fatsectors(self, chain=None):
-        '''If chain is defined then yield each fat sector specified by it, otherwise return all the fat sectors within the document as a list.'''
-        if chain is None:
-            return self.__fatsectors()
+    def fatsectors(self, chain):
+        '''Yield the contents of each sector specified by the given chain.'''
+        fat, available = self.Fat(), self['Data']
 
-        # We actually don't need to consult the fat to yield each sector.
-        return (self['Data'][index] for index in chain)
+        # Iterate through the specifed chain and
+        # yield each sector that is available.
+        for index in chain:
+            if index < len(available):
+                yield available[index]
+
+            # If the index is not available, then we
+            # need to dereference it out of the fat.
+            else:
+                yield fat[index].d
+            continue
+        return
 
     @ptypes.utils.memoize(self=lambda self: self)
-    def __minisectors(self):
-        '''Return the sectors associated with the entire ministream as a list.'''
+    def __ministream_sectors__(self):
+        '''Return the contents of the sectors containing the ministream as a list.'''
         fat, directory = self.Fat(), self.Directory()
         root = directory.RootEntry()
         start, _ = (root[item].int() for item in ['sectLocation', 'qwSize'])
         iterable = fat.chain(start)
         return [item for item in self.fatsectors(iterable)]
 
-    def minisectors(self, chain=None):
-        '''If chain is defined the yield each minisector specified by it, otherwise return the sectors associated with the entire ministream as a list.'''
-        if chain is None:
-            return self.__minisectors()
-
-        # Otherwise recurse to get all the minisectors, and cast its parts into an array.
-        sectors, shift = self.minisectors(), self['SectorShift']['uMiniSectorShift'].int()
+    def minisectors(self, chain):
+        '''Yield the contents of each minisector specified by the given chain.'''
+        sectors, shift = self.__ministream_sectors__(), self['SectorShift']['uMiniSectorShift'].int()
         source = ptypes.provider.disorderly(sectors, autocommit={})
         minisectors = self.new(parray.type, _object_=dyn.block(pow(2, shift)), length=source.size() // pow(2, shift), source=source).l
         return (minisectors[index] for index in chain)
 
     def directorysectors(self):
-        '''Return the fat sectors associated with the Directory as a list.'''
+        '''Return the contents of the sectors that contain the Directory for the file as a list.'''
         fat, directory = self.Fat(), self['Fat']['sectDirectory'].int()
         iterable = fat.chain(directory)
         return [sector.cast(Directory) for sector in self.fatsectors(iterable)]
@@ -847,21 +852,21 @@ class File(pstruct.type):
         return truncated
 
     def Stream(self, sector):
-        '''Return the stream starting at a specified sector in the fat.'''
+        '''Return the contents of the stream starting at a specified sector using the fat.'''
         fat = self.Fat()
         iterable = fat.chain(sector)
         items = [sector for sector in self.fatsectors(iterable)]
         return self.new(ptype.container, value=items)
 
     def MiniStream(self, sector):
-        '''Return the ministream starting at a specified minisector in the minifat.'''
+        '''Return the contents of the ministream starting at a specified minisector using the minifat.'''
         minifat = self.MiniFat()
         iterable = minifat.chain(sector)
         items = [minisector for minisector in self.minisectors(iterable)]
         return self.new(ptype.container, value=items)
 
     def Directory(self):
-        '''Return the whole Directory for the document.'''
+        '''Return the array of Directory entries for the file.'''
         fat = self.Fat()
         dsect = self['Fat']['sectDirectory'].int()
         sectors = self.Stream(dsect)
