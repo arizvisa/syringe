@@ -88,6 +88,7 @@ class AllocationTable(parray.type):
             membername = '(untyped)'
         items = str().join(Sector.withdefault(entry.int(), type=entry.int()).symbol for entry in self)
         return ' '.join(["{:s}[{:s}]".format(membername, "{:d}".format(len(self)) if self.initializedQ() else '...'), items])
+
     def _object_(self):
         raise NotImplementedError
 
@@ -526,6 +527,14 @@ class DirectoryEntry(pstruct.type):
         F = self.getparent(File)
         return self['qwSize'].int() < F['MiniFat']['ulMiniSectorCutoff'].int() and not self['Type']['Root']
 
+    def valid(self):
+        '''Validate the DirectoryEntry by checking that some of its fields are within bounds.'''
+        checks = []
+        checks.append(('Type', {0, 1, 2, 5}))
+        checks.append(('Flag', {0, 1}))
+        checks.append(('uName', {size for size in range(self['Name'].size())}))
+        return functools.reduce(lambda ok, field_range: (lambda field, range: ok and self[field].int() in range)(*field_range), checks, True)
+
 class Directory(parray.block):
     _object_ = DirectoryEntry
     def blocksize(self):
@@ -562,8 +571,17 @@ class Directory(parray.block):
         return self.details()
 
     def RootEntry(self):
-        iterable = (entry for entry in self if entry['Type']['Root'])
-        return next(iterable, None)
+        type = 'Root'
+        iterable = (entry for entry in self if entry['Type'][type])
+        result = next(iterable, None)
+
+        # if we couldn't find a root entry, then do a quick sanity check over the directory to raise an exception.
+        if result is None:
+            count, invalid = len(self), [index for index, entry in enumerate(self) if not entry.valid()]
+            descriptions = [string for string in itertools.chain(map("{:d}".format, invalid[:-1]), map("and {:d}".format, invalid[-1:]))] if len(invalid) > 1 else ["{:d}".format(*invalid)] if invalid else []
+            complaints = ', '.join(descriptions) if len(descriptions) > 2 else ' '.join(descriptions)
+            raise KeyError("{:s}.RootEntry(): Unable to find a \"{:s}\" directory entry out of {:d} entr{:s}{:s}.".format(self.classname(), type, count, 'y' if count == 1 else 'ies', " (entr{:s} {:s} possibly corrupted)".format('y' if len(descriptions) == 1 else 'ies', complaints) if descriptions else ''))
+        return result
     root = property(fget=RootEntry)
 
     def filter(self, type):
@@ -705,7 +723,7 @@ class File(pstruct.type):
             res['Table'].set([0xffffffff] * len(res['Table']))
         return res
 
-    @ptypes.utils.memoize(self=lambda self: self)
+    @ptypes.utils.memoize(self=lambda self: id(self.value))
     def DiFat(self):
         '''Return an array containing the DiFat'''
         count = self['DiFat']['csectDifat'].int()
@@ -728,7 +746,7 @@ class File(pstruct.type):
         ## We're loading it from the source temporarily, so we can still dereference the sector.
         return self.new(DIFAT, recurse=self.attributes, length=length).load(source=source)
 
-    @ptypes.utils.memoize(self=lambda self: self, attrs=lambda attrs:frozenset(map(tuple, attrs.items())))
+    @ptypes.utils.memoize(self=lambda self: id(self.value), attrs=lambda attrs:frozenset(map(tuple, attrs.items())))
     def MiniFat(self, **attrs):
         '''Return an array containing the MiniFat'''
         res = self['MiniFat']
@@ -740,7 +758,7 @@ class File(pstruct.type):
         minisectors = [item for item in self.__ministream_sectors__()]
         return self.new(MINIFAT, __minitable__=minisectors, recurse=self.attributes, length=count * self._uSectorCount, source=source).load(**attrs)
 
-    @ptypes.utils.memoize(self=lambda self: self, attrs=lambda attrs:frozenset(map(tuple, attrs.items())))
+    @ptypes.utils.memoize(self=lambda self: id(self.value), attrs=lambda attrs:frozenset(map(tuple, attrs.items())))
     def Fat(self, **attrs):
         '''Return an array containing the FAT'''
         count, difat = self['Fat']['csectFat'].int(), self.DiFat()
@@ -790,7 +808,7 @@ class File(pstruct.type):
             continue
         return
 
-    @ptypes.utils.memoize(self=lambda self: self)
+    @ptypes.utils.memoize(self=lambda self: id(self.value))
     def __ministream_sectors__(self):
         '''Return the contents of the sectors containing the ministream as a list.'''
         fat, directory = self.Fat(), self.Directory()
