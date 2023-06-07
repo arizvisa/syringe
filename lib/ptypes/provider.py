@@ -317,7 +317,7 @@ class proxy(proxied):
         left, right = offset, offset + len(data)
         size, value = object.blocksize(), object.serialize()
         padding = utils.padding.fill(size - min(size, len(data)), object.padding)
-        object.load(offset=0, source=string(value[:left] + data + padding + value[right:]))
+        object.load(offset=0, source=memoryview(value[:left] + data + padding + value[right:]))
         return sum({data, padding})
 
     @classmethod
@@ -336,8 +336,8 @@ class proxy(proxied):
         n = sl.pop(0)
         source, bs, l = n.serialize(), n.blocksize(), left - n.getoffset()
         s = bs - l
-        _ = source[:l] + data[:s] + source[l + s:]
-        n.load(offset=0, source=string(_))
+        sourcedata = source[:l] + data[:s] + source[l+len(data[:s]):]
+        n.load(offset=0, source=memoryview(sourcedata))
         data = data[s:]
         result += s    # sum the blocksize
 
@@ -345,8 +345,8 @@ class proxy(proxied):
         while len(sl) > 1:
             n = sl.pop(0)
             source, bs = n.serialize(), n.blocksize()
-            _ = data[:bs] + source[len(data[:bs]):]
-            n.load(offset=0, source=string(_))
+            sourcedata = data[:bs] + source[len(data[:bs]):]
+            n.load(offset=0, source=memoryview(sourcedata))
             data = data[bs:]
             result += bs    # sum the blocksize
 
@@ -354,9 +354,9 @@ class proxy(proxied):
         if len(sl) > 0:
             n = sl.pop(0)
             source, bs = n.serialize(), n.blocksize()
-            _ = data[:bs] + source[len(data[:bs]):]
-            padding = utils.padding.fill(bs - min(bs, len(_)), n.padding)
-            n.load(offset=0, source=string(_ + padding))
+            sourcedata = data[:bs] + source[len(data[:bs]):]
+            padding = utils.padding.fill(bs - min(bs, len(sourcedata)), n.padding)
+            n.load(offset=0, source=memoryview(sourcedata + padding))
             data = data[bs:]
             result += len(data[:bs])    # sum the final blocksize
 
