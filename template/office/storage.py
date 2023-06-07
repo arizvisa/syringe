@@ -74,7 +74,9 @@ class SectorType(pint.enum, DWORD):
 SectorType._values_ = [(item.__name__, type) for type, item in Sector.cache.items() if type is not None]
 Pointer._value_ = SectorType
 
-class SECT(Pointer): pass
+class SECT(Pointer):
+    def _calculate_(self, index):
+        return self._uSectorSize + index * self._uSectorSize
 
 ### File-allocation tables that populate a single sector
 class AllocationTable(parray.type):
@@ -232,7 +234,7 @@ class MINIFAT(AllocationTable):
         p, index = self.getparent(File), len(self.value)
         count, table = self._uSectorSize // self._uMiniSectorSize, self.__minitable__ if hasattr(self, '__minitable__') else [item for item in p.__ministream_sectors__()]
         sector = table[index // count] if index // count < len(table) else None
-        return dyn.clone(self.Pointer, _object_=dyn.block(self._uMiniSectorSize), __index__=index % count, __sector__=sector, __minisource__=ptypes.provider.disorderly(table))
+        return dyn.clone(self.Pointer, _object_=dyn.block(self._uMiniSectorSize), __index__=index % count, __sector__=sector, __minisource__=ptypes.provider.disorderly(table, autocommit={}))
 
 ### Header types
 class uByteOrder(pint.enum, USHORT):
@@ -284,7 +286,7 @@ class Header(pstruct.type):
 
         (USHORT, 'uMinorVersion'),      # Minor version (0x3e)
         (USHORT, 'uMajorVersion'),      # Major version (3 or 4)
-        (uByteOrder, 'uByteOrder'),    # 0xfffe -- little-endian
+        (uByteOrder, 'uByteOrder'),     # 0xfffe -- little-endian
     ]
 
     def alloc(self, **fields):
@@ -443,7 +445,7 @@ class DirectoryEntry(pstruct.type):
             minisector = dyn.block(self._uMiniSectorSize, __name__='MiniSector')
             datatype = dyn.blockarray(minisector, self['qwSize'].int())
             stream = F.Stream(self['sectLocation'].int())
-            source = ptypes.provider.disorderly(stream, autocommit={})
+            source = ptypes.provider.proxy(stream, autocommit={})
             result = self.new(datatype, source=source)
 
         # Determine whether the data is stored in the minifat or the regular fat, and
@@ -453,7 +455,7 @@ class DirectoryEntry(pstruct.type):
             data = fstream(self['sectLocation'].int())
 
             # Assign all of the pieces that we'll use to return what the user wanted.
-            source = ptypes.provider.disorderly(data, autocommit={})
+            source = ptypes.provider.proxy(data, autocommit={})
             clamped = self.new(DirectoryEntryData, length=self['qwSize'].int(), source=source)
             backing = self.new(DirectoryEntryData, length=data.size(), source=source)
 
@@ -716,7 +718,7 @@ class File(pstruct.type):
         if next.int() < MAXREGSECT.type:
             next = next.d.l
             items.extend(table for table in next.collect(count))
-        source = ptypes.provider.disorderly(items)
+        source = ptypes.provider.disorderly(items, autocommit={})
 
         ## Now we need to figure out the number of entries and then load it.
         length = sum(1 for item in itertools.chain(*items))
@@ -855,23 +857,25 @@ class File(pstruct.type):
         '''Return the contents of the stream starting at a specified sector using the fat.'''
         fat = self.Fat()
         iterable = fat.chain(sector)
-        items = [sector for sector in self.fatsectors(iterable)]
-        return self.new(ptype.container, value=items)
+        type, items = dyn.block(self._uSectorSize), [sector for sector in self.fatsectors(iterable)]
+        source = ptypes.provider.disorderly(items, autocommit={})
+        return self.new(parray.type, _object_=type, length=len(items), source=source).l
 
     def MiniStream(self, sector):
         '''Return the contents of the ministream starting at a specified minisector using the minifat.'''
         minifat = self.MiniFat()
         iterable = minifat.chain(sector)
-        items = [minisector for minisector in self.minisectors(iterable)]
-        return self.new(ptype.container, value=items)
+        type, items = dyn.block(self._uMiniSectorSize), [minisector for minisector in self.minisectors(iterable)]
+        source = ptypes.provider.disorderly(items, autocommit={})
+        return self.new(parray.type, _object_=type, length=len(items), source=source).l
 
     def Directory(self):
         '''Return the array of Directory entries for the file.'''
-        fat = self.Fat()
-        dsect = self['Fat']['sectDirectory'].int()
-        sectors = self.Stream(dsect)
-        source = ptypes.provider.disorderly(sectors, autocommit={})
-        return self.new(Directory, __name__='Directory', blocksize=lambda sz=sectors.size(): sz, source=source).l
+        fat, sector = self.Fat(), self['Fat']['sectDirectory'].int()
+        iterable = fat.chain(sector)
+        type, items = dyn.block(self._uSectorSize), [sector for sector in self.fatsectors(iterable)]
+        source, size = ptypes.provider.disorderly(items, autocommit={}), sum(sector.size() for sector in items)
+        return self.new(Directory, __name__='Directory', source=source, blocksize=lambda sz=size: sz).l
 
 ### Specific stream types
 class DirectoryStream(ptype.definition):
@@ -1091,7 +1095,7 @@ class CompObjStream(pstruct.type):
 if __name__ == '__main__':
     import sys, ptypes, office.storage as storage
     filename = sys.argv[1]
-    ptypes.setsource(ptypes.prov.file(filename, mode='r'))
+    ptypes.setsource(ptypes.prov.file(filename, mode='rw'))
 
     store = storage.File()
     store = store.l
