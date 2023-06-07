@@ -1113,7 +1113,11 @@ class CompObjStream(pstruct.type):
 if __name__ == '__main__':
     import sys, ptypes, office.storage as storage
     filename = sys.argv[1]
-    ptypes.setsource(ptypes.prov.file(filename, mode='rw'))
+    try:
+        ptypes.setsource(ptypes.prov.file(filename, mode='rw'))
+    except ptypes.error.ProviderError as E:
+        print("{!s}: Unable to open file in r/w, trying as r/o instead...".format(E))
+        ptypes.setsource(ptypes.prov.file(filename, mode='rb'))
 
     store = storage.File()
     store = store.l
