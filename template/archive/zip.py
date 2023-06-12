@@ -768,6 +768,6 @@ if __name__ == '__main__':
         # fall-back to writing to already open target
         else:
             logging.debug('{:s}ing {:d} bytes from record({:d}) to stream: {:s}'.format(args.mode.title(), len(data), int(rec.name()), target.name))
-            target.write(data) if args.mode in {'extract'} else six.print_(data, file=target)
+            getattr(target, 'buffer', target).write(data) if args.mode in {'extract'} else six.print_(data, file=target)
         continue
     sys.exit(0)
