@@ -366,13 +366,13 @@ if __name__ == '__main__':
 
     # fix up arguments
     source_a, target_a = args.source.buffer if hasattr(args.source, 'buffer') else args.source, args.target.buffer if hasattr(args.target, 'buffer') else args.target
-    if source_a == '-':
+    if source_a == '-' or getattr(source_a, 'name', '') in {'<stdin>'}:
         if sys.platform == 'win32': msvcrt.setmode(source_a.fileno(), os.O_BINARY)
         source = ptypes.prov.stream(source_a)
     else:
         source = ptypes.prov.fileobj(source_a)
 
-    if target_a == '-':
+    if target_a == '-' or getattr(target_a, 'name', '') in {'<stdout>', '<stderr>'}:
         if sys.platform == 'win32': msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
         target = sys.stdout
     else:
