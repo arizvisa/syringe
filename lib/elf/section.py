@@ -1209,3 +1209,5 @@ class SectionData(pstruct.type):
 
 class MixedSectionData(ptype.block):
     pass
+class UndefinedSectionData(ptype.undefined):
+    pass

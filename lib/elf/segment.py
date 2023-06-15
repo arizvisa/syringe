@@ -411,3 +411,5 @@ class MemorySegmentData(SegmentData):
 
 class MixedSegmentData(ptype.block):
     pass
+class UndefinedSegmentData(ptype.undefined):
+    pass

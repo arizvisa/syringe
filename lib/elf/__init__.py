@@ -125,6 +125,9 @@ class File(pstruct.type, base.ElfXX_File):
         # empty list and table just to be safe.
         if isinstance(self.source, ptypes.provider.memorybase):
             return []
+        elif isinstance(self.source, ptypes.provider.bounded) and not(sections.getoffset() < self.source.size()):
+            logging.warning("{:s} : Skipping {:s} due to it being outside the boundaries of the source ({:#x}..{:+#x}).".format(self.instance(), sections.instance(), 0, self.source.size()))
+            return []
         return [shdr for _, shdr in sections.li.sorted()]
 
     def __gather_sections__(self, sections):
@@ -462,7 +465,7 @@ class File(pstruct.type, base.ElfXX_File):
                 delta = header.align(boundary) - boundary
 
                 # We got the size of our alignment so pad our results with a block.
-                res = boundary - position + delta, ptype.undefined
+                res = position, boundary - position + delta, ptype.undefined
                 result.append(res)
                 logging.debug("(align)  {:#010x}<>{:#010x} goal:{:#010x} {:#04x}{:+#04x}{:+#x} : {:s}".format(base + position, base + boundary, base + header.align(boundary), base + position, boundary - position, delta, ptype.undefined.typename()))
                 position = header.align(boundary)
@@ -470,7 +473,7 @@ class File(pstruct.type, base.ElfXX_File):
             # Very first thing we need to do is to pad things up to the current
             # segment ensuring that we begin at the right place.
             if position < boundary:
-                res = boundary - position, block_t
+                res = position, boundary - position, block_t
                 result.append(res)
                 logging.debug("(pad)    {:#010x} goal:{:#010x} {:#04x}{:+#04x} : {:s}".format(base + position, base + boundary, base + position, boundary - position, block_t.typename()))
                 position = boundary
@@ -485,8 +488,8 @@ class File(pstruct.type, base.ElfXX_File):
                 # then we ignore the entrysize and clamp it down towards
                 # whatever size we need for the next element.
                 if not items:
-                    res = entrysize, item
-                    items.append(res), result.append(res)
+                    res = offset, entrysize, item
+                    items.append(res[-2:]), result.append(res)
                     logging.debug("(header) {:#010x}<>{:#010x} {:#04x}{:+#04x} : {:s}".format(base + offset, base + offset + entrysize, base + offset, entrysize, Fsummary(item)))
                     position = offset + entrysize
                     continue
@@ -496,17 +499,17 @@ class File(pstruct.type, base.ElfXX_File):
                 # result so that it has a size that doesn't overlap anything.
                 elif offset < minimum:
                     delta = minimum - offset
-                    previous, t = result[-1]
-                    result[-1] = previous - delta, t
+                    res, previous, t = result[-1]
+                    result[-1] = res, previous - delta, t
                     logging.debug("(-min)   {:#010x} goal:{:#010x} {:#04x}{:+#04x} ({:#x}) : {:s}".format(base + offset, base + minimum, base + previous, -delta, base + boundary + previous - delta, Fsummary(item)))
 
                 # If our position does not point at our entry's offset,
                 # then we need to add a block to pad us all the way there.
                 elif position < offset:
                     delta = offset - position
-                    res = delta, block_t
+                    res = offset, delta, block_t
                     logging.debug("(+pad)   {:#010x} goal:{:#010x} {:#04x}{:+#04x} : {:s}".format(base + position, base + offset, base + position, -position, Fsummary(item)))
-                    items.append(res), result.append(res)
+                    items.append(res[-2:]), result.append(res)
                     position = offset
 
                 # If our projected position pushes us all the way to
@@ -514,8 +517,8 @@ class File(pstruct.type, base.ElfXX_File):
                 # we need to backtrack and try it out again.
                 elif position > offset:
                     delta = position - offset
-                    previous, t = result[-1]
-                    result[-1] = max(0, delta - previous), t
+                    res, previous, t = result[-1]
+                    result[-1] = res, max(0, delta - previous), t
                     logging.debug("(-pad)   {:#010x} goal:{:#010x} {:#04x}{:+#04x} : {:s}".format(base + position, base + offset, base + position, -offset, Fsummary(item)))
                     position = offset
 
@@ -537,16 +540,16 @@ class File(pstruct.type, base.ElfXX_File):
                 # boundaries of the segment, the clamp it to a size that
                 # lays us at the very end of the segment.
                 elif position == offset and offset + entrysize > boundary + size:
-                    res = (boundary + size) - offset, item
-                    items.append(res), result.append(res)
+                    res = offset, (boundary + size) - offset, item
+                    items.append(res[-2:]), result.append(res)
                     logging.debug("(clamp)  {:#010x} goal:{:#010x} {:+#04x} : {:s}".format(base + offset, base + boundary + size, size, Fsummary(item)))
                     position = boundary + size
 
                 # If our position is where we expect it, then we can simply
                 # append our element with its entrysize.
                 elif position == offset and offset + entrysize <= boundary + size:
-                    res = entrysize, item
-                    items.append(res), result.append(res)
+                    res = offset, entrysize, item
+                    items.append(res[-2:]), result.append(res)
                     logging.debug("(append) {:#010x} goal:{:#010x} {:+#04x} : {:s}".format(base + offset, base + offset + entrysize, entrysize, Fsummary(item)))
                     position = offset + entrysize
 
@@ -577,7 +580,7 @@ class File(pstruct.type, base.ElfXX_File):
                 # However, we still need to track our offset because we
                 # actually might need to pad our way there.
                 if position < offset:
-                    res = offset - position, block_t
+                    res = offset, offset - position, block_t
                     result.append(res)
                     logging.debug("(pad)   {:#010x} goal:{:#010x} {:#04x}{:+#04x} : {:s}".format(base + position, base + offset, base + position, offset - position, block_t.typename()))
                     position = offset
@@ -585,7 +588,7 @@ class File(pstruct.type, base.ElfXX_File):
                 # If we're not at the correct position, then we need to
                 # adjust the size of our item so the sections line up.
                 elif position > offset:
-                    delta = position - offset
+                    delta = offset, position - offset
                     #result[-1] = max(0, delta - previous), t
                     logging.debug("(clamp) {:#010x} goal:{:#010x} {:#04x}{:+#04x} : {:s}".format(base + offset, base + position, base + position, delta, block_t.typename()))
                     result.append((entrysize - delta, item))
@@ -593,7 +596,7 @@ class File(pstruct.type, base.ElfXX_File):
 
                 # We should be good, so we just need to add it.
                 else:
-                    result.append((entrysize, item))
+                    result.append((offset, entrysize, item))
                     logging.debug("(append) {:d}/{:d} {:#010x} goal:{:#010x} {:+#04x} : {:s}".format(1 + count + index, len(entries), base + offset, base + offset + entrysize, entrysize, Fsummary(item)))
                     position += entrysize
                 continue
@@ -601,9 +604,15 @@ class File(pstruct.type, base.ElfXX_File):
 
         # Everything has been sorted, so now we can construct our array and
         # align it properly to load as many contiguous pieces as possible.
+        maximum = self.source.size() if isinstance(self.source, ptypes.provider.bounded) else None
         def _object_(self, items=result):
-            size, item = items[len(self.value)]
-            if isinstance(item, segment.ElfXX_Phdr):
+            offset, size, item = items[len(self.value)]
+            if maximum is not None and any([maximum <= offset, maximum <= offset + size]):
+                if isinstance(item, segment.ElfXX_Phdr):    keyword, type = '__segment__', segment.UndefinedSegmentData
+                elif isinstance(item, section.ElfXX_Shdr):  keyword, type = '__section__', section.UndefinedSectionData
+                else:                                       keyword, type = '', ptype.undefined
+                return ptype.clone(type, length=size, **{keyword: item} if keyword else {})
+            elif isinstance(item, segment.ElfXX_Phdr):
                 return ptype.clone(segment_t, length=size, __segment__=item)
             elif isinstance(item, section.ElfXX_Shdr):
                 return ptype.clone(section_t, length=size, __section__=item)
