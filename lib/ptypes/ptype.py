@@ -1700,14 +1700,24 @@ class undefined(block):
     """An empty ptype that is pretty much always empty...except when it's not."""
     length = 0
     def __init__(self, **attrs):
-        attrs.setdefault('value', b'')
         return super(undefined, self).__init__(**attrs)
     def initializedQ(self):
         return True if self.blocksize() <= len(self.value or b'') else False
     def serialize(self):
         return self.value or b''
     def summary(self, **options):
-        return super(undefined, self).summary() if self.value else '...'
+        return '...' if self.value is not None and not len(self.value) else super(undefined, self).summary()
+    repr = details = summary
+    def size(self):
+        return self.blocksize()
+    def load(self, **attrs):
+        with utils.assign(self, **attrs):
+            source, offset, blocksize = self.source, self.getoffset(), self.blocksize()
+            source.seek(offset)
+            self.value = self.source.consume(min(blocksize, source.size() - offset)) if builtins.isinstance(self.source, provider.bounded) and offset < self.source.size() else b''
+            #self.value = b''
+            source.seek(offset + blocksize)
+        return self
 
 #@utils.memoize('cls', newattrs=lambda n:tuple(sorted(n().items())))
 def clone(cls, **newattrs):
