@@ -382,8 +382,9 @@ class __interface__(object):
             continue
 
         # Make a copy of our current attributes for our new instance, and then
-        # update ourself with them.
+        # update ourselves with the attributes provided by the caller.
         self.attributes = {} if self.attributes is None else dict(self.attributes)
+        [setattr(self, attribute, value) for attribute, value in self.attributes.items()]
         self.__update__(attrs)
 
     ## offset
