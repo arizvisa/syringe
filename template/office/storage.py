@@ -169,8 +169,8 @@ class FAT(AllocationTable):
             realindex = self.__index__
             return self._uHeaderSize + realindex * self._uSectorSize
         def dereference(self, **attrs):
-            p = self.getparent(FAT)
-            attrs.setdefault('source', p.parent.source)
+            parent = self.getparent(FAT)
+            attrs.setdefault('source', parent.parent.source)
             return super(FAT.Pointer, self).dereference(**attrs)
 
     def _object_(self):
@@ -235,10 +235,10 @@ class MINIFAT(AllocationTable):
             return super(MINIFAT.Pointer, self).dereference(**attrs)
 
     def _object_(self):
-        p, index = self.getparent(File), len(self.value)
-        count, table = self._uSectorSize // self._uMiniSectorSize, self.__minitable__ if hasattr(self, '__minitable__') else [item for item in p.__ministream_sectors__()]
+        parent, index = self.getparent(File), len(self.value)
+        count, table = self._uSectorSize // self._uMiniSectorSize, self.__minitable__ if hasattr(self, '__minitable__') else [item for item in parent.__ministream_sectors__()]
         sector = table[index // count] if index // count < len(table) else None
-        return dyn.clone(self.Pointer, _object_=p.MiniSector, __index__=index % count, __sector__=sector, __minisource__=ptypes.provider.disorderly(table, autocommit={}))
+        return dyn.clone(self.Pointer, _object_=parent.MiniSector, __index__=index % count, __sector__=sector, __minisource__=ptypes.provider.disorderly(table, autocommit={}))
 
 ### Header types
 class uByteOrder(pint.enum, USHORT):
@@ -400,8 +400,8 @@ class DirectoryEntryIdentifier(pint.enum, DWORD):
 
 class DirectoryEntry(pstruct.type):
     def __clsid(self):
-        p = self.getparent(File)
-        header = p['Header']
+        parent = self.getparent(File)
+        header = parent['Header']
         order = header.ByteOrder()
         return dyn.clone(CLSID, byteorder=order)
 
@@ -489,22 +489,22 @@ class DirectoryEntry(pstruct.type):
 
     def enumerate(self):
         '''Return the index and item of each directory entry below the current one.'''
-        p = self.getparent(Directory)
-        for index, entry in p.enumerate(self):
+        parent = self.getparent(Directory)
+        for index, entry in parent.enumerate(self):
             yield index, entry
         return
 
     def children(self):
         '''Return each element belonging to the current directory entry (Root or Storage).'''
-        p = self.getparent(Directory)
-        for _, item in p.children(self):
+        parent = self.getparent(Directory)
+        for _, item in parent.children(self):
             yield item
         return
 
     def stores(self):
         '''Return all of the stores that belong to the current directory entry (Root or Storage).'''
-        p = self.getparent(Directory)
-        for _, item in p.stores(self):
+        parent = self.getparent(Directory)
+        for _, item in parent.stores(self):
             yield item
         return
 
