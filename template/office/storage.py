@@ -76,7 +76,10 @@ Pointer._value_ = SectorType
 
 class SECT(Pointer):
     def _calculate_(self, index):
-        return self._uSectorSize + index * self._uSectorSize
+        parent = self.parent
+        uHeaderSize = getattr(parent if parent else self, '_uHeaderSize', pow(2, 9))
+        uSectorSize = getattr(parent if parent else self, '_uSectorSize', 0)
+        return uHeaderSize + index * uSectorSize
 
 ### File-allocation tables that populate a single sector
 class AllocationTable(parray.type):
@@ -164,7 +167,7 @@ class FAT(AllocationTable):
     class Pointer(Pointer):
         def _calculate_(self, nextindex):
             realindex = self.__index__
-            return self._uSectorSize + realindex * self._uSectorSize
+            return self._uHeaderSize + realindex * self._uSectorSize
         def dereference(self, **attrs):
             p = self.getparent(FAT)
             attrs.setdefault('source', p.parent.source)
@@ -172,8 +175,8 @@ class FAT(AllocationTable):
 
     def _object_(self):
         '''return a custom pointer that can be used to dereference entries in the FAT.'''
-        t = dyn.block(self._uSectorSize)
-        return dyn.clone(self.Pointer, _object_=t, __index__=len(self.value))
+        target = dyn.clone(FileSector, length=self._uSectorSize)
+        return dyn.clone(self.Pointer, _object_=target, __index__=len(self.value))
 
 class DIFAT(AllocationTable):
     class IndirectPointer(Pointer):
@@ -183,12 +186,12 @@ class DIFAT(AllocationTable):
         to the correct position of the file.
         '''
         def _calculate_(self, index):
-            return self._uSectorSize + index * self._uSectorSize
+            return self._uHeaderSize + index * self._uSectorSize
 
     def _object_(self):
         '''return a custom pointer that can be used to dereference the FAT.'''
-        t = dyn.clone(FAT, length=self._uSectorCount)
-        return dyn.clone(DIFAT.IndirectPointer, _object_=t)
+        target = dyn.clone(FAT, length=self._uSectorCount)
+        return dyn.clone(DIFAT.IndirectPointer, _object_=target)
 
     def iterate(self):
         '''Yield all allocation tables dereferenced from the DiFat.'''
@@ -235,7 +238,7 @@ class MINIFAT(AllocationTable):
         p, index = self.getparent(File), len(self.value)
         count, table = self._uSectorSize // self._uMiniSectorSize, self.__minitable__ if hasattr(self, '__minitable__') else [item for item in p.__ministream_sectors__()]
         sector = table[index // count] if index // count < len(table) else None
-        return dyn.clone(self.Pointer, _object_=dyn.block(self._uMiniSectorSize), __index__=index % count, __sector__=sector, __minisource__=ptypes.provider.disorderly(table, autocommit={}))
+        return dyn.clone(self.Pointer, _object_=p.MiniSector, __index__=index % count, __sector__=sector, __minisource__=ptypes.provider.disorderly(table, autocommit={}))
 
 ### Header types
 class uByteOrder(pint.enum, USHORT):
@@ -376,6 +379,9 @@ class HeaderDiFat(pstruct.type):
             ('csectDifat', "{:d}")
         ]
         return ' '.join("{:s}={!s}".format(fld, fmtstring.format(self[fld].int()) if fmtstring else self[fld].summary()) for fld, fmtstring in fields)
+    def alloc(self, **fields):
+        fields.setdefault('sectDifat', 'ENDOFCHAIN')
+        return super(HeaderDiFat, self).alloc(**fields)
 
 ### Directory types
 class DirectoryEntryData(ptype.block):
@@ -638,13 +644,52 @@ class Directory(parray.block):
             continue
         return
 
+### Sector types
+class SectorContent(ptype.block):
+    @classmethod
+    def typename(cls):
+        return cls.__name__
+
+    def asTable(self, allocationTable, **attrs):
+        '''Return the block as an allocation table of the specified type.'''
+        assert(issubclass(allocationTable, AllocationTable)), "Given type {:s} does not inherit from {:s}".format(allocationTable.typename(), AllocationTable.typename())
+        attrs.setdefault('source', ptypes.provider.proxy(self, autocommit={}))
+        return self.new(allocationTable, **attrs).li
+
+class FileSector(SectorContent):
+    '''An individual sector within the file.'''
+    def asTable(self, allocationTable, **attrs):
+        attrs.setdefault('length', self._uSectorCount)
+        return super(FileSector, self).asTable(allocationTable, **attrs)
+
+class StreamSector(SectorContent):
+    '''An individual sector belonging to a stream.'''
+    def asTable(self, allocationTable, **attrs):
+        attrs.setdefault('length', self._uSectorCount)
+        return super(StreamSector, self).asTable(allocationTable, **attrs)
+
+class MiniSector(SectorContent):
+    '''An individual minisector belonging to a ministream.'''
+    def asTable(self, allocationTable, **attrs):
+        attrs.setdefault('length', self._uMiniSectorCount)
+        return super(MiniSector, self).asTable(allocationTable, **attrs)
+
 ### File type
 class FileSectors(parray.block):
+    '''An array of sectors within the file.'''
     def _object_(self):
-        res = self.getparent(File)
-        return getattr(res, 'Sector', dyn.block(self._uSectorSize, __name__='Sector'))
+        parent = self.getparent(File)
+        return parent.FileSector
+
+    def asTable(self, allocationTable, **attrs):
+        '''Return the array as an allocation table of the specified type.'''
+        assert(issubclass(allocationTable, AllocationTable)), "Given type {:s} does not inherit from {:s}".format(allocationTable.typename(), AllocationTable.typename())
+        attrs.setdefault('source', ptypes.provider.proxy(self, autocommit={}))
+        attrs.setdefault('length', self._uSectorCount * len(self))
+        return self.new(allocationTable, **attrs).li
 
 class File(pstruct.type):
+    attributes = {'_uHeaderSize': pow(2, 9)}    # _always_ hardcoded to 512
     def __reserved(self):
         '''Hook decoding of the "reserved" field in order to keep track of the sector and mini-sector dimensions.'''
         header = self['Header'].li
@@ -670,20 +715,19 @@ class File(pstruct.type):
     def __Data(self):
         if not getattr(self, '_uSectorSize', 0):
             return FileSectors
-        self.Sector = dyn.block(self._uSectorSize, __name__='Sector')
         if isinstance(self.source, ptypes.provider.bounded):
-            return dyn.clone(FileSectors, blocksize=lambda _, cb=self.source.size() - self._uSectorSize: cb)
+            return dyn.clone(FileSectors, blocksize=lambda _, cb=max(0, self.source.size() - self._uHeaderSize): cb)
         return FileSectors
 
     def __Table(self):
-        total, size = getattr(self, '_uSectorSize', 0), sum(self[fld].li.size() for fld in ['Header', 'SectorShift', 'reserved', 'Fat', 'MiniFat', 'DiFat'])
+        total, size = self._uHeaderSize, sum(self[fld].li.size() for fld in ['Header', 'SectorShift', 'reserved', 'Fat', 'MiniFat', 'DiFat'])
 
         # Figure out how many pointers can fit into whatever number of bytes are left
         leftover = max(0, total - size) // Pointer().blocksize()
         return dyn.clone(DIFAT, length=leftover)
 
     def __padding(self):
-        total, size = getattr(self, '_uSectorSize', 0), sum(self[fld].li.size() for fld in ['Header', 'SectorShift', 'reserved', 'Fat', 'MiniFat', 'DiFat', 'Table'])
+        total, size = self._uHeaderSize, sum(self[fld].li.size() for fld in ['Header', 'SectorShift', 'reserved', 'Fat', 'MiniFat', 'DiFat', 'Table'])
         return dyn.block(max(0, total - size))
 
     _fields_ = [
@@ -701,6 +745,7 @@ class File(pstruct.type):
     def alloc(self, **fields):
         fields.setdefault('Header', Header)
         fields.setdefault('SectorShift', HeaderSectorShift)
+        fields.setdefault('DiFat', HeaderDiFat)
         res = super(File, self).alloc(**fields)
 
         # Extract the sector shifts used for the sector sizes.
@@ -722,6 +767,30 @@ class File(pstruct.type):
         if 'Table' not in fields:
             res['Table'].set([0xffffffff] * len(res['Table']))
         return res
+
+    @property
+    @ptypes.utils.memoize(self=lambda self: self._uSectorSize)
+    def StreamSector(self):
+        class Sector(StreamSector):
+            length = self._uSectorSize
+        Sector.__name__ = 'StreamSector'
+        return Sector
+
+    @property
+    @ptypes.utils.memoize(self=lambda self: self._uMiniSectorSize)
+    def MiniSector(self):
+        class Sector(MiniSector):
+            length = self._uMiniSectorSize
+        Sector.__name__ = 'MiniSector'
+        return Sector
+
+    @property
+    @ptypes.utils.memoize(self=lambda self: self._uSectorSize)
+    def FileSector(self):
+        class Sector(FileSector):
+            length = self._uSectorSize
+        Sector.__name__ = 'FileSector'
+        return Sector
 
     @ptypes.utils.memoize(self=lambda self: id(self.value))
     def DiFat(self):
@@ -821,7 +890,7 @@ class File(pstruct.type):
         '''Yield the contents of each minisector specified by the given chain.'''
         sectors, shift = self.__ministream_sectors__(), self['SectorShift']['uMiniSectorShift'].int()
         source = ptypes.provider.disorderly(sectors, autocommit={})
-        minisectors = self.new(parray.type, _object_=dyn.block(pow(2, shift)), length=source.size() // pow(2, shift), source=source).l
+        minisectors = self.new(parray.type, _object_=self.MiniSector, length=source.size() // pow(2, shift), source=source).l
         return (minisectors[index] for index in chain)
 
     def directorysectors(self):
@@ -875,7 +944,7 @@ class File(pstruct.type):
         '''Return the contents of the stream starting at a specified sector using the fat.'''
         fat = self.Fat()
         iterable = fat.chain(sector)
-        type, items = dyn.block(self._uSectorSize), [sector for sector in self.fatsectors(iterable)]
+        type, items = self.StreamSector, [sector for sector in self.fatsectors(iterable)]
         source = ptypes.provider.disorderly(items, autocommit={})
         return self.new(parray.type, _object_=type, length=len(items), source=source).l
 
@@ -883,7 +952,7 @@ class File(pstruct.type):
         '''Return the contents of the ministream starting at a specified minisector using the minifat.'''
         minifat = self.MiniFat()
         iterable = minifat.chain(sector)
-        type, items = dyn.block(self._uMiniSectorSize), [minisector for minisector in self.minisectors(iterable)]
+        type, items = self.MiniSector, [minisector for minisector in self.minisectors(iterable)]
         source = ptypes.provider.disorderly(items, autocommit={})
         return self.new(parray.type, _object_=type, length=len(items), source=source).l
 
@@ -891,7 +960,7 @@ class File(pstruct.type):
         '''Return the array of Directory entries for the file.'''
         fat, sector = self.Fat(), self['Fat']['sectDirectory'].int()
         iterable = fat.chain(sector)
-        type, items = dyn.block(self._uSectorSize), [sector for sector in self.fatsectors(iterable)]
+        type, items = self.StreamSector, [sector for sector in self.fatsectors(iterable)]
         source, size = ptypes.provider.disorderly(items, autocommit={}), sum(sector.size() for sector in items)
         return self.new(Directory, __name__='Directory', source=source, blocksize=lambda sz=size: sz).l
 
