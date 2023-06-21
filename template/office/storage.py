@@ -163,6 +163,15 @@ class AllocationTable(parray.type):
         additional = (index for _, index in zip(range(amount), source))
         return self.link(chain + [index for index in additional])
 
+    def set(self, *values, **attrs):
+        '''Overwrite the sector values with the list of values while preserving the table size.'''
+        if not values:
+            return super(AllocationTable, self).set(*values, **attrs)
+        [value] = values
+        iterable = value if len(self) <= len(value) else itertools.chain(value, ['FREESECT'] * len(self))
+        items = [item for _, item in zip(range(len(self)), iterable)]
+        return super(AllocationTable, self).set(items, **attrs)
+
 class FAT(AllocationTable):
     class Pointer(Pointer):
         def _calculate_(self, nextindex):
