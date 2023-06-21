@@ -187,8 +187,8 @@ class __array_interface__(ptype.container):
     def __getitem__(self, index):
         '''x.__getitem__(y) <==> x[y]'''
         if isinstance(index, slice):
-            result = [ self.value[self.__getindex__(idx)] for idx in range(*index.indices(len(self))) ]
-            t = ptype.clone(type, length=len(result), _object_=self._object_)
+            cls, result = self.__class__, [ self.value[self.__getindex__(idx)] for idx in range(*index.indices(len(self))) ]
+            t = ptype.clone(cls, length=len(result), _object_=self._object_)
             return self.new(t, offset=result[0].getoffset() if len(result) else self.getoffset(), value=result)
 
         idx = self.__getindex__(index)
@@ -1249,6 +1249,94 @@ if __name__ == '__main__':
                 return 1 if self.getoffset() else 0
         res = t().alloc([pint.uint8_t, pint.uint8_t, dynamic_t, pint.uint8_t])
         if res.size() == 4:
+            raise Success
+
+    @TestCase
+    def test_array_slice_1():
+        result = [1,2,3,4]
+        class argh(parray.type):
+            _object_, length = pint.uint8_t, len(result)
+        res = argh().set(result)
+        if res.size() == len(result) and tuple(res[:].get()) == tuple(result):
+            raise Success
+
+    @TestCase
+    def test_array_slice_2():
+        result = [1,2,3,4]
+        class argh(parray.type):
+            _object_, length = pint.uint8_t, len(result)
+        res = argh().set(result)
+        if res.size() == len(result) and tuple(res[::1].get()) == tuple(result[::1]):
+            raise Success
+
+    @TestCase
+    def test_array_slice_3():
+        result = [1,2,3,4]
+        class argh(parray.type):
+            _object_, length = pint.uint8_t, len(result)
+        res = argh().set(result)
+        if res.size() == len(result) and tuple(res[::2].get()) == tuple(result[::2]):
+            raise Success
+
+    @TestCase
+    def test_array_slice_4():
+        result = [1,2,3,4]
+        class argh(parray.type):
+            _object_, length = pint.uint8_t, len(result)
+        res = argh().set(result)
+        if res.size() == len(result) and tuple(res[::-1].get()) == tuple(result[::-1]):
+            raise Success
+
+    @TestCase
+    def test_array_slice_5():
+        result = bytearray([1,2,3,4,5,0])
+        class argh(parray.terminated):
+            _object_, isTerminator = pint.uint8_t, lambda self, item: not item.int()
+
+        res = argh().load(source=provider.bytes(result))
+        if res.size() == len(result) and tuple(res[::2].get()) == tuple(result[::2]):
+            raise Success
+
+    @TestCase
+    def test_array_slice_6():
+        result = bytearray([1,2,3,4,5,0])
+        class argh(parray.block):
+            _object_, blocksize = pint.uint8_t, lambda self, size=4: size
+
+        res = argh().load(source=provider.bytes(result))
+        if res.size() == 4 and tuple(res[::-1].get()) == tuple(result[3::-1]):
+            raise Success
+
+    @TestCase
+    def test_array_slice_7():
+        result = bytearray([1,2,3,4,4,3,2,1])
+        class argh(parray.infinite):
+            _object_ = pint.uint8_t
+
+        res = argh().load(source=provider.bytes(result))
+        if (res.size(), res.blocksize()) == (8, 9) and tuple(res[:].get()) == tuple(result[:]) + (0,):
+            raise Success
+
+    @TestCase
+    def test_array_slice_preserve_1():
+        result = [1,2,3,4]
+        class argh(parray.type):
+            _object_, length = pint.uint8_t, len(result)
+            def get(self):
+                return [2 * x for x in super(argh, self).get()]
+        res = argh().set(result)
+        if res.size() == len(result) and tuple(res[:].get()) == tuple(2 * x for x in result):
+            raise Success
+
+    @TestCase
+    def test_array_slice_preserve_2():
+        result = [1,2,3,4]
+        class argh(parray.type):
+            _object_, length = pint.uint8_t, len(result)
+            def get(self):
+                return [2 * x for x in super(argh, self).get()]
+        res = argh().set(result)
+        if res.size() == len(result) and tuple(res[::-1].get()) == tuple(2 * x for x in result[::-1]):
             raise Success
 
 if __name__ == '__main__':
