@@ -674,20 +674,43 @@ class MiniSector(SectorContent):
         attrs.setdefault('length', self._uMiniSectorCount)
         return super(MiniSector, self).asTable(allocationTable, **attrs)
 
-### File type
-class FileSectors(parray.block):
+# Sector stream types
+class ContentStream(parray.type):
+    @classmethod
+    def typename(cls):
+        return cls.__name__
+
+    def asTable(self, allocationTable, **attrs):
+        '''Return the array as an allocation table of the specified type.'''
+        assert(issubclass(allocationTable, AllocationTable)), "Given type {:s} does not inherit from {:s}".format(allocationTable.typename(), AllocationTable.typename())
+        attrs.setdefault('source', ptypes.provider.proxy(self, autocommit={}))
+        return self.new(allocationTable, **attrs).li
+
+class FileSectors(parray.block, ContentStream):
     '''An array of sectors within the file.'''
     def _object_(self):
         parent = self.getparent(File)
         return parent.FileSector
 
     def asTable(self, allocationTable, **attrs):
-        '''Return the array as an allocation table of the specified type.'''
-        assert(issubclass(allocationTable, AllocationTable)), "Given type {:s} does not inherit from {:s}".format(allocationTable.typename(), AllocationTable.typename())
-        attrs.setdefault('source', ptypes.provider.proxy(self, autocommit={}))
         attrs.setdefault('length', self._uSectorCount * len(self))
-        return self.new(allocationTable, **attrs).li
+        return super(FileSectors, self).asTable(allocationTable, **attrs)
 
+class StreamSectors(ContentStream):
+    '''An array of sectors belonging to a stream.'''
+    _object_ = StreamSector
+    def asTable(self, allocationTable, **attrs):
+        attrs.setdefault('length', self._uSectorCount * len(self))
+        return super(StreamSectors, self).asTable(allocationTable, **attrs)
+
+class MiniStreamSectors(ContentStream):
+    '''An array of minisectors belonging to a ministream.'''
+    _object_ = MiniSector
+    def asTable(self, allocationTable, **attrs):
+        attrs.setdefault('length', self._uMiniSectorCount * len(self))
+        return super(MiniStreamSectors, self).asTable(allocationTable, **attrs)
+
+### File type
 class File(pstruct.type):
     attributes = {'_uHeaderSize': pow(2, 9)}    # _always_ hardcoded to 512
     def __reserved(self):
@@ -890,7 +913,7 @@ class File(pstruct.type):
         '''Yield the contents of each minisector specified by the given chain.'''
         sectors, shift = self.__ministream_sectors__(), self['SectorShift']['uMiniSectorShift'].int()
         source = ptypes.provider.disorderly(sectors, autocommit={})
-        minisectors = self.new(parray.type, _object_=self.MiniSector, length=source.size() // pow(2, shift), source=source).l
+        minisectors = self.new(MiniStreamSectors, _object_=self.MiniSector, length=source.size() // pow(2, shift), source=source).l
         return (minisectors[index] for index in chain)
 
     def directorysectors(self):
@@ -946,7 +969,7 @@ class File(pstruct.type):
         iterable = fat.chain(sector)
         type, items = self.StreamSector, [sector for sector in self.fatsectors(iterable)]
         source = ptypes.provider.disorderly(items, autocommit={})
-        return self.new(parray.type, _object_=type, length=len(items), source=source).l
+        return self.new(StreamSectors, _object_=type, length=len(items), source=source).l
 
     def MiniStream(self, sector):
         '''Return the contents of the ministream starting at a specified minisector using the minifat.'''
@@ -954,7 +977,7 @@ class File(pstruct.type):
         iterable = minifat.chain(sector)
         type, items = self.MiniSector, [minisector for minisector in self.minisectors(iterable)]
         source = ptypes.provider.disorderly(items, autocommit={})
-        return self.new(parray.type, _object_=type, length=len(items), source=source).l
+        return self.new(MiniStreamSectors, _object_=type, length=len(items), source=source).l
 
     def Directory(self):
         '''Return the array of Directory entries for the file.'''
