@@ -671,6 +671,16 @@ class FileSector(SectorContent):
         attrs.setdefault('length', self._uSectorCount)
         return super(FileSector, self).asTable(allocationTable, **attrs)
 
+    def index(self):
+        '''Return the sector index for the current sector.'''
+        cls, offset, header, size = self.__class__, self.getoffset(), self._uHeaderSize, self._uSectorSize
+        shifted = offset - header
+        if offset < header:
+            raise ValueError("{:s}: Location of {:s} is referencing the sector containing the file header.".format('.'.join([cls.__module__, cls.__name__]), self.instance()))
+        elif shifted % size:
+            logger.warning("{:s}: Calculated index ({:d}) might be wrong due to location of {:s} not being aligned to a sector ({:#x}).".format('.'.join([cls.__module__, cls.__name__]), shifted // size, self.instance(), size))
+        return shifted // size
+
 class StreamSector(SectorContent):
     '''An individual sector belonging to a stream.'''
     def asTable(self, allocationTable, **attrs):
