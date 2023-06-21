@@ -665,6 +665,12 @@ class SectorContent(ptype.block):
         attrs.setdefault('source', ptypes.provider.proxy(self, autocommit={}))
         return self.new(allocationTable, **attrs).li
 
+    def asDirectory(self, **attrs):
+        '''Return the sector as a list of directory entries.'''
+        attrs.setdefault('source', ptypes.provider.proxy(self, autocommit={}))
+        attrs.setdefault('blocksize', self.size)
+        return self.new(Directory, **attrs).li
+
 class FileSector(SectorContent):
     '''An individual sector within the file.'''
     def asTable(self, allocationTable, **attrs):
@@ -704,6 +710,12 @@ class ContentStream(parray.type):
         assert(issubclass(allocationTable, AllocationTable)), "Given type {:s} does not inherit from {:s}".format(allocationTable.typename(), AllocationTable.typename())
         attrs.setdefault('source', ptypes.provider.proxy(self, autocommit={}))
         return self.new(allocationTable, **attrs).li
+
+    def asDirectory(self, **attrs):
+        '''Return the array as a list of directory entries.'''
+        attrs.setdefault('source', ptypes.provider.proxy(self, autocommit={}))
+        attrs.setdefault('blocksize', self.size)
+        return self.new(Directory, **attrs).li
 
 class FileSectors(parray.block, ContentStream):
     '''An array of sectors within the file.'''
