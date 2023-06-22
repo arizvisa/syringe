@@ -150,7 +150,13 @@ class proxied(bounded):
     '''Provider that is backed by other objects that is backed by other objects that is backed by other objects that is backed by another provider.'''
 
     def __iter__(self):
-        raise NotImplementedError
+        raise NotImplementedError("The current provider {!s} does not implement this method.".format(self.__class__))
+
+    def iterate(self):
+        '''Iterate through all of the instances that back this provider in the order that they are laid out contiguously.'''
+        for item in iter(self):
+            yield item
+        return
 
     @classmethod
     def __collect__(cls, iterable, left, right):
