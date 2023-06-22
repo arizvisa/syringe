@@ -2116,15 +2116,15 @@ class definition(object):
 
         def __get__(self, obj, type=None):
             result = super(definition.__enum_instance__, self).__get__(obj, type)
-
             from . import pint, pbinary
+
+            cls = type or definition
+            clsname = '.'.join(getattr(cls, attribute) for attribute in ['__module__', '__name__'] if hasattr(cls, attribute))
+
             if not issubclass(result, generic):
                 raise TypeError("type object '{:s}' in attribute '{:s}' is not a supported type or callable".format('.'.join(getattr(result, attribute) for attribute in ['__module__', '__name__'] if hasattr(result, attribute)), '.'.join([clsname, self._definition])))
             if not issubclass(result, (pint.enum, pbinary.enum)):
                 raise TypeError("type object '{:s}' in attribute '{:s}' is not a supported enumeration type".format('.'.join(getattr(result, attribute) for attribute in ['__module__', '__name__'] if hasattr(result, attribute)), '.'.join([clsname, self._definition])))
-
-            cls = type or definition
-            clsname = '.'.join(getattr(cls, attribute) for attribute in ['__module__', '__name__'] if hasattr(cls, attribute))
 
             def get_filtered_values(values):
                 newvalues = {object.__name__ : self.bytes_or_whatever(result, key) for key, object in type.cache.items()}
