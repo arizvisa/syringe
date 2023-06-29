@@ -1,4 +1,4 @@
-import sys, ptypes
+import sys, ptypes, logging, bisect, itertools, operator, functools
 from ptypes import pstruct, parray, ptype, dyn, pstr, utils, pbinary, pint
 
 from ..headers import *
@@ -386,6 +386,72 @@ class IMAGE_EXCEPTION_DIRECTORY(parray.block):
     _object_ = IMAGE_RUNTIME_FUNCTION_ENTRY
     def blocksize(self):
         return self.p.p['Size'].int()
+
+    def enumerate(self):
+        for index, item in enumerate(self):
+            yield index, item
+        return
+
+    def augmented(self):
+        '''Return an augmented interval tree of each `IMAGE_RUNTIME_FUNCTION_ENTRY` within the array as a dictionary of indices where each node is a tuple, (left-index, owners, maximum, right-index).'''
+        logger = logging.getLogger(__name__)
+
+        items = [(entry['BeginAddress'].int(), entry['EndAddress'].int(), id) for id, entry in self.enumerate()]
+        intervals = sorted(items, key=operator.itemgetter(0))
+
+        result, table = {}, {id : (start, stop, id) for start, stop, id in intervals}
+        def augment(intervals, table=table, result=result):
+            center = len(intervals) // 2
+            key, point, cid = table[intervals[center]]
+
+            left, right, owners = [], [], []
+            for start, stop, id in map(functools.partial(operator.getitem, table), intervals):
+                if stop <= key:
+                    left.append(id)
+                elif start > key:
+                    right.append(id)
+                else:
+                    owners.append(id)
+                point = max(point, stop)
+
+            node = left and augment(left), owners, point, right and augment(right)
+            [result.setdefault(id, node) for id in owners]
+            return cid
+
+        root = augment([id for id in map(operator.itemgetter(2), intervals)])
+        return result
+
+    def boundaries(self, augmented=None):
+        '''Return a dictionary of points associated with each `IMAGE_RUNTIME_FUNCTION_ENTRY` and a sorted list of points.'''
+        logger = logging.getLogger(__name__)
+
+        items = [(entry['BeginAddress'].int(), entry['EndAddress'].int(), id) for id, entry in self.enumerate()]
+        intervals = sorted(items, key=operator.itemgetter(0))
+
+        result, table, augmented = [], {}, augmented or self.augmented()
+        for start, stop, id in intervals:
+            entry, (_, _, current, _) = self[id], augmented[id]
+            assert(stop > start), entry
+
+            # find the index of the result insertion point for each point in the interval.
+            istart, istop = (bisect.bisect_left(result, point) for point in [start, stop])
+
+            # if insertion point is even, then we're not overlapping anything and can add it.
+            if istart == istop or not(istart % 2 and istart % 2):
+                result[istart : istop] = [start, stop]
+                table[start] = table[stop] = id
+                logger.debug("{:s} : {:{:d}<s} {:s} ({:d}/{:d}) {:#0{:d}x}..{:#0{:d}x}".format(entry.instance(), 'insert', 9, '^^', 1, 1, start, 2 + 8, stop, 2 + 8))
+
+            # if our insertion point is not even or the same, then our interval is overlapping.
+            # so, we need to figure out which interval owns the point by checking its maximum.
+            elif istart % 2 != istop % 2:
+                point = result[istop - 1]
+                _, _, maximum, _ = augmented[table[point]]
+                result[istart : istop] = [start, stop]
+                table[start] = table[stop] = id
+                logger.debug("{:s} : {:{:d}<s} {:s} ({:d}/{:d}) {:#0{:d}x}..{:#0{:d}x}".format(entry.instance(), 'overlap', 9, '<' if istart % 2 else '>', id, table[point], start, 2 + 8, stop, 2 + 8))
+            continue
+        return table, result
 
 if __name__ == '__main__':
     import ptypes, pecoff
