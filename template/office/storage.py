@@ -593,8 +593,13 @@ class DirectoryEntry(pstruct.type):
         sector = self['sectLocation'].int()
         count, iterable = fat.count(sector), fat.chain(sector)
         sectors = [index for _, index in zip(range(count), iterable)]
-        if sectors and not sectors[-1]['ENDOFCHAIN']:
-            logger.warning("{:s}.space({:s}): {:s} chain starting at {:s} {:d} cycles at sector {:d} ({:s}).".format('.'.join([cls.__module__, cls.__name__]), self.instance(), fat.classname(), 'mini-sector' if isinstance(fat, MINIFAT) else 'sector', sector, sectors[-1].int(), ', '.join(map("{:d}".format, sectors))))
+        if not sectors:
+            return size, count
+
+        index = sectors[-1]
+        if not fat[index].object['ENDOFCHAIN']:
+            cls = self.__class__
+            logger.warning("{:s}.space({:s}): {:s} chain ({:d} sectors) at {:s} {:d} will cycle when at sector {:d} ({:s}).".format('.'.join([cls.__module__, cls.__name__]), self.instance(), fat.classname(), count, 'mini-sector' if isinstance(fat, MINIFAT) else 'sector', sector, fat[index].int(), ', '.join(map("{:d}".format, sectors))))
         return size, count
 
     def count(self):
