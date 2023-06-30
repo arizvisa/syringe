@@ -211,31 +211,49 @@ class DIFAT(AllocationTable):
         target = dyn.clone(FAT, length=self._uSectorCount)
         return dyn.clone(DIFAT.IndirectPointer, _object_=target)
 
-    def iterate(self):
-        '''Yield all allocation tables dereferenced from the DiFat.'''
-        for table in self.li:
+    def enumerate(self):
+        '''Yield the index and IndirectPointer of each entry within the DiFat.'''
+        for index, table in enumerate(self.li):
             if table.object.int() >= MAXREGSECT.type:
                 break
-            yield table
+            yield index, table
         return
+
+    def iterate(self):
+        '''Yield each IndirectPointer for each entry within the DiFat.'''
+        return (entry for _, entry in self.enumerate())
 
     def collect(self, count):
         '''Yield each entry from the DIFAT table.'''
-        yield self
+        if self.getoffset() < self._uHeaderSize:
+            yield self
 
-        while count > 0:
+        while count > 0 and isinstance(self, DIFAT):
             self = self.next()
             yield self.l
             count -= 1
         return
 
     def next(self):
-        '''Return the next DIFAT table.'''
-        last = self.value[-1]
-        if last.object['ENDOFCHAIN']:
+        '''Return the next DIFAT table following the current one..'''
+        if self._uHeaderSize <= self.getoffset():
+            pointer = self.value[-1]
+            length = getattr(self, '_uSectorCount', 0)
+
+        # Otherwise, the next table has to be determined from the header.
+        else:
+            F = self.getparent(File)
+            pointer = F['DiFat']['sectDifat']
+            parent = None if hasattr(self, '_uSectorCount') else F if self.parent else None
+            length = parent._uSectorCount if parent else getattr(self, '_uSectorCount', 0)
+
+        if pointer.object['ENDOFCHAIN']:
             cls = self.__class__
-            raise AssertionError("{:s}: Encountered {:s} while trying to traverse to next DIFAT table. {:s}".format('.'.join((cls.__module__, cls.__name__)), ENDOFCHAIN.typename(), last.summary()))
-        return last.dereference(_object_=DIFAT, length=self._uSectorCount)
+            raise ValueError("{:s}: Encountered {:#s} while trying to traverse to next DIFAT table at {:s}.".format('.'.join((cls.__module__, cls.__name__)), pointer.object, self.instance()))
+
+        target = dyn.clone(DIFAT, length=length) if length else DIFAT
+        object = dyn.clone(DIFAT.IndirectPointer, _object_=target)
+        return pointer.cast(object).dereference()
 
 class MINIFAT(AllocationTable):
     class Pointer(Pointer):
@@ -387,16 +405,24 @@ class HeaderMiniFat(pstruct.type):
         return ' '.join("{:s}={!s}".format(fld, fmtstring.format(self[fld].int()) if fmtstring else self[fld].summary()) for fld, fmtstring in fields)
 
 class HeaderDiFat(pstruct.type):
+    def __sectDifat(self):
+        parent = None if hasattr(self, '_uSectorCount') else self.getparent(File) if self.parent else None
+        length = parent._uSectorCount if parent else getattr(self, '_uSectorCount', 0)
+        target = dyn.clone(DIFAT, length=length) if length else DIFAT
+        return dyn.clone(SECT, _object_=target)
+
     _fields_ = [
-        (dyn.clone(SECT, _object_=DIFAT), 'sectDifat'), # First difat sector location
-        (DWORD, 'csectDifat'),                          # Number of difat sectors
+        (__sectDifat, 'sectDifat'),     # First difat sector location
+        (DWORD, 'csectDifat'),          # Number of difat sectors
     ]
+
     def summary(self):
         fields = [
             ('sectDifat', None),
             ('csectDifat', "{:d}")
         ]
         return ' '.join("{:s}={!s}".format(fld, fmtstring.format(self[fld].int()) if fmtstring else self[fld].summary()) for fld, fmtstring in fields)
+
     def alloc(self, **fields):
         fields.setdefault('sectDifat', 'ENDOFCHAIN')
         return super(HeaderDiFat, self).alloc(**fields)
@@ -881,21 +907,21 @@ class File(pstruct.type):
     def DiFat(self):
         '''Return an array containing the DiFat'''
         count = self['DiFat']['csectDifat'].int()
+        table = self['Table']
 
-        ## First DiFat entries
-        items = [self['Table']]
-
-        ## Check if we need to find more and use them to make a source
+        ## Check if we need to find more tables and use them to make a source. We chop
+        ## out the last element of each table, since that last entry is actually a link.
         next, count = self['DiFat']['sectDifat'], self['DiFat']['csectDifat'].int()
         if next.int() < MAXREGSECT.type:
-            next = next.d.l
-            items.extend(table for table in next.collect(count))
+            items = [table] + [item[:-1] for item in table.collect(count)][1:]
+        else:
+            items = [table]
         source = ptypes.provider.disorderly(items, autocommit={})
 
         ## Now we need to figure out the number of entries and then load it.
-        length = sum(1 for item in itertools.chain(*items))
-        count = len(self['Table']) + self._uSectorCount * (len(items) - 1)
-        assert(count == length)
+        length = sum(len(item) for item in items)
+        count = len(table) + self._uSectorCount * (len(items) - 1) - (len(items) - 1)
+        assert(count == length), "expected {:d} DiFat entries, got {:d} instead".format(count, length)
 
         ## We're loading it from the source temporarily, so we can still dereference the sector.
         return self.new(DIFAT, recurse=self.attributes, length=length).load(source=source)
@@ -916,9 +942,11 @@ class File(pstruct.type):
     def Fat(self, **attrs):
         '''Return an array containing the FAT'''
         count, difat = self['Fat']['csectFat'].int(), self.DiFat()
-        sectors = [sector.d.l for _, sector in zip(range(count), difat)]
+        sectors = [sector.d for _, sector in zip(range(count), difat)]
+        loaded = [sector.l for sector in sectors]
+        length = sum(len(sector) for sector in loaded)
         source = ptypes.provider.disorderly(sectors, autocommit={})
-        return self.new(FAT, recurse=self.attributes, length=len(sectors) * self._uSectorCount, source=source).load(**attrs)
+        return self.new(FAT, recurse=self.attributes, length=length, source=source).load(**attrs)
 
     def __difat_sectors__(self):
         '''Return a list of the sectors that compose the difat.'''
@@ -1276,12 +1304,24 @@ if __name__ == '__main__':
     store = storage.File()
     store = store.l
     print(store['Header'])
-    print(store['Fat'])
-    print(store['MiniFat'])
-    print(store['DiFat'])
+    print()
 
+    print('>>> Loading DiFat...')
+    print(store['DiFat'])
     difat = store.DiFat()
+    print()
+
+    print('>>> Loading Fat...')
+    print(store['Fat'])
     fat = store.Fat()
+    print()
+
+    print('>>> Loading MiniFat...')
+    print(store['MiniFat'])
     minifat = mfat = store.MiniFat()
+    print(store['MiniFat'])
+    print()
+
+    print('>>> Loading Directory...')
     directory = store.Directory()
     print(directory)
