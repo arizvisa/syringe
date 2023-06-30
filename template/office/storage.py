@@ -103,6 +103,15 @@ class AllocationTable(parray.type):
             yield index
         return
 
+    def count(self, index):
+        '''Return the number of sectors contained by a chain until termination or encountering a cycle.'''
+        iterable, visited = self.chain(index), {index for index in []}
+        for index in iterable:
+            if index in visited:
+                break
+            visited.add(index)
+        return len(visited)
+
     # Yields the index of all objects in the table that matches 'type'
     def enumerate(self, type=None):
         '''Yield the index and pointer for each item within the table.'''
@@ -532,12 +541,12 @@ class DirectoryEntry(pstruct.type):
         # Otherwise it's in the fat like most things and we just need to return it.
         return F.chain(self['sectLocation'].int())
 
-    def stream(self):
+    def streamQ(self):
         '''Return true if the directory entry is stored by the fat as a regular stream backed by regular sectors.'''
         F = self.getparent(File)
         return self['qwSize'].int() >= F['MiniFat']['ulMiniSectorCutoff'].int() or self['Type']['Root']
 
-    def ministream(self):
+    def ministreamQ(self):
         '''Return true if the directory entry is stored by the minifat as a stream backed by minisectors.'''
         F = self.getparent(File)
         return self['qwSize'].int() < F['MiniFat']['ulMiniSectorCutoff'].int() and not self['Type']['Root']
@@ -549,6 +558,28 @@ class DirectoryEntry(pstruct.type):
         checks.append(('Flag', {0, 1}))
         checks.append(('uName', {size for size in range(self['Name'].size())}))
         return functools.reduce(lambda ok, field_range: (lambda field, range: ok and self[field].int() in range)(*field_range), checks, True)
+
+    def __sector_space(self):
+        '''Private method that returns a tuple of the sector size and number of sectors that the directory entry occupies.'''
+        F = self.getparent(File)
+        fat = F.Fat() if F['MiniFat']['ulMiniSectorCutoff'].int() < self['qwSize'].int() or self['Type']['Root'] else F.MiniFat()
+        size = self._uSectorSize if F['MiniFat']['ulMiniSectorCutoff'].int() < self['qwSize'].int() or self['Type']['Root'] else self._uMiniSectorSize
+        sector = self['sectLocation'].int()
+        count, iterable = fat.count(sector), fat.chain(sector)
+        sectors = [index for _, index in zip(range(count), iterable)]
+        if sectors and not sectors[-1]['ENDOFCHAIN']:
+            logger.warning("{:s}.space({:s}): {:s} chain starting at {:s} {:d} cycles at sector {:d} ({:s}).".format('.'.join([cls.__module__, cls.__name__]), self.instance(), fat.classname(), 'mini-sector' if isinstance(fat, MINIFAT) else 'sector', sector, sectors[-1].int(), ', '.join(map("{:d}".format, sectors))))
+        return size, count
+
+    def count(self):
+        '''Return the number of sectors that are occupied by the current directory entry.'''
+        _, count = self.__sector_space()
+        return count
+
+    def space(self):
+        '''Return the maximum number of bytes that are occupied by the current directory entry.'''
+        size, count = self.__sector_space()
+        return size * count
 
 class Directory(parray.block):
     _object_ = DirectoryEntry
