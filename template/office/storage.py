@@ -181,6 +181,23 @@ class AllocationTable(parray.type):
         items = [item for _, item in zip(range(len(self)), iterable)]
         return super(AllocationTable, self).set(items, **attrs)
 
+    def resize(self, chain, count, available=None):
+        '''Modify the length of a chain to the specified count, leaving each entry in the allocation table uncommitted, and then return the new chain.'''
+        if count < len(chain):
+            return self.reduce(chain, len(chain) - count)
+        elif count > len(chain):
+            return self.grow(chain, count - len(chain), available=available)
+        return chain
+
+    def sector(self):
+        '''Return the number of bytes occupied by a sector being described by the current allocation table.'''
+        pointer_t = self._object_ if ptypes.istype(self._object_) else self._object_()
+        assert(issubclass(pointer_t, Pointer)), "{:s} is not a subclass of {:s}.".format(pointer_t.typename(), Pointer.typename())
+        sector_t = pointer_t._object_ if ptypes.istype(pointer_t._object_) else pointer_t._object_()
+        assert(ptypes.istype(sector_t)), "{!s} is not a type.".format(sector_t)
+        sector = sector_t()
+        return sector.blocksize()
+
 class FAT(AllocationTable):
     class Pointer(Pointer):
         def _calculate_(self, nextindex):
