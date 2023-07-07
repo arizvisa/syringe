@@ -674,9 +674,41 @@ class ELFCLASSXX(object):
     class SHT_PROGBITS(ptype.block):
         type = 1
 
-    class SHT_SYMTAB(parray.block):
-        type = 2
+    class __SYMTAB(parray.type):
         _object_ = None
+
+        def enumerate(self, **match):
+            iterable = (match.pop(key) for key in ['st_other', 'other'] if key in match)
+            F_check = lambda st_other: (lambda item: True) if st_other is None else (lambda item: item['st_other'][st_other])
+            F_check_other = F_check(next(iterable, None))
+
+            iterable = (match.pop(key) for key in ['st_bind', 'bind'] if key in match)
+            F_check = lambda st_bind: (lambda item: True )if st_bind is None else (lambda item: item['st_info'].item('ST_BIND')[st_bind])
+            F_check_bind = F_check(next(iterable, None))
+
+            iterable = (match.pop(key) for key in ['st_type', 'type'] if key in match)
+            F_check = lambda st_type: (lambda item: True) if st_type is None else (lambda item: item['st_info'].item('ST_TYPE')[st_type])
+            F_check_type = F_check(next(iterable, None))
+
+            iterable = (match.pop(key) for key in ['st_shndx', 'shndx', 'index', 'section'] if key in match)
+            F_check = lambda st_shndx: (lambda item: True) if st_shndx is None else (lambda item: not(item['st_shndx'][0]) == st_shndx) if isinstance(st_shndx, bool) else (lambda item: item['st_shndx'][st_shndx])
+            F_check_index = F_check(next(iterable, None))
+
+            all_checks = [F_check_other, F_check_bind, F_check_type, F_check_index]
+            for index, item in enumerate(self):
+                if all(F(item) for F in all_checks):
+                    yield index, item
+                continue
+            return
+
+        def iterable(self, **match):
+            for _, item in self.enumerate(**match):
+                yield item
+            return
+        by = iterable
+
+    class SHT_SYMTAB(parray.block, __SYMTAB):
+        type = 2
 
     class SHT_STRTAB(parray.block):
         type = 3
@@ -734,9 +766,8 @@ class ELFCLASSXX(object):
         '''This is a placeholder and needs to be manually defined.'''
         type = 10
 
-    class SHT_DYNSYM(parray.block):
+    class SHT_DYNSYM(parray.block, __SYMTAB):
         type = 11
-        _object_ = Elf32_Sym
 
     class SHT_INIT_ARRAY(parray.block):
         type = 14
