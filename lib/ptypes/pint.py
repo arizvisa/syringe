@@ -514,7 +514,7 @@ class enum(type):
         '''Return True if the enumeration matches the value of the constant specified by name.'''
         if isinstance(name, string_types):
             return self.__byname__(name, None) == self.get()
-        return False
+        return self.get() == name
 
     @classmethod
     def enumerations(cls):

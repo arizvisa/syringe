@@ -715,7 +715,7 @@ class enum(integer):
         '''If a key is specified, then return True if the enumeration actually matches the specified constant'''
         if isinstance(name, string_types):
             return self.__byname__(name, None) == bitmap.value(self.get())
-        return False
+        return bitmap.value(self.get()) == name
 
     @classmethod
     def enumerations(cls):
