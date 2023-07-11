@@ -548,10 +548,10 @@ class DirectoryEntry(pstruct.type):
             logger.warning("{:s}.Data: Ignoring {:s} that was raised during load: {}".format('.'.join([cls.__module__, cls.__name__]), '.'.join([exception.__module__, exception.__name__]), result), exc_info=True)
         return result
 
-    def enumerate(self):
+    def items(self):
         '''Return the index and item of each directory entry below the current one.'''
         parent = self.getparent(Directory)
-        for index, entry in parent.enumerate(self):
+        for index, entry in parent.items(self):
             yield index, entry
         return
 
@@ -692,12 +692,20 @@ class Directory(parray.block):
             continue
         return
 
-    def items(self, store=None):
-        '''Return the (sorted) index and entry of each item in the directory.'''
+    def enumerate(self, store=None):
+        '''Return the index and entry of each item from the directory in their sorted order.'''
         root = self.RootEntry() if store is None else store
         assert(root)
-        for index, (_, entry) in enumerate(self.children(root)):
+        for index, entry in self.children(root):
             yield index, entry
+        return
+
+    def iterate(self, store=None):
+        '''Return the each entry from the directory in their sorted order.'''
+        root = self.RootEntry() if store is None else store
+        assert(root)
+        for _, entry in self.children(root):
+            yield entry
         return
 
     def children(self, index):
@@ -705,17 +713,17 @@ class Directory(parray.block):
         node = index if isinstance(index, DirectoryEntry) else self[index]
         iChild = node['iChild']
         if iChild['NOSTREAM']:
-            raise TypeError(iChild)
-        for index, node in self.enumerate(iChild.int()):
+            return
+        for index, node in self.items(iChild.int()):
             yield index, node
         return
 
-    def enumerate(self, index):
+    def items(self, index):
         '''Return the index and entry of each element below the directory entry at the specified index.'''
         if not isinstance(index, DirectoryEntry):
-            (_, node), = stack = [(index, self[index])]
+            [(_, node)] = stack = [(index, self[index])]
         else:
-            index, node = self.value.index(index), index
+            [(index, node)] = stack = [(self.value.index(index), index)]
 
         while not node['iLeftSibling']['NOSTREAM']:
             iLeft = node['iLeftSibling'].int()
@@ -727,7 +735,7 @@ class Directory(parray.block):
             if node['iRightSibling']['NOSTREAM']:
                 continue
             iRight = node['iRightSibling'].int()
-            for index, node in self.enumerate(iRight):
+            for index, node in self.items(iRight):
                 yield index, node
             continue
         return
