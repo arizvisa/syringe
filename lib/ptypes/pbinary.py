@@ -805,6 +805,15 @@ class container(type):
         offset, suboffset = offset, suboffset + self.blockbits()
         return offset + (suboffset // 8), suboffset % 8
 
+    def __calculate__(self, length, position=(0, 0)):
+        calculator = utils.byteorder_calculator(length)
+        current, (offset, suboffset) = utils.next(calculator), position
+        assert(current == (0, 0))
+        current = calculator.send(8 * offset + suboffset)   # XXX: this is not the right way to calculate the number of bits
+        while True:
+            current = calculator.send((yield current))
+        return
+
     def setposition(self, position, recurse=False):
         (offset, suboffset) = position
         if suboffset >= 8:
@@ -816,12 +825,22 @@ class container(type):
         # out what partial type that we're relative to (if any) and get a calculator.
         if recurse is True:
             p = self.getparent(partial, default=None)
-            recurse = (lambda _: utils.byteorder_calculator(1)) if p is None else p.__calculate__
+            position, recurse = (offset, suboffset), functools.partial(self.__calculate__, 1) if p is None else p.__calculate__
 
-        # If we have at least one member, then we need to seed our calculator
-        # at the first member in order to calculate the position of each member.
+        # We should be extracting the current container position from the very first element,
+        # but since binary types have no concept of bytes the whole thing is wrong to begin with..
+        # Internally we should be only be tracking the current bit that we're on, and then we should
+        # use the partial type that owns us to calculate the correct position that we're residing at.
+        else:
+            #position = self.value[0].getposition() if self.value else (offset, suboffset)
+            position = (offset, suboffset)
+
+        # If we have at least one member, then we need to seed our calculator at the first member
+        # in order to calculate the position of each following member. The original purpose of this
+        # was so that the container type would represent the byte boundaries of the types that are
+        # inside of it, but in the end we're really mixing two completely different variable types.
         if recurse and len(self.value or []) > 0:
-            calculator = recurse(self.value[0].getposition())
+            calculator = recurse(position)
 
             # Now that we have our partial calculator, check what position
             # that we're actually at for the very first member.
