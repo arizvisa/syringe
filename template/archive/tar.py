@@ -255,7 +255,7 @@ class File(stream_t):
     def Visor(self):
         res = abs((self.size() % PAGESIZE) - PAGESIZE)
         offset = self.size() + (res % PAGESIZE)
-        index = [item.filesize() for item in self]
+        index = [(item.filesize() if item['header']['magic'].str() == 'visor' else 0) for item in self]
         return self.new(Visor, offset=offset, _index_=index) #.l
 
 ### old
