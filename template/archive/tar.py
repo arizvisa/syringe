@@ -302,8 +302,11 @@ class header_ustar_member(pstruct.type):
     ]
 
     def summary(self):
-        prefix = self['prefix'].str().encode('unicode_escape').decode(sys.getdefaultencoding())
-        return "prefix=\"{:s}\" padding={:s}".format(prefix.replace('"', '\\"'), self['padding'].summary())
+        Fencoded = lambda string: string.encode('unicode_escape').decode(sys.getdefaultencoding())
+        prefix = self['prefix'].str()
+        stripped_prefix = prefix.lstrip('\0')
+        dotdotdot, summarized_prefix = ("\"{:s}\"..".format(Fencoded('\0')) if stripped_prefix else '..', stripped_prefix) if 4 <= len(prefix) - len(stripped_prefix) else ('', prefix)
+        return "prefix={:s}{:s} padding={:s}".format(dotdotdot, '' if dotdotdot and not summarized_prefix else "\"{:s}\"".format(Fencoded(summarized_prefix).replace('"', '\\"')), self['padding'].summary())
 
     def isempty(self):
         return self['prefix'].str() == ""
