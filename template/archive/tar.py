@@ -4,6 +4,7 @@ from ptypes import *
 import sys, operator, six
 
 BLOCKSIZE = pow(2, 9)
+PAGESIZE = pow(2, 12)
 largeinteger = long if sys.version_info.major < 3 else int
 
 class stringinteger(pstr.string):
@@ -224,8 +225,31 @@ class member_t(pstruct.type):
         res = self['data']
         return res.serialize()
 
+class Visor(parray.infinite):
+    _object_ = dyn.block(PAGESIZE)
+
+    # FIXME: although each element is a page, they aren't guaranteed to all be PAGESIZE in
+    #        length. this is because the way that the "visor" format works is that every
+    #        "visor" item in the index contains a size. each item with a size gets stored
+    #        right after the index, which is then padded to the default PAGESIZE.
+
+    class VisorElement(pstruct.type):
+        def __data(self):
+            size = getattr(self, '_length_', 0)
+            return dyn.clone(ptype.block, length=size) if size else ptype.block
+        _fields_ = [
+            (__data, 'data'),
+            (dyn.padding(PAGESIZE), 'padding'),
+        ]
+    #_object_ = VisorElement
+
 class File(stream_t):
     _object_ = member_t
+
+    def Visor(self):
+        res = abs((self.size() % PAGESIZE) - PAGESIZE)
+        offset = self.size() + (res % PAGESIZE)
+        return self.new(Visor, offset=offset) #.l
 
 ### old
 @header.define
@@ -337,6 +361,19 @@ class header_gnu_member(pstruct.type):
     def listing(self):
         # TODO
         return "(header_gnu) atime={:#x} ctime={:#x} offset={:#x} longnames={:s} ...".format(self['atime'].int(), self['ctime'].int(), self['offset'].int(), self['longnames'].summary())
+
+### vmware
+@header.define
+class header_visor(header_ustar):
+    magic = 'visor'
+    def member_size(self):
+        # XXX: visor always has 0-sized members because they're literally just an
+        #      index to the pages (4096) that follows the list of headers.
+        return 0
+
+@header_member.define
+class header_visor_member(header_ustar_member):
+    magic = 'visor'
 
 if __name__ == '__main__':
     import six
