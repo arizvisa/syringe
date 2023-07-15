@@ -82,7 +82,7 @@ Example usage:
     # print the length of the array
     print(len(instance))
 """
-import itertools
+import functools, operator, itertools
 from . import ptype, utils, error, provider
 
 __all__ = 'type,terminated,infinite,block'.split(',')
@@ -415,7 +415,7 @@ class terminated(type):
                     # we only allow elements with a zero size when the object type is
                     # a call (meaning it's a dynamic type) or if its blocksize is dynamic.
                     if size <= 0:
-                        if issubclass(item.__class__, ptype.generic) and item.__blocksize_originalQ__():
+                        if ptype.istype(self._object_) and item.__blocksize_originalQ__():
                             Log.warning("terminated.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
                             break
 
@@ -518,11 +518,15 @@ class infinite(uninitialized):
             return super(infinite, self).load(**attrs)
 
         with utils.assign(self, **attrs):
-            offset, self.value = self.getoffset(), []
+            current, offset, self.value = 0, self.getoffset(), []
 
-            current, maximum = 0, None if self.parent is None else self.parent.blocksize()
+            forever = itertools.count() if self.length is None else range(self.length)
+            Fwhile = functools.partial(operator.ge, self.source.size() - self.getoffset()) if isinstance(self.source, provider.bounded) else lambda current: True
+
             try:
-                while True if maximum is None else current < maximum:
+                for index in forever:
+                    if not Fwhile(current):
+                        break
 
                     # read next element at the current offset
                     item = self.__next_element(offset)
@@ -537,10 +541,10 @@ class infinite(uninitialized):
                         break
                     size = item.blocksize()
 
-                    # only allow elements with a zero size when the object type is a call
-                    # or if its blocksize is dynamically calculated.
-                    if size <= 0:
-                        if issubclass(self._object_, ptype.generic) and item.__blocksize_originalQ__():
+                    # only allow elements with a zero size if the array has a limited length,
+                    # when the object type is a call, or if its blocksize is dynamically calculated.
+                    if size <= 0 and self.length is None:
+                        if ptype.istype(self._object_) and item.__blocksize_originalQ__():
                             Log.warning("infinite.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
                             break
 
@@ -565,22 +569,28 @@ class infinite(uninitialized):
     def __deserialize_block__(self, block):
         try:
             super(infinite, self).__deserialize_block__(block)
-        except (StopIteration, error.ProviderError) as E:
+        except (StopIteration, error.ProviderError) as exception:
             if not self.initializedQ():
-                raise E
+                raise exception
             uninitialized = [item.blocksize() for item in itertools.takewhile(lambda item: not item.initializedQ(), self.value[::-1])]
             Log.warning("infinite.__deserialize_block__ : {:s} : Consumed {:d}{:+d} elements for infinite-sized-array with the size being {:#x}{:+#x} for the total blocksize ({:+#x}).".format(self.instance(), len(self.value) - len(uninitialized), len(uninitialized), self.size(), sum(uninitialized), self.blocksize()))
         return self
 
+    # XXX: this iterator isn't used for anything and should probably be
+    #      removed... its purpose is likely completely unnecessary anyways.
     def loadstream(self, **attr):
         '''an iterator that incrementally populates the array'''
         with utils.assign(self, **attr):
-            self.value = []
-            offset = self.getoffset()
+            current, offset, self.value = 0, self.getoffset(), []
 
-            current, maximum = 0, None if self.parent is None else self.parent.blocksize()
+            length_unlimited = self.length is None
+            forever = itertools.count() if self.length is None else range(self.length)
+            Fwhile = functools.partial(operator.ge, self.source.size() - self.getoffset()) if isinstance(self.source, provider.bounded) else lambda current: True
+
             try:
-                while True if maximum is None else current < maximum:
+                for index in forever:
+                    if not Fwhile(current):
+                        break
 
                     # yield next element at the current offset
                     item = self.__next_element(offset)
@@ -594,9 +604,10 @@ class infinite(uninitialized):
                         break
                     size = item.blocksize()
 
-                    # validate the size of the element, we only will allow zero-sized
-                    # elements if our object is dynamically determined via a callable.
-                    if size <= 0:
+                    # validate the element size. if the element has a zero size, then we check if the array
+                    # has a length. if it doesn't, then we need to check if the object or its blocksize
+                    # is being determined dynamically. if it isn't, then we break to avoid an infinite loop.
+                    if size <= 0 and self.length is None:
                         if issubclass(self._object_, ptype.generic) and item.__blocksize_originalQ__():
                             Log.warning("infinite.loadstream : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
                             break
@@ -667,7 +678,7 @@ class block(uninitialized):
                 # elements if our object is dynamically determined via a callable.
                 size = item.blocksize()
                 if size <= 0:
-                    if issubclass(self._object_, ptype.generic) and item.__blocksize_originalQ__():
+                    if ptype.istype(self._object_) and item.__blocksize_originalQ__():
                         Log.warning("block.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
                         self.value.append(item)
                         break
