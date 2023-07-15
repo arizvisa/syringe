@@ -180,6 +180,8 @@ class header_t(pstruct.type):
         magic, iterable = self['magic'].str(), (self[fld].listing() for fld in ['common', 'extended', 'member'] if hasattr(self[fld], 'isempty') and not self[fld].isempty())
         return "{:s}{:s}".format("<{:s}> ".format(magic.encode('unicode_escape').decode(sys.getdefaultencoding())) if magic else '', ' | '.join(iterable))
 
+    summary = listing
+
     def dump(self):
         res = []
         for item in self.traverse(filter=lambda node: isinstance(node, pstruct.type)):
@@ -241,7 +243,11 @@ class Visor(parray.infinite):
             (__data, 'data'),
             (dyn.padding(PAGESIZE), 'padding'),
         ]
-    #_object_ = VisorElement
+
+    def _object_(self):
+        index = len(self.value or [])
+        length = self._index_[index] if index < len(self._index_) else 0
+        return dyn.clone(self.VisorElement, _length_=length)
 
 class File(stream_t):
     _object_ = member_t
@@ -249,7 +255,8 @@ class File(stream_t):
     def Visor(self):
         res = abs((self.size() % PAGESIZE) - PAGESIZE)
         offset = self.size() + (res % PAGESIZE)
-        return self.new(Visor, offset=offset) #.l
+        index = [item.filesize() for item in self]
+        return self.new(Visor, offset=offset, _index_=index) #.l
 
 ### old
 @header.define
