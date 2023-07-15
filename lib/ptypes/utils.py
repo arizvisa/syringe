@@ -384,9 +384,9 @@ def valueiterator(value, direction=+1):
     return
 
 def valueaccumulate(value, direction, offset=0):
-    '''iterate through a list yielding the current offset and the bytes that got us there'''
+    '''iterate through a list yielding the current offset and the bytes that should be there.'''
     for size, value in valueiterator(value, direction):
-        yield offset + size, value
+        yield offset, value
         offset += size
     return
 
