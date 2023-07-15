@@ -551,7 +551,7 @@ class infinite(uninitialized):
                         # check sanity of element size
                         if size < 0:
                             raise error.AssertionError(self, 'infinite.load', message="Element size for {:s} is < 0".format(item.classname()))
-                        Log.info("infinite.load : {:s} : Added a dynamic element with a {:d} length to an infinite array : {:s}".format(self.instance(), size, item.instance()))
+                        Log.debug("infinite.load : {:s} : Added a dynamic element with a {:d} length to an infinite array : {:s}".format(self.instance(), size, item.instance()))
 
                     # next iteration
                     offset += size
