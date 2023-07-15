@@ -1,5 +1,4 @@
 import logging
-logging.root.setLevel(logging.INFO)
 
 # TODO: https://www.hanshq.net/zip.html
 
@@ -573,6 +572,7 @@ if __name__ == '__main__':
     import zlib, logging, argparse
     import ptypes, archive.zip
     if sys.platform == 'win32': import msvcrt
+    logging.root.setLevel(logging.INFO)
 
     arg_p = argparse.ArgumentParser(prog=sys.argv[0] if len(sys.argv) > 0 else 'zip.py', description='List or extract information out of a .zip file', add_help=False)
     arg_p.add_argument('FILE', nargs='*', action='append', type=str, help='list of filenames to extract')
