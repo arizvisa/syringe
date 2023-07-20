@@ -206,6 +206,7 @@ class EM_(pint.enum, Elf32_Half):
         ('EM_AMDGPU', 224),
 #        ('RESERVED', 225-242),
         ('EM_RISCV', 243),
+        ('EM_LOONGARCH', 258),
     ]
 
 class E_VERSION(EV_, Elf32_Word):
@@ -315,6 +316,16 @@ class E_FLAGS_MIPS(pbinary.flags):
         (1, 'EF_MIPS_CPIC'),
         (1, 'EF_MIPS_PIC'),
         (1, 'EF_MIPS_NOREORDER'),
+    ]
+
+@E_FLAGS.define
+class E_FLAGS_LOONGARCH(pbinary.flags):
+    type = EM_.byname('EM_LOONGARCH')
+    _fields_ = [
+        (24, 'reserved'),
+        (2, 'version'),
+        (3, 'extension'),
+        (3, 'base modifier'),
     ]
 
 class PN_(pint.enum):
