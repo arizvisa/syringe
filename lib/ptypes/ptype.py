@@ -1697,6 +1697,26 @@ class block(type):
         res[index] = value
         self.value = bytes(res)
 
+    def __format__(self, spec):
+        if self.value is None or not spec:
+            return super(block, self).__format__(spec)
+
+        prefix, spec = spec[:-1], spec[-1:]
+        if spec in 's':
+            summary = super(block, self).summary()
+            return "{:{:s}{:s}}".format(summary, prefix, spec)
+        elif prefix in {'', '#'} and spec in 'xX':
+            string, Fcase = "{:{:s}{:s}}".format(0, prefix, spec)[:-1], operator.methodcaller({'x': 'lower', 'X': 'upper'}[spec])
+            data = self.serialize()
+            hexed = data.encode('hex') if sys.version_info.major < 3 else bytearray(data).hex()
+            return string + Fcase(hexed)
+        elif spec in 'xX':
+            data = bytearray(self.serialize())
+            integer = functools.reduce(lambda agg, byte: pow(2, 8) * agg + byte, data, 0)
+            return "{:{:s}{:s}}".format(integer, prefix, spec)
+
+        return super(block, self).__format__(prefix + spec)
+
 class undefined(block):
     """An empty ptype that is pretty much always empty...except when it's not."""
     length = 0
