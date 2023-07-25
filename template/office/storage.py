@@ -97,6 +97,7 @@ class AllocationTable(parray.type):
 
     # Walk the linked-list of sectors
     def chain(self, index):
+        '''Yield the index of each sector in the chain starting at the given index.'''
         yield index
         while self[index].int() <= MAXREGSECT.type:
             index = self[index].int()
@@ -159,7 +160,7 @@ class AllocationTable(parray.type):
 
     def reduce(self, chain, amount, type='FREESECT'):
         '''Reduce a chain by releasing the specified number of sectors, leaving them uncommitted, and returning the new smaller chain.'''
-        chain = [index for index in chain]
+        chain = [index for index in chain] if hasattr(chain, '__iter__') else [index for index in self.chain(chain)]
         result = self.link(chain[:-amount] if amount else chain)
         released = chain[-amount:] if amount else []
         [self[index].set(type) for index in released]
@@ -167,7 +168,7 @@ class AllocationTable(parray.type):
 
     def grow(self, chain, amount, available=None):
         '''Grow a chain by adding the specified count of sectors from available, leaving then uncommitted, and returning the new larger chain.'''
-        chain = [index for index in chain]
+        chain = [index for index in chain] if hasattr(chain, '__iter__') else [index for index in self.chain(chain)]
         source = self.available() if available is None else (index for index in available)
         additional = (index for _, index in zip(range(amount), source))
         return self.link(chain + [index for index in additional])
@@ -183,6 +184,7 @@ class AllocationTable(parray.type):
 
     def resize(self, chain, count, available=None):
         '''Modify the length of a chain to the specified count, leaving each entry in the allocation table uncommitted, and then return the new chain.'''
+        chain = [index for index in chain] if hasattr(chain, '__iter__') else [index for index in self.chain(chain)]
         if count < len(chain):
             return self.reduce(chain, len(chain) - count)
         elif count > len(chain):
@@ -197,6 +199,12 @@ class AllocationTable(parray.type):
         assert(ptypes.istype(sector_t)), "{!s} is not a type.".format(sector_t)
         sector = sector_t()
         return sector.blocksize()
+
+    def estimate(self, bytes):
+        '''Return the required number of sectors in order to store the specified number of bytes.'''
+        denominator = self.sector()
+        numerator = bytes + denominator - 1
+        return numerator // denominator if denominator else 0
 
 class FAT(AllocationTable):
     class Pointer(Pointer):
