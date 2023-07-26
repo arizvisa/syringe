@@ -1713,7 +1713,10 @@ class block(type):
         elif spec in 'xX':
             data = bytearray(self.serialize())
             integer = functools.reduce(lambda agg, byte: pow(2, 8) * agg + byte, data, 0)
-            return "{:{:s}{:s}}".format(integer, prefix, spec)
+            string_prefix = ''.join(char for char in prefix if char != '#')
+            hex_prefix, length = ('#', 2 + 2 * len(data)) if '#' in prefix else ('', 2 * len(data))
+            res = "{:{:s}0{:d}{:s}}".format(integer, hex_prefix, length, spec)
+            return "{:{:s}s}".format(res, string_prefix)
 
         return super(block, self).__format__(prefix + spec)
 
