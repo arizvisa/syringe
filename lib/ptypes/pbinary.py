@@ -996,7 +996,7 @@ class container(type):
         offset, suboffset = self.getposition()
         offset, suboffset = position = offset + (size // 8), suboffset + (size % 8)
 
-        object.parent, object.source = self, None
+        object.parent, object.source, object.__position__ = self, None, position
 
         # FIXME: it would probably be best to figure out where to grab the position
         #        of the previous member, in order to calculate the current one.
@@ -1351,9 +1351,9 @@ class __structure_interface__(container):
 
     def __append__(self, object):
         current = len(self.value)
-        position = super(__structure_interface__, self).__append__(object)
+        result = super(__structure_interface__, self).__append__(object)
         self.__fastindex__[object.name().lower()] = current
-        return position
+        return result
 
     def alias(self, target, *aliases):
         """Add any of the specified aliases to point to the target field."""
