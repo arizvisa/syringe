@@ -1572,15 +1572,8 @@ class container(base):
             return u"\"{:s}\"".format(utils.emit_repr(data, threshold, message, **options)) if len(data) > 0 else u"???"
         return u"???"
 
-    def append(self, value):
-        """Add ``object`` to the ptype.container ``self``. Return the element's offset.
-
-        When adding ``object`` to ``self``, none of the offsets are updated and
-        thus will need to be manually updated before committing to a provider.
-        """
-        return self.__append__(value)
-
     def __append__(self, object):
+        '''Append the specified ``object`` to ``self`` and then return it.'''
 
         # if we're uninitialized, then create an empty value and try again
         if self.value is None:
@@ -1597,7 +1590,7 @@ class container(base):
 
         offset = self.getoffset() + self.size()
         self.value.append(object if object.initializedQ() else object.a)
-        return offset
+        return object
 
     def __len__(self):
         '''x.__len__() <==> len(x)'''
@@ -3392,8 +3385,8 @@ if __name__ == '__main__':
     def test_container_append_type():
         class C(ptype.container): pass
         x = C()
-        x.append(pint.uint32_t)
-        x.append(pint.uint32_t)
+        x.__append__(pint.uint32_t)
+        x.__append__(pint.uint32_t)
         if x.serialize() == b'\x00\x00\x00\x00\x00\x00\x00\x00':
             raise Success
 
