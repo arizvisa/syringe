@@ -65,9 +65,7 @@ Example usage:
     # return the type in ascii
     value = instance.str()
 """
-import sys, itertools
-import codecs
-
+import functools, itertools, sys, codecs
 from . import ptype, parray, pint, bitmap, utils, error, pstruct, provider
 
 from . import config
@@ -374,19 +372,19 @@ class string(ptype.type):
         self.length = len(result)
         return self.load(offset=0, source=provider.proxy(result))
 
-    def str(self):
+    def str(self, **parameters):
         '''Decode the string into the specified encoding type while stripping any trailing '\0' characters.'''
-        res = self.__getvalue__()
+        res = self.__getvalue__(**parameters)
         return res.rstrip('\0')
 
-    def __getvalue__(self):
+    def __getvalue__(self, **parameters):
         '''Try and decode the string into the specified encoding type.'''
         encoding = self.encoding
         cb, _ = encoding.encode('\0')
         t = ptype.clone(parray.type, _object_=self._object_, length=self.size() // len(cb))
         data = self.cast(t).serialize()
         try:
-            res, length = encoding.decode(data)
+            res, length = encoding.decode(data, **parameters)
         except UnicodeDecodeError:
             Log.warning('{:s}.str : {:s} : Unable to decode {:s} to {:s}. Defaulting to unencoded string.'.format(self.classname(), self.instance(), self._object_.typename(), encoding.name))
             return data.decode(encoding.name, errors='replace')
@@ -447,10 +445,20 @@ class string(ptype.type):
             return super(type, self).__format__(spec)
 
         prefix, spec = spec[:-1], spec[-1:]
-        if spec == 's' and prefix:
+        if '#' in prefix and spec in 's':
+            data, escape = self.serialize(), codecs.lookup('unicode_escape')
+            decoded, length = self.encoding.decode(data, errors='ignore')
+            escaped, length = escape.encode(decoded)
+            return "{:{:s}s}".format(escaped.decode('ascii'), ''.join(char for char in prefix if char != '#'))
+        elif spec in 's':
             return "{:{:s}s}".format(self.str(), prefix)
-        elif spec == 's':
-            return self.str()
+        elif spec in 'xX':
+            data = bytearray(self.serialize())
+            integer = functools.reduce(lambda agg, byte: pow(2, 8) * agg + byte, data, 0)
+            string_prefix = ''.join(char for char in prefix if char != '#')
+            hex_prefix, length = ('#', 2 + 2 * len(data)) if '#' in prefix else ('', 2 * len(data))
+            res = "{:{:s}0{:d}{:s}}".format(integer, hex_prefix, length, spec)
+            return "{:{:s}s}".format(res, string_prefix)
         return super(string, self).__format__(prefix + spec)
 
 type = string
