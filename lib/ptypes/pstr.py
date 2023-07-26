@@ -109,7 +109,7 @@ def guess_string_encoding(self):
         res = sys.getdefaultencoding()
     return codecs.lookup(res) if isinstance(res, string_types) else res
 
-unicode_escape = codecs.lookup('unicode_escape')
+unicode_escape = codecs.lookup('unicode-escape')
 def string_escape(string, encoding=codecs.lookup(sys.getdefaultencoding())):
     encoded, _ = unicode_escape.encode(string)
     res, _ = encoding.decode(encoded)
@@ -446,10 +446,9 @@ class string(ptype.type):
 
         prefix, spec = spec[:-1], spec[-1:]
         if '#' in prefix and spec in 's':
-            data, escape = self.serialize(), codecs.lookup('unicode_escape')
+            data = self.serialize()
             decoded, length = self.encoding.decode(data, errors='ignore')
-            escaped, length = escape.encode(decoded)
-            return "{:{:s}s}".format(escaped.decode('ascii'), ''.join(char for char in prefix if char != '#'))
+            return "{:{:s}s}".format(string_escape(decoded), ''.join(char for char in prefix if char != '#'))
         elif spec in 's':
             return "{:{:s}s}".format(self.str(), prefix)
         elif spec in 'xX':
@@ -561,7 +560,7 @@ class szstring(string):
             Log.debug('{:s}.summary : {:s} : Unable to decode unicode string. Rendering as hexdump instead.'.format(self.classname(), self.instance()))
             return super(szstring, self).summary(**options)
 
-        escaped = utils.strdup(res, '\0').encode('unicode_escape').decode(sys.getdefaultencoding())
+        escaped = string_escape(utils.strdup(res, '\0'))
         q, escaped = ('"', escaped) if '\'' in escaped and '"' not in escaped else ('\'', escaped.replace('\'', '\\\''))
         return u"({:d}) {:s}".format(len(res), q + escaped + q)
 
