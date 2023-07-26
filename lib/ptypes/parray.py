@@ -122,10 +122,10 @@ class __array_interface__(ptype.container):
 
     def __append__(self, object):
         idx = len(self.value)
-        offset = super(__array_interface__, self).__append__(object)
+        result = super(__array_interface__, self).__append__(object)
         offset = (self.value[idx - 1].getoffset() + self.value[idx - 1].size()) if idx > 0 else self.getoffset()
-        self.value[idx].setoffset(offset, recurse=True)
-        return offset
+        result.setoffset(offset, recurse=True)
+        return result
 
     def append(self, object):
         """Append ``object`` to a ``self``. Return the offset it was inserted at.
@@ -136,8 +136,7 @@ class __array_interface__(ptype.container):
         return self.__append__(object)
 
     def extend(self, iterable):
-        [ self.append(item) for item in iterable ]
-        return self
+        return [ self.append(item) for item in iterable ]
 
     def pop(self, index=-1):
         """Remove the element at ``index`` or the last element in the array.
@@ -1234,8 +1233,8 @@ if __name__ == '__main__':
     @TestCase
     def test_array_append_getoffset():
         x = parray.type(length=2, _object_=pint.uint32_t, offset=0x10).a
-        offset = x.append(pint.uint16_t)
-        if offset == x.getoffset() + x[0].size() * 2:
+        result = x.append(pint.uint16_t)
+        if result.getoffset() == x.getoffset() + x[0].size() * 2:
             raise Success
 
     @TestCase
