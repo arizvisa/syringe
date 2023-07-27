@@ -230,6 +230,11 @@ class DIFAT(AllocationTable):
         '''
         def _calculate_(self, index):
             return self._uHeaderSize + index * self._uSectorSize
+        def dereference(self, **attrs):
+            parent = self.getparent(File)
+            #attrs.setdefault('source', ptypes.provider.proxy(parent, autocommit={}))
+            attrs.setdefault('source', parent.source)
+            return super(DIFAT.IndirectPointer, self).dereference(**attrs)
 
     def _object_(self):
         '''return a custom pointer that can be used to dereference the FAT.'''
@@ -961,8 +966,8 @@ class File(pstruct.type):
         count = len(table) + self._uSectorCount * (len(items) - 1) - (len(items) - 1)
         assert(count == length), "expected {:d} DiFat entries, got {:d} instead".format(count, length)
 
-        ## We're loading it from the source temporarily, so we can still dereference the sector.
-        return self.new(DIFAT, recurse=self.attributes, length=length).load(source=source)
+        ## Attach the source to the DIFAT, load it, and then return.
+        return self.new(DIFAT, recurse=self.attributes, length=length, source=source).load()
 
     @ptypes.utils.memoize(self=lambda self: id(self.value), attrs=lambda attrs:frozenset(map(tuple, attrs.items())))
     def MiniFat(self, **attrs):
@@ -980,10 +985,16 @@ class File(pstruct.type):
     def Fat(self, **attrs):
         '''Return an array containing the FAT'''
         count, difat = self['Fat']['csectFat'].int(), self.DiFat()
-        sectors = [sector.d for _, sector in zip(range(count), difat)]
-        loaded = [sector.l for sector in sectors]
+
+        sectors = [sector for _, sector in zip(range(count), difat)]
+        dereferenced = (sector.d for sector in sectors)
+        loaded = (sector.l for sector in dereferenced)
         length = sum(len(sector) for sector in loaded)
-        source = ptypes.provider.disorderly(sectors, autocommit={})
+
+        indices = (sector.int() for sector in sectors)
+        realsectors = [self['Data'][index] for index in indices]
+        #source = ptypes.provider.disorderly(dereferenced, autocommit={})
+        source = ptypes.provider.disorderly(realsectors, autocommit={})
         return self.new(FAT, recurse=self.attributes, length=length, source=source).load(**attrs)
 
     def __difat_sectors__(self):
