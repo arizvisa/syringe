@@ -986,7 +986,7 @@ class container(type):
         #        that follow it
         self.__position__ = consumer.position // 8, consumer.position % 8
         for item in generator:
-            self.__append__(item)
+            item = self.__append__(item)
             item.__deserialize_consumer__(consumer)
             self.__position__ = min(self.__position__, item.__position__)
         return self
@@ -1005,10 +1005,7 @@ class container(type):
         if self.value is None:
             self.value = []
         self.value.append(object)
-
-        # Return the current "projected" position, this should actually change
-        # during deserialization due to us now doing the calculation.
-        return position
+        return object
 
     ## method overloads
     def __iter__(self):
@@ -3544,8 +3541,8 @@ if __name__ == '__main__':
     @TestCase
     def test_pbinary_array_append_getoffset_76():
         x = pbinary.array(length=2, _object_=8, offset=0x10).a
-        position = x.append(bitmap.new(0, 0x200))
-        if position == (x.getoffset() + 2, 0):
+        result = x.append(bitmap.new(0, 0x200))
+        if result.getposition() == (x.getoffset() + 2, 0):
             raise Success
 
     @TestCase
