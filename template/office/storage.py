@@ -116,8 +116,8 @@ class AllocationTable(parray.type):
     # Yields the index of all objects in the table that matches 'type'
     def enumerate(self, type=None):
         '''Yield the index and pointer for each item within the table.'''
-        Ffilter = lambda _: True if type is None else type if callable(type) else lambda item, type=type: item.object[type]
-        return ((index, item) for index, item in enumerate(self) if Ffilter(item))
+        critique = (lambda _: True) if type is None else type if callable(type) else (lambda item, type=type: item.object[type])
+        return ((index, item) for index, item in enumerate(self) if critique(item))
 
     def iterate(self, *args, **kwargs):
         '''Yield the pointer for each item within the table.'''
@@ -125,17 +125,17 @@ class AllocationTable(parray.type):
 
     def filter(self, type):
         '''Yield the index of each item within the table that satisfies the given type.'''
-        Ffilter = type if callable(type) else lambda item, type=type: item.object[type]
-        return (index for index, item in enumerate(self) if Ffilter(item))
+        critique = type if callable(type) else (lambda item, type=type: item.object[type])
+        return (index for index, item in enumerate(self) if critique(item))
 
     def contiguous(self, start, count, type='FREESECT'):
         '''Yield each chain from the allocation table containing a contiguous count of sectors.'''
-        Ffilter = type if callable(type) else lambda item, type=type: item.object[type]
-        available = (index for index in range(start, len(self)) if Ffilter(self[index]))
+        critique = type if callable(type) else (lambda item, type=type: item.object[type])
+        available = (index for index in range(start, len(self)) if critique(self[index]))
         iterable = ((index, index + count) for index in available)
         for left, right in iterable:
             items = self[left : right]
-            if len(items) == count and all(Ffilter(item) for item in items):
+            if len(items) == count and all(critique(item) for item in items):
                 yield [index for index in range(left, right)]
             continue
         return
@@ -154,9 +154,9 @@ class AllocationTable(parray.type):
 
     def available(self, start=0, stop=None, type='FREESECT'):
         '''Yield the index of each sector that is available and unused.'''
-        Ffilter = type if callable(type) else lambda item, type=type: item.object[type]
+        critique = type if callable(type) else (lambda item, type=type: item.object[type])
         iterable = range(start, len(self) if stop is None else stop)
-        return (index for index in range(start, len(self)) if Ffilter(self[index]))
+        return (index for index in range(start, len(self)) if critique(self[index]))
 
     def reduce(self, chain, amount, type='FREESECT'):
         '''Reduce a chain by releasing the specified number of sectors, leaving them uncommitted, and returning the new smaller chain.'''
