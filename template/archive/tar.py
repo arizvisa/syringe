@@ -264,13 +264,14 @@ class header_old(pstruct.type):
     magic, _fields_ = '', []
     def member_size(self):
         p = self.getparent(header_t)
-        res = p['common']
-        return res['size'].int()
+        count = p['common']['size'].int()
+        res = abs((count % BLOCKSIZE) - BLOCKSIZE)
+        return count + (res % BLOCKSIZE) if count > 0 else 0
 
 @header_member.define
 class header_old_member(pstruct.type):
     magic, _fields_ = '', [
-        (dyn.clone(pstr.string, length=255), 'pad'),
+        (dyn.clone(pstr.string, length=255 - 6), 'pad'),    # sizeof(header_t.magic)
     ]
 
     def summary(self):
