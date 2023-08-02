@@ -2486,7 +2486,7 @@ def setbyteorder(order):
     '''
     global pointer_t
     if order in (config.byteorder.bigendian, config.byteorder.littleendian):
-        result, pointer_t._value_.byteorder = pointer_t._value_.byteorder, config.byteorder.bigendian if order is config.byteorder.bigendian else config.byteorder.littleendian
+        result, pointer_t._value_.byteorder = getattr(pointer_t._value_, 'byteorder', config.defaults.integer.order), config.byteorder.bigendian if order is config.byteorder.bigendian else config.byteorder.littleendian
         return result
 
     elif builtins.isinstance(order, utils.string_types):
