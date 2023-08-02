@@ -1169,7 +1169,7 @@ class type(base):
         cls = self.__class__
         return utils.callable_eq(self, self.blocksize, cls, cls.blocksize) and utils.callable_eq(cls, cls.blocksize, type, type.blocksize)
     def blocksize(self):
-        """Returns the expected size of the type
+        """Returns the expected size of the type that is needed to load it.
 
         By default this returns self.length, but can be overloaded to define the
         size of the type. This *must* return an integral type.
@@ -1177,7 +1177,7 @@ class type(base):
 
         # XXX: overloading will always provide a side effect of modifying the .source's offset
         #        make sure to fetch the blocksize first before you .getoffset() on something.
-        return getattr(self, 'length', len(self.value) if self.value is not None else 0)
+        return getattr(self, 'length', 0 if self.value is None else len(self.value))
 
     ## operator overloads
     def repr(self, **options):
@@ -2511,24 +2511,26 @@ class pointer_t(encoded_t):
 
     class _value_(block):
         '''Default pointer value that can return an integer in any byteorder'''
-        length, byteorder = Config.integer.size, Config.integer.order
-
         def __setvalue__(self, *values, **attrs):
             if not values:
                 return super(pointer_t._value_, self).__setvalue__(*values, **attrs)
 
             [offset] = values
             res = bitmap.new(offset, 8 * self.blocksize())
-            res = bitmap.data(res, reversed=(self.byteorder is config.byteorder.littleendian))
+            res = bitmap.data(res, reversed=(getattr(self, 'byteorder', Config.integer.order) is config.byteorder.littleendian))
             return super(pointer_t._value_, self).__setvalue__(res, **attrs)
 
         def __getvalue__(self):
             if self.value is None:
                 raise error.InitializationError(self, 'pointer_t._value_.get')
-            bs, value = self.blocksize(), self.value[:: -1 if self.byteorder is config.byteorder.littleendian else -1]
+
+            bs, value = self.blocksize(), self.value[:: -1 if getattr(self, 'byteorder', Config.integer.order) is config.byteorder.littleendian else -1]
             octets = __izip_longest__(bytearray(value), [8] * bs)
             res = functools.reduce(bitmap.push, octets, bitmap.zero)
             return bitmap.value(res)
+
+        def blocksize(self):
+            return getattr(self, 'length', Config.integer.size if self.value is None else len(self.value))
 
     def decode(self, object, **attrs):
         return object.cast(self._value_, **attrs)
