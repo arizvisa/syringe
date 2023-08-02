@@ -1,5 +1,6 @@
 import ptypes, functools, codecs, math, datetime, time, sys
 from ptypes import *
+from ptypes import bitmap
 
 ### C datatypes (microsoft)
 class int(pint.int32_t): pass
