@@ -105,8 +105,8 @@ class AllocationTable(parray.type):
         return
 
     def count(self, index):
-        '''Return the number of sectors contained by a chain until termination or encountering a cycle.'''
-        iterable, visited = self.chain(index), {index for index in []}
+        '''Return the number of sectors contained by a chain starting at the specified index until termination or encountering a cycle.'''
+        visited, iterable = {index for index in []}, self.chain(index) if isinstance(index, (int, type(1 + sys.maxsize))) else index
         for index in iterable:
             if index in visited:
                 break
@@ -200,11 +200,20 @@ class AllocationTable(parray.type):
         sector = sector_t()
         return sector.blocksize()
 
-    def estimate(self, bytes):
+    def required(self, bytes):
         '''Return the required number of sectors in order to store the specified number of bytes.'''
-        denominator = self.sector()
-        numerator = bytes + denominator - 1
-        return numerator // denominator if denominator else 0
+        size = self.sector()
+        count, extra = divmod(bytes, size) if size else 0
+        return 1 + count if extra else count
+
+    def used(self, chain):
+        '''Return the total number of bytes used by the given `chain`.'''
+        return self.count(chain) * self.sector()
+
+    def estimate(self, length):
+        '''Estimate the size of an allocation table that holds the specified number of entries and return it.'''
+        count = length if isinstance(length, (int, type(1 + sys.maxsize))) else len(length)
+        return count * self.new(self._object_).a.size()
 
 class FAT(AllocationTable):
     class Pointer(Pointer):
@@ -764,12 +773,14 @@ class SectorContent(ptype.block):
         assert(issubclass(allocationTable, AllocationTable)), "Given type {:s} does not inherit from {:s}".format(allocationTable.typename(), AllocationTable.typename())
         attrs.setdefault('source', ptypes.provider.proxy(self, autocommit={}))
         return self.new(allocationTable, **attrs).li
+    astable = property(fget=lambda self: self.asTable)
 
     def asDirectory(self, **attrs):
         '''Return the sector as a list of directory entries.'''
         attrs.setdefault('source', ptypes.provider.proxy(self, autocommit={}))
         attrs.setdefault('blocksize', self.size)
         return self.new(Directory, **attrs).li
+    asdirectory = property(fget=lambda self: self.asDirectory)
 
 class FileSector(SectorContent):
     '''An individual sector within the file.'''
@@ -810,12 +821,14 @@ class ContentStream(parray.type):
         assert(issubclass(allocationTable, AllocationTable)), "Given type {:s} does not inherit from {:s}".format(allocationTable.typename(), AllocationTable.typename())
         attrs.setdefault('source', ptypes.provider.proxy(self, autocommit={}))
         return self.new(allocationTable, **attrs).li
+    astable = property(fget=lambda self: self.asTable)
 
     def asDirectory(self, **attrs):
         '''Return the array as a list of directory entries.'''
         attrs.setdefault('source', ptypes.provider.proxy(self, autocommit={}))
         attrs.setdefault('blocksize', self.size)
         return self.new(Directory, **attrs).li
+    asdirectory = property(fget=lambda self: self.asDirectory)
 
 class FileSectors(parray.block, ContentStream):
     '''An array of sectors within the file.'''
