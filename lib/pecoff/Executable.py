@@ -549,6 +549,13 @@ class os2_flat_header(pstruct.type, Header):
             ('286', 1),
             ('386', 2),
             ('486', 3),
+            ('586', 4),
+        ]
+
+    class LE_OS_(pint.enum, unsigned_16):
+        _values_ = [
+            ('OS2', 1),
+            ('WINDOWS', 4),
         ]
 
     class OSF_(pbinary.flags):
@@ -858,14 +865,102 @@ class NeHeader(pstruct.type):
             ( uint8, 'Major' )
         ]
 
+    class NE_Segment(pstruct.type):
+        class _SegmentFlags(pbinary.flags):
+            _fields_ = [
+                (3, '_reserved3'),
+                (1, 'discardable'),
+                (3, '_reserved2'),
+                (1, 'relocations'),
+                (1, 'protection'),
+                (1, 'preload'),
+                (1, 'shared'),
+                (1, 'relocatable'),
+                (1, '_reserved1'),
+                (1, 'loaded'),
+                (1, 'allocated'),
+                (1, 'segType'),
+            ]
+
+        _fields_ = [
+            ( uint16, 'Offset' ),
+            ( uint16, 'Size' ),
+            ( _SegmentFlags, 'Flags'),
+            ( uint16, 'Allocation' ),
+        ]
+
+    class NE_Resource(pstruct.type):
+        _fields_ = [
+            ( uint16, 'ID' ),
+            ( uint16, 'Count' ),
+            ( uint32, 'Reserved' ),
+        ]
+
+    class NE_Import(pstruct.type):
+        _fields_ = [
+            ( uint8, 'Size' ),
+            ( uint32, 'Offset' ),
+            ( pstr.szstring, 'Name' ),
+        ]
+
+    class NE_Export(pstruct.type):
+        _fields_ = [
+            ( uint8, 'Size' ),
+            ( pstr.szstring, 'Name' ),
+            ( uint8, 'Ordinal' ),
+        ]
+
+    class _ProgramFlags(pbinary.flags):
+        _fields_ = [
+            (1, 'ops80x87'),
+            (1, 'ops80386'),
+            (1, 'ops80286'),
+            (1, 'ops8086'),
+            (1, 'pmModeOnly'),
+            (1, 'globalInit'),
+            (2, 'dataType'),
+        ]
+
+    class _ApplicationFlags(pbinary.flags):
+        _fields_ = [
+            (1, 'libraryBit'),
+            (1, '_reserved3'),
+            (1, 'linkErrors'),
+            (1, 'executable'),
+            (1, 'os2FamExec'),
+            (3, 'appType'),
+        ]
+
+    class _TargetOS(pint.enum, uint8):
+        _values_ = [
+            ('OS_UNKNOWN', 1),
+            ('OS_OS2', 2),                # OS/2 1.x
+            ('OS_WINDOWS', 3),            # Windows
+            ('OS_MSDOS', 4),              # MS-DOS 4.00 for the European market used NE executables
+            ('OS_WIN386', 5),             # Windows/386 2.x specific
+            ('OS_BOSS', 6),               # Borland Operating System Services and HX DPMI-16
+            ('OS_HX', 7),                 # HX DPMI-32
+            ('OS_PHARLAP286OS2', 0x81),   # Phar Lap 286|DOS-Extender emulating OS/2
+            ('OS_PHARLAP286WIN', 0x82),   # Phar Lap 286|DOS-Extender emulating Windows (?)
+        ]
+
+    class _OS2_Flags(pbinary.flags):
+        _fields_ = [
+            (4, '_reserved5'),
+            (1, 'fastLoad'),
+            (1, 'os2Fonts'),
+            (1, 'os2PMode'),
+            (1, 'os2LFN'),
+        ]
+
     _fields_ = [
         ( uint8, 'LinkVersion' ),
         ( uint8, 'LinkRevision' ),
         ( uint16, 'EntryOffset' ),
         ( uint16, 'EntryLength' ),
         ( uint32, 'CRC' ),
-        ( uint8, 'ProgramFlags' ),
-        ( uint8, 'ApplicationFlags' ),
+        ( _ProgramFlags, 'ProgramFlags' ),
+        ( _ApplicationFlags, 'ApplicationFlags' ),
         ( uint8, 'AutoDataSegmentIndex' ),
         ( uint16, 'HeapSize' ),
         ( uint16, 'StackSize' ),
@@ -884,7 +979,7 @@ class NeHeader(pstruct.type):
         ( uint16, 'AlignmentSize' ),
         ( uint16, 'ResourceCount' ),
         ( uint8, 'TargetOS' ),
-        ( uint8, 'OS2_Flags' ),
+        ( _OS2_Flags, 'OS2_Flags' ),
         ( uint16, 'ReturnThunksOffset' ),
         ( uint16, 'SegmentThunksOffset' ),
         ( uint16, 'SwapMinimumSize' ),
