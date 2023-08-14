@@ -93,6 +93,19 @@ Log = config.logging.getLogger('.'.join([Config.log.name, 'dynamic']))
 __izip_longest__ = utils.izip_longest
 integer_types, string_types = bitmap.integer_types, utils.string_types
 
+# Some candy to render types and callables in some printable format.
+def determine_name(target):
+    if ptype.istype(target):
+        return target.typename()
+    elif hasattr(target, '__qualname__'):
+        return target.__qualname__
+    elif hasattr(target, '__name__'):
+        return target.__name__
+    elif hasattr(target, '__func__'):
+        return determine_name(target.__func__)
+    cls = target.__class__
+    return "unsupported_class<{!s}>".format('.'.join(getattr(cls, attribute) for attribute in ['__module__', '__name__']))
+
 ## FIXME: might want to raise an exception or warning if we have too large of a block
 def block(size, **kwds):
     """Returns a ptype.block type with the specified ``size``"""
@@ -108,9 +121,13 @@ def block(size, **kwds):
         [Log.error("block : {:s} : {:s}".format(t.typename(), item.rstrip())) for item in itertools.chain(*stack)]
         size = 0
 
+    def typename(cls):
+        return "dynamic.block({:d})".format(getattr(cls, 'length', size))
+    kwds.setdefault('typename', classmethod(typename))
     def classname(self):
         return "dynamic.block({:d})".format(self.blocksize())
     kwds.setdefault('classname', classname)
+
     kwds.setdefault('__module__', __name__)
     kwds.setdefault('__name__', 'block')
     return clone(ptype.block, length=size, **kwds)
@@ -136,9 +153,12 @@ def blockarray(type, size, **kwds):
         def blocksize(self):
             return size
 
+        @classmethod
+        def typename(cls):
+            return "dynamic.blockarray({:s}, {:d})".format(determine_name(type), size)
+
         def classname(self):
-            t = type.typename() if ptype.istype(type) else getattr(type, '__qualname__', t.__name__)
-            return "dynamic.blockarray({:s}, {:d})".format(t, self.blocksize())
+            return "dynamic.blockarray({:s}, {:d})".format(determine_name(type), self.blocksize())
 
     blockarray.__getinitargs__ = getinitargs
     blockarray.__module__, blockarray.__name__ = __name__, 'blockarray'
@@ -170,6 +190,10 @@ def padding(size, **kwds):
     # if padding is undefined and represents empty space
     if kwds.get('undefined', False):
         class result(ptype.undefined):
+            @classmethod
+            def typename(cls):
+                return "dynamic.padding({:d}, size={:s}, undefined={!s})".format(size, '???', True)
+
             def classname(self):
                 res = self.blocksize()
                 return "dynamic.padding({:d}, size={:d}, undefined={!s})".format(size, res, True)
@@ -181,6 +205,11 @@ def padding(size, **kwds):
     # otherwise, this is simply padding
     class result(ptype.block):
         initializedQ = lambda self: self.value is not None
+
+        @classmethod
+        def typename(cls):
+            return "dynamic.padding({:d}, size={:s})".format(size, '???')
+
         def classname(self):
             res = self.blocksize()
             return "dynamic.padding({:d}, size={:d})".format(size, res)
@@ -212,6 +241,10 @@ def align(size, **kwds):
     # if alignment is undefined and represents empty space
     if kwds.get('undefined', False):
         class result(ptype.undefined):
+            @classmethod
+            def typename(cls):
+                return "dynamic.align({:d}, size={:s}, undefined={!s})".format(size, '???', True)
+
             def classname(self):
                 res = self.blocksize()
                 return "dynamic.align({:d}, size={:d}, undefined={!s})".format(size, res, True)
@@ -223,6 +256,11 @@ def align(size, **kwds):
     # otherwise, this is simply padding
     class result(ptype.block):
         initializedQ = lambda self: self.value is not None
+
+        @classmethod
+        def typename(cls):
+            return "dynamic.align({:d}, size={:s})".format(size, '???')
+
         def classname(self):
             res = self.blocksize()
             return "dynamic.align({:d}, size={:d})".format(size, res)
@@ -257,9 +295,14 @@ def array(type, count, **kwds):
             raise error.UserError(t, 'array', message="Requested array count={:d} is larger than configuration max_count={:d}".format(count, Config.parray.max_count))
         Log.warning("dynamic.array : {:s} : Requested argument count={:d} is larger than configuration max_count={:d}.".format(t.typename(), count, Config.parray.max_count))
 
-    def classname(self):
-        return "dynamic.array({:s}, {!s})".format(getattr(type, '__qualname__', type.__name__), self.length)
+    def typename(cls):
+        return "dynamic.array({:s}, {!s})".format(determine_name(type), getattr(cls, 'length', '???'))
 
+    def classname(self):
+        res = getattr(type, '__qualname__', type.__name__)
+        return "dynamic.array({:s}, {!s})".format(res, self.length if hasattr(self, 'length') else len(self.value))
+
+    kwds.setdefault('typename', classmethod(typename))
     kwds.setdefault('classname', classname)
     kwds.setdefault('length', count)
     kwds.setdefault('_object_', type)
@@ -531,12 +574,16 @@ def pointer(target, *optional_type, **attrs):
     if len(optional_type) > 1:
         raise TypeError("{:s}.pointer takes exactly 1 or 2 arguments ({:d} given)".format(__name__, 1 + len(optional_type)))
     type = ptype.pointer_t._value_ if len(optional_type) == 0 or optional_type[0] is None else optional_type[0]
+
+    def typename(cls):
+        return 'dynamic.pointer'
+#    attrs.setdefault('typename', classmethod(typename))
     def classname(self):
-        return "dynamic.pointer({:s})".format(target.typename() if ptype.istype(target) else getattr(target, '__qualname__', target.__name__))
+        return "dynamic.pointer({:s})".format(determine_name(target))
 #    attrs.setdefault('classname', classname)
     t = ptype.pointer_t._value_ if type is None else type
     res = ptype.clone(t, **attrs)
-    return ptype.clone(ptype.pointer_t, _object_=target, _value_=res)
+    return ptype.clone(ptype.pointer_t, _object_=target, _value_=res, typename=classmethod(typename))
 
 def rpointer(target, *optional, **attrs):
     """rpointer(target, object?, type?, **attributes):
@@ -548,12 +595,15 @@ def rpointer(target, *optional, **attrs):
     if len(optional) > 2:
         raise TypeError("{:s}.rpointer takes exactly 1 - 3 arguments ({:d} given)".format(__name__, 1 + len(optional)))
     object = (lambda self: list(self.walk())[-1]) if len(optional) == 0 or optional[0] is None else optional[0]
+    def typename(cls):
+        return 'dynamic.rpointer'
+#    attrs.setdefault('typename', classmethod(typename))
     def classname(self):
-        return "dynamic.rpointer({:s}, ...)".format(target.typename() if ptype.istype(target) else getattr(target, '__qualname__', target.__name__))
+        return "dynamic.rpointer({:s}, ...)".format(determine_name(target))
 #    attrs.setdefault('classname', classname)
     t = ptype.pointer_t._value_ if len(optional) == 1 or optional[1] is None else optional[1]
     res = ptype.clone(t, **attrs)
-    return ptype.clone(ptype.rpointer_t, _object_=target, _baseobject_=object, _value_=res)
+    return ptype.clone(ptype.rpointer_t, _object_=target, _baseobject_=object, _value_=res, typename=classmethod(typename))
 
 def opointer(target, *optional, **attrs):
     """rpointer(target, calculate?, type?, **attributes):
@@ -569,10 +619,12 @@ def opointer(target, *optional, **attrs):
     calculate_name = '' if len(optional) == 0 or optional[0] is None else "{:+#x}".format(optional[0]) if isinstance(optional[0], integer_types) else getattr(optional[0], '__qualname__', optional[0].__name__)
     def classname(self):
         calcname = calculate_name if calculate_name else "{:+#x}".format(calculate(self, 0))
-        return "dynamic.opointer({:s}, {:s})".format(target.typename() if ptype.istype(target) else getattr(target, '__qualname__', target.__name__), calcname)
+        return "dynamic.opointer({:s}, {:s})".format(determine_name(target), calcname)
+    def typename(cls):
+        return 'dynamic.opointer'
 
     backing = ptype.clone(ptype.pointer_t._value_ if len(optional) == 1 or optional[1] is None else optional[1], **attrs)
-    return ptype.clone(ptype.opointer_t, _object_=target, _calculate_=calculate, _value_=backing, classname=classname)
+    return ptype.clone(ptype.opointer_t, _object_=target, _calculate_=calculate, _value_=backing, typename=classmethod(typename))
 
 if __name__ == '__main__':
     class Result(Exception): pass
