@@ -2386,7 +2386,7 @@ class encoded_t(wrapper_t):
             expected = self.blocksize()
 
             # now turn it into the type that the encoded_t should expect
-            res = object.cast(self._object_) if self._object_ else object
+            res = object.cast(self._object_) if getattr(self, '_object_', None) else object
 
             # so that we can encode it
             enc = self.encode(res, **attrs)
@@ -2452,7 +2452,8 @@ class encoded_t(wrapper_t):
         attrs.setdefault('blocksize', dec.size)
 
         # and we now have a good working object
-        return dec.new(self._object_ or type, **attrs)
+        object = getattr(self, '_object_', type) or type
+        return dec.new(object, **attrs)
 
     def reference(self, object, **attrs):
         """Reference ``object`` and encode it into self"""
@@ -2545,7 +2546,8 @@ class pointer_t(encoded_t):
         attrs.setdefault('__name__', '*'+self.name())
         attrs.setdefault('source', self.__source__)
         attrs.setdefault('offset', res.get())
-        return self.new(self._object_, **attrs)
+        object = getattr(self, '_object_', undefined) or undefined
+        return self.new(object, **attrs)
 
     def reference(self, object, **attrs):
         attrs.setdefault('__name__', '*'+self.name())
@@ -2565,7 +2567,8 @@ class pointer_t(encoded_t):
     def classname(self):
         object = getattr(self, '_object_', undefined) or undefined
         if self.initializedQ():
-            return "{:s}<{:s}>".format(self.typename(), self.dereference().classname())
+            res = self.dereference()
+            return "{:s}<{:s}>".format(self.typename(), res.classname())
         objectname = force(object, self).typename() if istype(object) else object.__qualname__ if hasattr(object, '__qualname__') else getattr(object, '__name__', 'None')
         return "{:s}<{:s}>".format(self.typename(), objectname)
 
