@@ -229,8 +229,10 @@ class AllocationTable(parray.type):
             integers = integer if hasattr(integer, '__iter__') else self.chain(integer)
             iterable = (index for index in integers if index <= maxregsect)
 
+        # Grab all the unique indices and use them to calculate the total numbre
+        # of required sectors. We only have 0 if nothing in the table was set.
         used = {index for index in iterable}
-        return max(used) if used else 0
+        return 1 + max(used) if used else 0
 
 class FAT(AllocationTable):
     class Pointer(Pointer):
