@@ -217,11 +217,19 @@ class AllocationTable(parray.type):
 
     def needed(self, *chain):
         '''Return the minimum number of sectors needed to support the specified chain or all the indices from the table if a chain is not provided.'''
-        ignored, transformed = SectorType.enumerations(), (index.object for index in self)
-        [integer] = chain if chain else [(index.int() for index in transformed)]
-        integers = integer if hasattr(integer, '__iter__') else self.chain(integer)
-        filtered = (index for index in integers if index not in ignored)
-        used = {index for index in filtered}
+        maxregsect = SectorType.byname('MAXREGSECT')
+        ignored = {maxregsect} | {SectorType.byname(name) for name in ['FREESECT', 'NotApplicable']}
+        if not chain:
+            everything = ((index, item.object) for index, item in enumerate(self))
+            filtered = ((index, item.int()) for index, item in everything if item.int() not in ignored)
+            iterable = (index for index in itertools.chain.from_iterable(filtered) if index <= maxregsect)
+
+        else:
+            [integer] = chain
+            integers = integer if hasattr(integer, '__iter__') else self.chain(integer)
+            iterable = (index for index in integers if index <= maxregsect)
+
+        used = {index for index in iterable}
         return max(used) if used else 0
 
 class FAT(AllocationTable):
