@@ -218,7 +218,8 @@ class AllocationTable(parray.type):
     def needed(self, *chain):
         '''Return the minimum number of sectors needed to support the specified chain or all the indices from the table if a chain is not provided.'''
         ignored, transformed = SectorType.enumerations(), (index.object for index in self)
-        [integers] = chain if chain else [(index.int() for index in transformed)]
+        [integer] = chain if chain else [(index.int() for index in transformed)]
+        integers = integer if hasattr(integer, '__iter__') else self.chain(integer)
         filtered = (index for index in integers if index not in ignored)
         used = {index for index in filtered}
         return max(used) if used else 0
