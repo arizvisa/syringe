@@ -215,6 +215,14 @@ class AllocationTable(parray.type):
         count = length if isinstance(length, (int, type(1 + sys.maxsize))) else len(length)
         return count * self.new(self._object_).a.size()
 
+    def needed(self, *chain):
+        '''Return the minimum number of sectors needed to support the specified chain or all the indices from the table if a chain is not provided.'''
+        ignored, transformed = SectorType.enumerations(), (index.object for index in self)
+        [integers] = chain if chain else [(index.int() for index in transformed)]
+        filtered = (index for index in integers if index not in ignored)
+        used = {index for index in filtered}
+        return max(used) if used else 0
+
 class FAT(AllocationTable):
     class Pointer(Pointer):
         def _calculate_(self, nextindex):
