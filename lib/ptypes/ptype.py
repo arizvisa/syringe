@@ -642,7 +642,7 @@ class __interface__(object):
         options.setdefault('offset', self.getoffset())
 
         # if larger than threshold...
-        assert(threshold > 0 and size > threshold)
+        assert(threshold > 0 and size >= threshold), (size, threshold)
         res = utils.emit_repr(data, threshold, message, **options)
         return u'"{:s}"'.format(res)
 
