@@ -141,7 +141,7 @@ class AllocationTable(parray.type):
         return
 
     def link(self, chain):
-        '''Link a given chain of sectors together overwriting any previous entries but leaving the sectors uncommitted..'''
+        '''Link a given chain of sectors together overwriting any previous entries but leaving the entries uncommitted.'''
         result, chain = [], [index for index in chain]
         while len(chain) > 1:
             index = chain.pop(0)
@@ -151,6 +151,12 @@ class AllocationTable(parray.type):
         self[index].set('ENDOFCHAIN'), result.append(index)
         assert(not chain)
         return result
+
+    def unlink(self, chain, type='FREESECT'):
+        '''Completely unlink and return the given chain of sectors by overwriting their table entries with the specified type and leaving them uncommitted.'''
+        chain = [index for index in chain] if hasattr(chain, '__iter__') else [index for index in self.chain(chain)]
+        [self[index].set(type) for index in chain]
+        return chain
 
     def available(self, start=0, stop=None, type='FREESECT'):
         '''Yield the index of each sector that is available and unused.'''
