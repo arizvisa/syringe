@@ -98,8 +98,10 @@ class AllocationTable(parray.type):
     # Walk the linked-list of sectors
     def chain(self, index):
         '''Yield the index of each sector in the chain starting at the given index.'''
-        yield index
-        while self[index].int() <= MAXREGSECT.type:
+        maximum = MAXREGSECT.type + 1
+        if 0 <= index < maximum:
+            yield index
+        while 0 <= index < maximum and self[index].int() < maximum:
             index = self[index].int()
             yield index
         return
@@ -1115,11 +1117,10 @@ class File(pstruct.type):
 
         # Now we can collect the entire chain, but truncate it to avoid an infinite
         # loop. This is done by constraining its length using the length of the fat.
-        maximum = len(fat)
-        truncated = [index for _, index in zip(range(maximum), iterable)]
+        truncated = [index for _, index in zip(range(len(fat)), iterable)]
 
         # Verify that the last sector is ENDOFCHAIN and return our result if so.
-        entry = fat[truncated[-1]]
+        entry = fat[truncated[-1]] if truncated else fat.new(fat._object_).a.set('ENDOFCHAIN')
         if entry.object['ENDOFCHAIN']:
             return truncated
 
@@ -1135,12 +1136,11 @@ class File(pstruct.type):
 
         # Similar to the regular fat, we truncate the chain that we're returning
         # using the length of the minifat to avoid an infinite loop.
-        maximum = len(minifat)
-        truncated = [index for _, index in zip(range(maximum), iterable)]
+        truncated = [index for _, index in zip(range(len(minifat)), iterable)]
 
         # Then we confirm that we retrieved a proper chain terminated with
         # ENDOFCHAIN. If we did, then we can return our result untampered.
-        entry = minifat[truncated[-1]]
+        entry = minifat[truncated[-1]] if truncated else minifat.new(minifat._object_).a.set('ENDOFCHAIN')
         if entry.object['ENDOFCHAIN']:
             return truncated
 
