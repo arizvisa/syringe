@@ -1649,6 +1649,7 @@ class container(base):
 
 class block(type):
     """A ptype that can be accessed as an array"""
+    length = None
     def __getitem__(self, index):
         '''x.__getitem__(y) <==> x[y]'''
         if not builtins.isinstance(index, slice):
