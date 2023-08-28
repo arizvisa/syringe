@@ -1177,7 +1177,10 @@ class type(base):
 
         # XXX: overloading will always provide a side effect of modifying the .source's offset
         #        make sure to fetch the blocksize first before you .getoffset() on something.
-        return getattr(self, 'length', 0 if self.value is None else len(self.value))
+        blocksize = getattr(self, 'length', None)
+        if blocksize is None:
+            return 0 if self.value is None else len(self.value)
+        return blocksize
 
     ## operator overloads
     def repr(self, **options):
@@ -2534,7 +2537,10 @@ class pointer_t(encoded_t):
             return bitmap.value(res)
 
         def blocksize(self):
-            return getattr(self, 'length', Config.integer.size if self.value is None else len(self.value))
+            blocksize = getattr(self, 'length', None)
+            if blocksize is None:
+                return Config.integer.size if self.value is None else len(self.value)
+            return blocksize
 
     def decode(self, object, **attrs):
         return object.cast(self._value_, **attrs)
