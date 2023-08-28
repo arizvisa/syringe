@@ -147,8 +147,11 @@ class AllocationTable(parray.type):
             index = chain.pop(0)
             sector, value = self[index], chain[0]
             sector.set(value), result.append(index)
-        index = chain.pop(0)
-        self[index].set('ENDOFCHAIN'), result.append(index)
+
+        if chain:
+            index = chain.pop(0)
+            self[index].set('ENDOFCHAIN'), result.append(index)
+
         assert(not chain)
         return result
 
@@ -528,6 +531,12 @@ class DirectoryEntry(pstruct.type):
         (SECT, 'sectLocation'),     # FIXME: This pointer only supports regular sectors and not mini-sectors
         (QWORD, 'qwSize'),
     ]
+
+    def alloc(self, **fields):
+        res = super(DirectoryEntry, self).alloc(**fields)
+        res if 'sectLocation' in fields else res.set(sectLocation='ENDOFCHAIN')
+        res if 'qwSize' in fields else res.set(qwSize=0)
+        return res
 
     def summary(self):
         return "Name:{!r} {:s} SECT:{:x} SIZE:{:x} {:s}".format(self.Name(), self['Type'].summary(), self['sectLocation'].int(), self['qwSize'].int(), self['clsid'].summary())
