@@ -92,6 +92,10 @@ class AllocationTable(parray.type):
         items = str().join(Sector.withdefault(entry.int(), type=entry.int()).symbol for entry in self)
         return ' '.join(["{:s}[{:s}]".format(membername, "{:d}".format(len(self)) if self.initializedQ() else '...'), items])
 
+    def alloc(self, *values, **attrs):
+        values = values if values else [['FREESECT'] * len(self)]
+        return super(AllocationTable, self).alloc(*values, **attrs)
+
     def _object_(self):
         raise NotImplementedError
 
