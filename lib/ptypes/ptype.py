@@ -590,37 +590,31 @@ class __interface__(object):
         options.setdefault('offset', self.getoffset())
         return utils.hexdump(self.serialize(), **options)
 
-    def details(self, **options):
-        """Return details of the object. This can be displayed in multiple-lines."""
+    def __details_size__(self, size, **options):
+        """Return details of the object clamped to the specified size. This can be displayed in multiple-lines."""
         if not self.initializedQ():
             return u"???"
 
         buf = self.serialize()
-        try: sz = self.size()
-        except Exception: sz = self.blocksize()
-
         length = options.setdefault('width', Config.display.hexdump.width)
         options.setdefault('offset', self.getoffset())
 
         # if larger than threshold...
         threshold = options.pop('threshold', Config.display.threshold.details)
         message = options.pop('threshold_message', Config.display.threshold.details_message)
-        if threshold > 0 and sz/length > threshold:
+        if threshold > 0 and size / length > threshold:
             threshold = options.pop('height', threshold) # 'threshold' maps to 'height' for emit_repr
             return '\n'.join(utils.emit_hexrows(buf, threshold, message, **options))
         return utils.hexdump(buf, **options)
 
-    def summary(self, **options):
-        """Return a summary of the object. This can be displayed on a single-line."""
+    def __summary_size__(self, size, **options):
+        """Return a summary of the object clamped to the specified size. This can be displayed on a single-line."""
         if self.value is None:
             return u"???"
 
         threshold = options.pop('threshold', Config.display.threshold.summary)
         message = options.pop('threshold_message', Config.display.threshold.summary_message)
         #threshold = options.pop('width', threshold) # 'threshold' maps to 'width' for emit_repr
-
-        try: size = self.size()
-        except Exception: size = self.blocksize()
 
         if threshold < 0 or size < threshold:
             data = self.serialize()
@@ -645,6 +639,16 @@ class __interface__(object):
         assert(threshold > 0 and size >= threshold), (size, threshold)
         res = utils.emit_repr(data, threshold, message, **options)
         return u'"{:s}"'.format(res)
+
+    def details(self):
+        try: size = self.size()
+        except Exception: size = self.blocksize()
+        return self.__details_size__(size)
+
+    def summary(self):
+        try: size = self.size()
+        except Exception: size = self.blocksize()
+        return self.__summary_size__(size)
 
     #@utils.memoize('self', self='parent', args=lambda item: (item[0],) if len(item) > 0 else (), kwds=lambda item: item.get('type', ()))
     @utils.memoize_method(self='parent', args=lambda item: frozenset(item[:1] if len(item) else ()), kwds=lambda item: (item.get('type', ()), item.get('default', ())))
@@ -1051,7 +1055,7 @@ class type(base):
         result = super(type, self).copy(**attrs)
 
         # Explicitly copy the length if it wasn't copied properly. We
-        # check it's value first because "length" might be a property.
+        # check its value first because "length" might be a property.
         if hasattr(self, 'length') and result.length != self.length:
             result.length = self.length
         return result
@@ -1140,13 +1144,17 @@ class type(base):
         if not builtins.isinstance(value, (bytes, bytearray)):
             raise error.TypeError(self, 'type.set', message="provided value {!r} is not serialized data".format(value.__class__))
 
-        self.value = bytes(value) if builtins.isinstance(value, bytearray) else value[:]
+        # get the trim length from attrs or our own attributes if it's there.
+        length = attrs.get('length', getattr(self, 'length', None))
+        data = bytes(value) if builtins.isinstance(value, bytearray) else value[:]
+        if length is None:
+            self.value = data
 
-        # If there's a length attribute, and it's different than our value,
-        # then update it with the new calculated value. We do a comparison
-        # first in case the class implemented "length" as a property.
-        if hasattr(self, 'length') and self.length != len(self.value):
-            self.length = len(self.value)
+        # pad the setting if it's necessary
+        else:
+            padding = utils.padding.fill(length, self.padding)
+            self.value = data + padding[len(data):]
+
         return self
 
     def __getvalue__(self):
@@ -1156,10 +1164,12 @@ class type(base):
     def size(self):
         """Returns the number of bytes that have been loaded into the type.
 
+        This excludes any required padding that is included during serialization.
         If type is uninitialized, issue a warning and return 0.
         """
-        if self.initializedQ() or self.value:
-            return len(self.value)
+        length = getattr(self, 'length', None)
+        if self.initializedQ() or self.value is not None:
+            return len(self.value) if length is None else len(self.value)
         cls = type
         Log.info("type.size : {:s} : Unable to determine (real) size with {!s}, as object is still uninitialized.".format(self.instance(), type.typename()))
         return 0
@@ -1185,13 +1195,23 @@ class type(base):
     ## operator overloads
     def repr(self, **options):
         """Display all ptype.type instances as a single-line hexstring"""
-        return self.summary(**options) if self.initializedQ() else '???'
+        return self.summary(**options) if self.value is not None else '???'
 
     def __getstate__(self):
         return (super(type, self).__getstate__(), self.blocksize(), self.value,)
     def __setstate__(self, state):
         state, self.length, self.value = state
         super(type, self).__setstate__(state)
+
+    def details(self):
+        try: size = self.size() if getattr(self, 'length', None) is None else self.length
+        except Exception: size = self.blocksize()
+        return self.__details_size__(size)
+
+    def summary(self):
+        try: size = self.size() if getattr(self, 'length', None) is None else self.length
+        except Exception: size = self.blocksize()
+        return self.__summary_size__(size)
 
 class container(base):
     '''
@@ -1242,7 +1262,7 @@ class container(base):
             raise error.InitializationError(self, 'container.blocksize')
         return sum(item.blocksize() for item in self.value)
 
-    def getoffset(self, *field, **options):
+    def getoffset(self, *field):
         """Returns the current offset.
 
         If ``field`` is specified as a ``str``, return the offset of the
@@ -1679,7 +1699,6 @@ class block(type):
         if not values:
             return super(block, self).__setvalue__(*values, **attrs)
         [value] = values
-        self.length = len(value)
         return super(block, self).__setvalue__(value, **attrs)
 
     def __setitem__(self, index, value):
