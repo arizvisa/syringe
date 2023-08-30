@@ -1156,7 +1156,7 @@ class File(pstruct.type):
     def Stream(self, sector):
         '''Return the contents of the stream starting at a specified sector using the fat.'''
         fat = self.Fat()
-        iterable = fat.chain(sector)
+        iterable = sector if hasattr(sector, '__iter__') else fat.chain(sector)
         type, items = self.StreamSector, [sector for sector in self.fatsectors(iterable)]
         source = ptypes.provider.disorderly(items, autocommit={})
         return self.new(StreamSectors, _object_=type, length=len(items), source=source).l
@@ -1164,7 +1164,7 @@ class File(pstruct.type):
     def MiniStream(self, sector):
         '''Return the contents of the ministream starting at a specified minisector using the minifat.'''
         minifat = self.MiniFat()
-        iterable = minifat.chain(sector)
+        iterable = sector if hasattr(sector, '__iter__') else minifat.chain(sector)
         type, items = self.MiniSector, [minisector for minisector in self.minisectors(iterable)]
         source = ptypes.provider.disorderly(items, autocommit={})
         return self.new(MiniStreamSectors, _object_=type, length=len(items), source=source).l
