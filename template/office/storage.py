@@ -1040,8 +1040,8 @@ class File(pstruct.type):
         loaded = (sector.l for sector in dereferenced)
         length = sum(len(sector) for sector in loaded)
 
-        indices = (sector.int() for sector in sectors)
-        realsectors = [self['Data'][index] for index in indices]
+        data, indices = self['Data'], (sector.int() for sector in sectors)
+        realsectors = [(data[index] if 0 <= index < len(data) else self.new(self.FileSector, offset=self._uHeaderSize + index * self._uSectorSize).l) for index in indices]
         #source = ptypes.provider.disorderly(dereferenced, autocommit={})
         source = ptypes.provider.disorderly(realsectors, autocommit={})
         return self.new(FAT, recurse=self.attributes, length=length, source=source).load(**attrs)
