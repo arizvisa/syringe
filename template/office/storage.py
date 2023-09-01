@@ -1057,7 +1057,7 @@ class File(pstruct.type):
 
         # Dereference the pointer in the header to grab the first sector,
         # and then yield any entries we can collect up to "count".
-        dfsector = start.d.l
+        dfsector = start.d.li
         for _, table in zip(range(count), dfsector.collect()):
             items.append(table)
         return items
@@ -1110,6 +1110,19 @@ class File(pstruct.type):
         fat, directory = self.Fat(), self['Fat']['sectDirectory'].int()
         iterable = fat.chain(directory)
         return [sector.cast(Directory) for sector in self.fatsectors(iterable)]
+
+    def difatchain(self):
+        '''Return the fat chain for the DIFAT as a list of sector numbers.'''
+        start, count = self['DiFat']['sectDifat'], self['DiFat']['csectDifat'].int()
+        if start.int() >= MAXREGSECT.type:
+            return []
+
+        # snag the last entry of each difat sector. this entry'll be the index
+        # of the sector that follows it. the very last entry of this list should
+        # be ENDOFCHAIN which ends up getting clamped out using "csectDiFat".
+        iterable = (sector[-1] for sector in self.__difat_sectors__())
+        result = [item.int() for item in itertools.chain([start], iterable)]
+        return result[:count]
 
     def chain(self, sector):
         '''Return the fat chain starting at the given sector as a list.'''
