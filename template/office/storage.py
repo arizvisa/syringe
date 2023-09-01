@@ -296,37 +296,35 @@ class DIFAT(AllocationTable):
         '''Yield each IndirectPointer for each entry within the DiFat.'''
         return (entry for _, entry in self.enumerate())
 
-    def collect(self, count):
-        '''Yield each entry from the DIFAT table.'''
+    def collect(self):
+        """Yield each sector that follows the current DIFAT sector.
+
+        If the current DIFAT instance is stored in the header, then no sectors will be returned.
+        """
+        cls = self.__class__
         if self.getoffset() < self._uHeaderSize:
-            yield self
+            return
 
-        while count > 0 and isinstance(self, DIFAT):
-            self = self.next()
-            yield self.l
-            count -= 1
-        return
+        this, visited = self, {sector for sector in []}
+        while isinstance(this, cls) and this._uHeaderSize <= this.getoffset():
+            yield this.l
 
-    def next(self):
-        '''Return the next DIFAT table following the current one..'''
-        if self._uHeaderSize <= self.getoffset():
-            pointer = self.value[-1]
-            length = getattr(self, '_uSectorCount', 0)
+            pointer, length = this.value[-1], getattr(this, '_uSectorCount', 0)
+            if pointer.object['ENDOFCHAIN']:
+                break
 
-        # Otherwise, the next table has to be determined from the header.
-        else:
+            elif pointer.object.int() >= MAXREGSECT.type:
+                logger.error("{:s}: Encountered {:#s} while trying to traverse to next {:s} table at {:s}.".format('.'.join([cls.__module__, cls.__name__]), pointer.object, cls.typename(), this.instance()))
+                break
+
+            target = dyn.clone(cls, length=length) if length else cls
+            object = dyn.clone(cls.IndirectPointer, _object_=target)
+            this = pointer.cast(object).dereference()
+
+        if this.getoffset() < self._uHeaderSize:
             F = self.getparent(File)
-            pointer = F['DiFat']['sectDifat']
-            parent = None if hasattr(self, '_uSectorCount') else F if self.parent else None
-            length = parent._uSectorCount if parent else getattr(self, '_uSectorCount', 0)
-
-        if pointer.object['ENDOFCHAIN']:
-            cls = self.__class__
-            raise ValueError("{:s}: Encountered {:#s} while trying to traverse to next DIFAT table at {:s}.".format('.'.join((cls.__module__, cls.__name__)), pointer.object, self.instance()))
-
-        target = dyn.clone(DIFAT, length=length) if length else DIFAT
-        object = dyn.clone(DIFAT.IndirectPointer, _object_=target)
-        return pointer.cast(object).dereference()
+            logger.error("{:s}: Encountered table {:s} that references header {:s} instead of a valid sector.".format('.'.join([cls.__module__, cls.__name__]), this.instance(), F.instance()))
+        return
 
 class MINIFAT(AllocationTable):
     class Pointer(Pointer):
@@ -1005,13 +1003,11 @@ class File(pstruct.type):
         count = self['DiFat']['csectDifat'].int()
         table = self['Table']
 
-        ## Check if we need to find more tables and use them to make a source. We chop
-        ## out the last element of each table, since that last entry is actually a link.
-        next, count = self['DiFat']['sectDifat'], self['DiFat']['csectDifat'].int()
-        if next.int() < MAXREGSECT.type:
-            items = [table] + [item[:-1] for item in table.collect(count)][1:]
-        else:
-            items = [table]
+        ## Grab any other difat sectors (specified in the header) and use them
+        ## to make a source. We chop out the last element of each table since
+        ## the last item is actually a link to the very next one.
+        iterable = itertools.chain([table], [dfsector[:-1] for dfsector in self.__difat_sectors__()])
+        items = [item for item in iterable]
         source = ptypes.provider.disorderly(items, autocommit={})
 
         ## Now we need to figure out the number of entries and then load it.
@@ -1051,17 +1047,18 @@ class File(pstruct.type):
         return self.new(FAT, recurse=self.attributes, length=length, source=source).load(**attrs)
 
     def __difat_sectors__(self):
-        '''Return a list of the sectors that compose the difat.'''
-        items = [self['Table']]
+        '''Return a list of the sectors that compose the difat excluding the "Table" included in the header.'''
+        items = []
 
-        # If there's nothing to continue with, then we're done.
-        next, count = self['DiFat']['sectDifat'], self['DiFat']['csectDifat'].int()
-        if next.int() >= MAXREGSECT.type:
+        # If there's nothing specified in the header, then we're essentially done.
+        start, count = self['DiFat']['sectDifat'], self['DiFat']['csectDifat'].int()
+        if start.int() >= MAXREGSECT.type:
             return items
 
-        # Yield any other table entries containing the difat
-        next = next.d.l
-        for table in next.collect(count):
+        # Dereference the pointer in the header to grab the first sector,
+        # and then yield any entries we can collect up to "count".
+        dfsector = start.d.l
+        for _, table in zip(range(count), dfsector.collect()):
             items.append(table)
         return items
 
