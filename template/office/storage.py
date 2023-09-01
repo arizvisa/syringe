@@ -543,7 +543,8 @@ class DirectoryEntry(pstruct.type):
         return res
 
     def summary(self):
-        return "Name:{!r} {:s} SECT:{:x} SIZE:{:x} {:s}".format(self.Name(), self['Type'].summary(), self['sectLocation'].int(), self['qwSize'].int(), self['clsid'].summary())
+        sectLocation = self['sectLocation'].object
+        return "Name:{!r} {:s} SECT:{:s} SIZE:{:x} CLSID:{:s}".format(self.Name(), self['Type'], "{:#s}".format(sectLocation) if sectLocation.has(sectLocation.int()) else "{:X}".format(sectLocation.int()), self['qwSize'].int(), self['clsid'])
 
     def Name(self):
         '''Return the name of the directory entry as a string.'''
@@ -698,16 +699,22 @@ class Directory(parray.block):
         Fescape = lambda self: eval("{!r}".format(self).replace('\\', '\\\\'))
 
         maxoffsetlength = max(len("[{:x}]".format(item.getoffset())) for item in self) if len(self) else 0
+        maxindexlength = len("{:d}".format(len(self)))
         maxnamelength = max(len(Fescape(item.Name())) for item in self) if len(self) else 0
-        maxtypelength = max(len(item['Type'].summary()) for item in self) if len(self) else 0
-        maxstartlength = max(len("{:x}".format(item['sectLocation'].int())) for item in self) if len(self) else 0
+        maxtypelength = max(len("{:s}".format(item['Type'])) for item in self) if len(self) else 0
+        maxstartlength = max(len("{:X}".format(item['sectLocation'].int())) for item in self) if len(self) else 0
+        sectorlengths = [len("{:#s}".format(item['sectLocation'].object)) for item in self if item['sectLocation'].object.has(item['sectLocation'].int())]
+        maxlocationlength = max(sectorlengths) if sectorlengths else 0
+        maxstartlength = max(maxlocationlength, maxstartlength)
         maxsizelength = max(len("{:x}".format(item['qwSize'].int())) for item in self) if len(self) else 0
 
-        res = []
+        rows = []
         for i, item in enumerate(self):
             offset = "[{:x}]".format(item.getoffset())
-            res.append("{:<{offsetwidth}s} {:s}[{:d}] {!s:>{filenamewidth}} {:<{typewidth}s} SECT:{:<{startwidth}x} SIZE:{:<{sizewidth}x} CLSID:{:s}".format(offset, item.classname(), i, Fescape(item.Name()), item['Type'].summary(), item['sectLocation'].int(), item['qwSize'].int(), item['clsid'].summary(), offsetwidth=maxoffsetlength, filenamewidth=maxnamelength, typewidth=maxtypelength, startwidth=maxstartlength, sizewidth=maxsizelength))
-        return '\n'.join(res)
+            sectorLocation = item['sectLocation'].object
+            sectorDescription = "{:#s}".format(sectorLocation) if sectorLocation.has(sectorLocation.int()) else "{:X}".format(sectorLocation.int())
+            rows.append("{:<{offsetwidth}s} {:s}{:<{:d}s} {!s:>{filenamewidth}} {:<{typewidth}s} SECT:{:<{startwidth}s} SIZE:{:<{sizewidth}x} CLSID:{:s}".format(offset, item.classname(), "[{:d}]".format(i), 2 + maxindexlength, Fescape(item.Name()), "{:s}".format(item['Type']), sectorDescription, item['qwSize'].int(), item['clsid'], offsetwidth=maxoffsetlength, filenamewidth=maxnamelength, typewidth=maxtypelength, startwidth=maxstartlength, sizewidth=maxsizelength))
+        return '\n'.join(rows)
 
     def byname(self, name, index=0):
         for item in self:
