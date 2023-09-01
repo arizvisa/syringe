@@ -515,7 +515,11 @@ class DirectoryEntryIdentifier(pint.enum, DWORD):
 
 class DirectoryEntry(pstruct.type):
     def __clsid(self):
-        parent = self.getparent(File)
+        try:
+            parent = self.getparent(File)
+        except ptypes.error.ItemNotFoundError:
+            return CLSID
+
         header = parent['Header']
         order = header.ByteOrder()
         return dyn.clone(CLSID, byteorder=order)
@@ -692,8 +696,16 @@ class DirectoryEntry(pstruct.type):
 
 class Directory(parray.block):
     _object_ = DirectoryEntry
+
     def blocksize(self):
         return self._uSectorSize
+
+    def alloc(self, *fields, **attrs):
+        if fields:
+            return super(Directory, self).alloc(*fields, **attrs)
+
+        initialized = super(Directory, self).alloc(**attrs)
+        return super(Directory, self).alloc([item.a for item in initialized], **attrs)
 
     def details(self):
         Fescape = lambda self: eval("{!r}".format(self).replace('\\', '\\\\'))
