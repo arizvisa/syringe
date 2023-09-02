@@ -1060,7 +1060,7 @@ class File(pstruct.type):
         length = sum(len(sector) for sector in loaded)
 
         data, indices = self['Data'], (sector.int() for sector in sectors)
-        realsectors = [(data[index] if 0 <= index < len(data) else self.new(self.FileSector, offset=self._uHeaderSize + index * self._uSectorSize).l) for index in indices]
+        realsectors = [(data[index] if 0 <= index < len(data) else data.new(self.FileSector, offset=self._uHeaderSize + index * self._uSectorSize).l) for index in indices]
         #source = ptypes.provider.disorderly(dereferenced, autocommit={})
         source = ptypes.provider.disorderly(realsectors, autocommit={})
         return self.new(FAT, recurse=self.attributes, length=length, source=source).load(**attrs)
@@ -1098,13 +1098,17 @@ class File(pstruct.type):
         # Iterate through the specifed chain and
         # yield each sector that is available.
         for index in chain:
-            if index < len(available):
+            if 0 <= index < len(available):
                 yield available[index]
 
             # If the index is not available, then we
             # need to dereference it out of the fat.
-            else:
+            elif 0 <= index < len(fat):
                 yield fat[index].d
+
+            # Otherwise we need to create a new sector to yield.
+            else:
+                yield available.new(self.FileSector, offset=self._uHeaderSize + index * self._uSectorSize)
             continue
         return
 
@@ -1114,8 +1118,7 @@ class File(pstruct.type):
         fat, directory = self.Fat(), self.Directory()
         root = directory.RootEntry()
         start, _ = (root[item].int() for item in ['sectLocation', 'qwSize'])
-        iterable = fat.chain(start)
-        return [item for item in self.fatsectors(iterable)]
+        return [item.li for item in self.fatsectors(fat.chain(start))]
 
     def minisectors(self, chain):
         '''Yield the contents of each minisector specified by the given chain.'''
@@ -1127,8 +1130,8 @@ class File(pstruct.type):
     def directorysectors(self):
         '''Return the contents of the sectors that contain the Directory for the file as a list.'''
         fat, directory = self.Fat(), self['Fat']['sectDirectory'].int()
-        iterable = fat.chain(directory)
-        return [sector.cast(Directory) for sector in self.fatsectors(iterable)]
+        iterable = (sector.li for sector in self.fatsectors(fat.chain(directory)))
+        return [sector.cast(Directory) for sector in iterable]
 
     def difatchain(self):
         '''Return the fat chain for the DIFAT as a list of sector numbers.'''
@@ -1156,10 +1159,11 @@ class File(pstruct.type):
         entry = fat[truncated[-1]] if truncated else fat.new(fat._object_).a.set('ENDOFCHAIN')
         if entry.object['ENDOFCHAIN']:
             return truncated
+        object = entry.object.copy()
 
         # Warn the user if the last sector is not the ENDOFCHAIN.
-        cls, expected = self.__class__, entry.object.copy().set('ENDOFCHAIN')
-        logger.warning("{:s}.chain({:d}): The fat chain ({:d} sector{:s}) was truncated due to being terminated by {:s} instead of {:s} as expected.".format('.'.join([cls.__module__, cls.__name__]), sector, len(truncated), '' if len(truncated) == 1 else 's', entry.object, expected))
+        cls, expected = self.__class__, object.set('ENDOFCHAIN')
+        logger.warning("{:s}.chain({:d}): The fat chain ({:d} sector{:s}) was truncated due to being terminated by {:s} instead of {:s} as expected.".format('.'.join([cls.__module__, cls.__name__]), sector, len(truncated), '' if len(truncated) == 1 else 's', object, expected))
         return truncated
 
     def minichain(self, sector):
@@ -1176,10 +1180,11 @@ class File(pstruct.type):
         entry = minifat[truncated[-1]] if truncated else minifat.new(minifat._object_).a.set('ENDOFCHAIN')
         if entry.object['ENDOFCHAIN']:
             return truncated
+        object = entry.object.copy()
 
         # Otherwise we log a warning suggesting that we truncated it.
-        cls, expected = self.__class__, entry.object.copy().set('ENDOFCHAIN')
-        logger.warning("{:s}.minichain({:d}): The minifat chain ({:d} minisector{:s}) was truncated due to being terminated by {:s} instead of {:s} as expected.".format('.'.join([cls.__module__, cls.__name__]), sector, len(truncated), '' if len(truncated) == 1 else 's', entry.object, expected))
+        cls, expected = self.__class__, object.set('ENDOFCHAIN')
+        logger.warning("{:s}.minichain({:d}): The minifat chain ({:d} minisector{:s}) was truncated due to being terminated by {:s} instead of {:s} as expected.".format('.'.join([cls.__module__, cls.__name__]), sector, len(truncated), '' if len(truncated) == 1 else 's', object, expected))
         return truncated
 
     def Stream(self, sector):
@@ -1200,10 +1205,8 @@ class File(pstruct.type):
 
     def Directory(self):
         '''Return the array of Directory entries for the file.'''
-        fat, sector = self.Fat(), self['Fat']['sectDirectory'].int()
-        iterable = fat.chain(sector)
-        type, items = self.StreamSector, [sector for sector in self.fatsectors(iterable)]
-        source, size = ptypes.provider.disorderly(items, autocommit={}), sum(sector.size() for sector in items)
+        items = [sector for sector in self.directorysectors()]
+        source, size = ptypes.provider.disorderly(items, autocommit={}), sum(sector.blocksize() for sector in items)
         return self.new(Directory, __name__='Directory', source=source, blocksize=lambda sz=size: sz).l
 
 ### Specific stream types
