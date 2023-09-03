@@ -1118,7 +1118,7 @@ class File(pstruct.type):
         fat, directory = self.Fat(), self.Directory()
         root = directory.RootEntry()
         start, _ = (root[item].int() for item in ['sectLocation', 'qwSize'])
-        return [item.li for item in self.fatsectors(fat.chain(start))]
+        return [item.l for item in self.fatsectors(fat.chain(start))]
 
     def minisectors(self, chain):
         '''Yield the contents of each minisector specified by the given chain.'''
