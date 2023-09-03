@@ -340,12 +340,11 @@ class proxy(proxied):
 
         # fix beginning element
         n = sl.pop(0)
-        source, bs, l = n.serialize(), n.blocksize(), left - n.getoffset()
+        source, bs, l = n.serialize(), n.blocksize(), left - (n.getoffset() - object.getoffset())
         s = bs - l
         sourcedata = source[:l] + data[:s] + source[l+len(data[:s]):]
         n.load(offset=0, source=memoryview(sourcedata))
-        data = data[s:]
-        result += s    # sum the blocksize
+        result, data = result + len(data[:s]), data[s:] # sum the blocksize
 
         # fix elements in the middle
         while len(sl) > 1:
@@ -353,8 +352,7 @@ class proxy(proxied):
             source, bs = n.serialize(), n.blocksize()
             sourcedata = data[:bs] + source[len(data[:bs]):]
             n.load(offset=0, source=memoryview(sourcedata))
-            data = data[bs:]
-            result += bs    # sum the blocksize
+            result, data = result + len(data[:bs]), data[bs:]
 
         # fix last element
         if len(sl) > 0:
@@ -363,8 +361,7 @@ class proxy(proxied):
             sourcedata = data[:bs] + source[len(data[:bs]):]
             padding = utils.padding.fill(bs - min(bs, len(sourcedata)), n.padding)
             n.load(offset=0, source=memoryview(sourcedata + padding))
-            data = data[bs:]
-            result += len(data[:bs])    # sum the final blocksize
+            result, data = result + len(data[:bs]), data[bs:]
 
         # check to see if there's any data left
         if len(data) > 0:
@@ -2485,6 +2482,87 @@ if __name__ == '__main__':
         source = provider.disorderly(contiguous)
         start = source.seek(64)
         if source.consume(0) == b'':
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_proxy_store_range_nonoverlap_1():
+        u32 = pint.uint32_t
+        argh = parray.type(length=4, _object_=u32).a
+        res = ptypes.prov.proxy.store_range(argh, 0, b'AAAAAAAA')
+        if res == 8 and argh.serialize() == b'AAAAAAAA\0\0\0\0\0\0\0\0':
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_proxy_store_range_nonoverlap_2():
+        u32 = pint.uint32_t
+        argh = parray.type(length=4, _object_=u32).a
+        res = ptypes.prov.proxy.store_range(argh, 4, b'AAAAAAAA')
+        if res == 8 and argh.serialize() == b'\0\0\0\0AAAAAAAA\0\0\0\0':
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_proxy_store_range_nonoverlap_3():
+        u8 = pint.uint8_t
+        argh = parray.type(length=0x10, _object_=u8).a
+        res = ptypes.prov.proxy.store_range(argh, 12, b'AAAA')
+        if res == 4 and argh.serialize() == b'\0\0\0\0\0\0\0\0\0\0\0\0AAAA':
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_proxy_store_range_nonoverlap_offset_1():
+        u32 = pint.uint32_t
+        argh = parray.type(length=4, _object_=u32, offset=0x12345).a
+        res = ptypes.prov.proxy.store_range(argh, 4, b'AAAAAAAA')
+        if res == 8 and argh.serialize() == b'\0\0\0\0AAAAAAAA\0\0\0\0':
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_proxy_store_range_nonoverlap_offset_2():
+        u8 = pint.uint8_t
+        argh = parray.type(length=0x10, _object_=u8, offset=-0x1000).a
+        res = ptypes.prov.proxy.store_range(argh, 12, b'AAAA')
+        if res == 4 and argh.serialize() == b'\0\0\0\0\0\0\0\0\0\0\0\0AAAA':
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_proxy_store_range_overlap_1():
+        u32 = pint.uint32_t
+        argh = parray.type(length=4, _object_=u32).a
+        res = ptypes.prov.proxy.store_range(argh, 2, b'AAAAAAAA')
+        if res == 8 and argh.serialize() == b'\0\0AAAAAAAA\0\0\0\0\0\0':
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_proxy_store_range_overlap_2():
+        u64 = pint.uint64_t
+        argh = parray.type(length=2, _object_=u64).a
+        res = ptypes.prov.proxy.store_range(argh, 2, b'AAAA')
+        if res == 4 and argh.serialize() == b'\0\0AAAA\0\0\0\0\0\0\0\0\0\0':
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_proxy_store_range_overlap_offset_1():
+        u32 = pint.uint32_t
+        argh = parray.type(length=4, _object_=u32, offset=0x1400).a
+        res = ptypes.prov.proxy.store_range(argh, 2, b'AAAAAAAA')
+        if res == 8 and argh.serialize() == b'\0\0AAAAAAAA\0\0\0\0\0\0':
+            raise Success
+        raise Failure
+
+    @TestCase
+    def test_proxy_store_range_overlap_offset_2():
+        u64 = pint.uint64_t
+        argh = parray.type(length=2, _object_=u64, offset=-42).a
+        res = ptypes.prov.proxy.store_range(argh, 2, b'AAAA')
+        if res == 4 and argh.serialize() == b'\0\0AAAA\0\0\0\0\0\0\0\0\0\0':
             raise Success
         raise Failure
 
