@@ -219,8 +219,20 @@ def extract_import(t, index, outformat, F=None, output=None):
     if E['Address'].int() == 0:
         raise ValueError("No Imports directory entry was found.")
     global it; it = E['Address'].d.li
+
+    # if index is a string and using the correct characters, then convert to an int.
+    if isinstance(index, six.string_types) and all(ch in '0123456789' for ch in index):
+        index = int(index)
+
+    # if it wasn't an integer, then try matching the imports by name.
+    elif isinstance(index, six.string_types):
+        iterable = ((idx, item['Name'].d.l.str()) for idx, item in enumerate(it) if item['Name'].int())
+        iterable = ((idx, {name.upper(), name.upper().rsplit('.', 1)[0]}) for idx, name in iterable)
+        index = next(idx for idx, candidates in iterable if index.upper() in candidates)
+
     if not(0 <= index < len(it)):
         raise IndexError("Invalid Imports table index was specified ({:d} <= {:d} < {:d}).".format(0, index, len(it)))
+
     ite = it[index]
     global result; result = ite
     if not F and (not outformat or outformat in {'list'}):
@@ -416,7 +428,7 @@ def args():
     res.add_argument('-e','--list-exports', action='store_const', const=list_exports, dest='command', help='display the contents of the export directory')
     res.add_argument('-E','--dump-export', action='store', nargs=1, type=int, dest='xexport', metavar='index', help='dump the specified export')
     res.add_argument('-i','--list-imports', action='store_const', const=list_imports, dest='command', help='list all the libraries listed in the import directory')
-    res.add_argument('-I','--dump-import', action='store', nargs=1, type=int, dest='ximport', metavar='index', help='list all the imported functions from the specified library')
+    res.add_argument('-I','--dump-import', action='store', nargs=1, dest='ximport', metavar='index', help='list all the imported functions from the specified library')
     res.add_argument('-r','--list-resource', action='store_const', const=list_resources, dest='command', help='display the resource directory tree')
     res.add_argument('-R','--dump-resource', action='store', nargs=1, type=str, dest='xresource', metavar='path', help='dump the resource with the \'/\'-separated specified path')
     res.add_argument('-l','--dump-loaderconfig', action='store_const', const=dump_loadconfig, dest='command', help='dump the LoadConfig directory entry')
