@@ -122,7 +122,8 @@ class __array_interface__(ptype.container):
 
     def __append__(self, object):
         idx = len(self.value)
-        result = super(__array_interface__, self).__append__(object)
+        item = object if ptype.isinstance(object) or ptype.istype(object) else self.new(self._object_).set(object)
+        result = super(__array_interface__, self).__append__(item)
         offset = (self.value[idx - 1].getoffset() + self.value[idx - 1].size()) if idx > 0 else self.getoffset()
         result.setoffset(offset, recurse=True)
         return result
