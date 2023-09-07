@@ -2313,8 +2313,7 @@ class wrapper_t(type):
             return self
 
         [value] = values
-        res = self.object.set(value, **attrs)
-        self.object.commit(offset=0, source=provider.proxy(self))
+        self.__value__ = self.object.set(value, **attrs).serialize()
         return self
 
     def commit(self, **attrs):
@@ -3555,6 +3554,44 @@ if __name__ == '__main__':
         x = wt().a
         x.object = bt().set(b'DCBA')
         if hasattr(x.object, 'int') and x.object.int() == 0x41424344:
+            raise Success
+
+    @TestCase
+    def test_wrapper_value_assign_1():
+        '''wrapper_t.value is uninitialized at start'''
+        class wrapped(ptype.wrapper_t):
+            _value_ = ptype.clone(ptype.type, length=4)
+        x = wrapped()
+        if x.value is None and not x.initializedQ():
+            raise Success
+
+    @TestCase
+    def test_wrapper_value_assign_2():
+        '''wrapper_t.value gets assigned during wrapper_t.alloc'''
+        class wrapped(ptype.wrapper_t):
+            _value_ = ptype.clone(ptype.type, length=4)
+        x = wrapped().alloc()
+        if x.value == b'\0\0\0\0' and x.initializedQ():
+            raise Success
+
+    @TestCase
+    def test_wrapper_value_assign_3():
+        '''wrapper_t.value gets assigned during wrapper_t.load'''
+        class wrapped(ptype.wrapper_t):
+            _value_ = ptype.clone(ptype.type, length=4)
+        data = b'ABCD'
+        x = wrapped().load(source=ptypes.prov.bytes(data))
+        if x.value == data and x.initializedQ():
+            raise Success
+
+    @TestCase
+    def test_wrapper_value_assign_4():
+        '''wrapper_t.value gets assigned during wrapper_t.set'''
+        class wrapped(ptype.wrapper_t):
+            _value_ = ptype.clone(ptype.type, length=4)
+        data = b'ABCD'
+        x = wrapped().set(data)
+        if x.value == data and x.initializedQ():
             raise Success
 
     @TestCase
