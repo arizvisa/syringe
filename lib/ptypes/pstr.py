@@ -332,11 +332,17 @@ class string(ptype.type):
         if not values:
             return super(string, self).__setvalue__(*values, **attrs)
 
-        value, = values
-        cb, _ = self.encoding.encode('\0')
+        [value] = values
+        null, _ = self.encoding.encode('\0')
+        esize = len(null)
 
-        size, esize = self.size() if self.initializedQ() else self.blocksize(), len(cb)
-        encoded, _ = self.encoding.encode(value) if isinstance(value, string_types) else (value, len(value))
+        if isinstance(value, string_types):
+            encoded, length = self.encoding.encode(value)
+            size = len(encoded) if self.length is None else self.blocksize() if self.value is None else self.size()
+        else:
+            encoded, size = value, len(value) if self.length is None else self.blocksize() if self.value is None else self.size()
+            res, extra = divmod(size, esize)
+            length = res + 1 if extra else res
 
         object = ptype.clone(self._object_, encoding=self.encoding)
         result = parray.type(_object_=object, length=size // esize)
@@ -346,7 +352,7 @@ class string(ptype.type):
         for element, glyph in __izip_longest__(result.alloc(), iterable):
             if element is None:
                 break
-            element.set(bytes(bytearray(glyph or cb)))
+            element.set(bytes(bytearray(glyph or null)))
         return self.load(offset=0, source=provider.proxy(result), blocksize=(lambda cb=result.blocksize(): cb))
 
     def alloc(self, *values, **attrs):
@@ -594,7 +600,6 @@ if __name__ == '__main__':
             except Failure as E:
                 print('%s: %r'% (name, E))
             except Exception as E:
-                raise
                 print('%s: %r : %r'% (name, Failure(), E))
             return False
         TestCaseList.append(harness)
@@ -881,6 +886,82 @@ if __name__ == '__main__':
         s = u'\u30b3\u30fc\u30c9\u30da\u30fc\u30b8'
         self = pstr.szstring(encoding='utf-8').set(s)
         if self.str() == s:
+            raise Success
+
+    @TestCase
+    def test_str_single_set_nolength_str():
+        self = pstr.string().set('haithere')
+        if self.serialize() == b'haithere' and self.blocksize() == 0 and self.size() == 8:
+            raise Success
+
+    @TestCase
+    def test_str_single_set_nolength_bytes():
+        self = pstr.string().set(b'haithere')
+        if self.serialize() == b'haithere' and self.blocksize() == 0 and self.size() == 8:
+            raise Success
+
+    @TestCase
+    def test_str_single_set_length_str():
+        self = pstr.string(length=5).set('hai')
+        if self.serialize() == b'hai\0\0' and self.blocksize() == 5 and self.size() == 5:
+            raise Success
+
+    @TestCase
+    def test_str_single_set_length_bytes():
+        self = pstr.string(length=5).set(b'hai')
+        if self.serialize() == b'hai\0\0' and self.blocksize() == 5 and self.size() == 5:
+            raise Success
+
+    @TestCase
+    def test_str_wide_set_nolength_str():
+        self = pstr.wstring().set('haithere')
+        if self.serialize() == b'h\0a\0i\0t\0h\0e\0r\0e\0' and self.blocksize() == 0 and self.size() == 16:
+            raise Success
+
+    @TestCase
+    def test_str_wide_set_nolength_bytes():
+        self = pstr.wstring().set(b'haithere')
+        if self.serialize() == b'haithere' and self.blocksize() == 0 and self.size() == 8:
+            raise Success
+
+    @TestCase
+    def test_str_wide_set_length_str():
+        self = pstr.wstring(length=5).set('haha')
+        if self.serialize() == b'h\0a\0h\0a\0\0\0' and self.blocksize() == 10 and self.size() == 10:
+            raise Success
+
+    @TestCase
+    def test_str_wide_set_length_bytes():
+        self = pstr.wstring(length=5).set(b'haha')
+        if self.serialize() == b'haha\0\0\0\0\0\0' and self.blocksize() == 10 and self.size() == 10:
+            raise Success
+
+    @TestCase
+    def test_str_multi_set_nolength_str():
+        s = u'\u30b3\u30fc\u30c9'
+        self = pstr.string(encoding='utf-8').set(s)
+        if self.serialize() == b'\xe3\x82\xb3\xe3\x83\xbc\xe3\x83\x89' and self.blocksize() == 0 and self.size() == 9:
+            raise Success
+
+    @TestCase
+    def test_str_multi_set_nolength_bytes():
+        data = b'\xe3\x82\xb3\xe3\x83\xbc\xe3\x83\x89'
+        self = pstr.string(encoding='utf-8').set(data)
+        if self.serialize() == data and self.blocksize() == 0 and self.size() == 9:
+            raise Success
+
+    @TestCase
+    def test_str_multi_set_length_str():
+        s = u'\u30b3\u30fc\u30c9'
+        self = pstr.string(length=12, encoding='utf-8').set(s)
+        if self.serialize() == b'\xe3\x82\xb3\xe3\x83\xbc\xe3\x83\x89\0\0\0' and self.blocksize() == 12 and self.size() == 12:
+            raise Success
+
+    @TestCase
+    def test_str_multi_set_length_bytes():
+        data = b'\xe3\x82\xb3\xe3\x83\xbc\xe3\x83\x89'
+        self = pstr.string(length=12, encoding='utf-8').set(data)
+        if self.serialize() == b'\xe3\x82\xb3\xe3\x83\xbc\xe3\x83\x89\0\0\0' and self.blocksize() == 12 and self.size() == 12:
             raise Success
 
 if __name__ == '__main__':
