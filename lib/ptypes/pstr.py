@@ -227,9 +227,16 @@ class string(ptype.type):
         cls = self.__class__
         return utils.callable_eq(self, self.blocksize, cls, cls.blocksize) and utils.callable_eq(cls, cls.blocksize, string, string.blocksize)
     def blocksize(self):
-        length = self.length or 0
-        cb, _ = self.encoding.encode('\0')
-        return len(cb) * length
+        if self.value is None:
+            length = 0 if self.length is None else self.length
+            cb, _ = self.encoding.encode('\0')
+            return len(cb) * length
+
+        elif self.length is None:
+            return len(self.value)
+
+        null, _ = self.encoding.encode('\0')
+        return len(null) * self.length
 
     def __insert(self, index, string):
         l, _ = self.encoding.encode('\0')
@@ -889,15 +896,27 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
+    def test_str_single_empty_nolength_str():
+        self = pstr.string().alloc(length=41)
+        if self.serialize() == 41 * b'\0' and self.blocksize() == 41 and self.size() == 41:
+            raise Success
+
+    @TestCase
     def test_str_single_set_nolength_str():
         self = pstr.string().set('haithere')
-        if self.serialize() == b'haithere' and self.blocksize() == 0 and self.size() == 8:
+        if self.serialize() == b'haithere' and self.blocksize() == 8 and self.size() == 8:
             raise Success
 
     @TestCase
     def test_str_single_set_nolength_bytes():
         self = pstr.string().set(b'haithere')
-        if self.serialize() == b'haithere' and self.blocksize() == 0 and self.size() == 8:
+        if self.serialize() == b'haithere' and self.blocksize() == 8 and self.size() == 8:
+            raise Success
+
+    @TestCase
+    def test_str_single_empty_length_str():
+        self = pstr.string(length=5).alloc(length=41)
+        if self.serialize() == 41 * b'\0' and self.blocksize() == 5 and self.size() == 41:
             raise Success
 
     @TestCase
@@ -913,15 +932,27 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
+    def test_str_wide_empty_nolength_str():
+        self = pstr.wstring().alloc(length=41)
+        if self.serialize() == 82 * b'\0' and self.blocksize() == 82 and self.size() == 82:
+            raise Success
+
+    @TestCase
     def test_str_wide_set_nolength_str():
         self = pstr.wstring().set('haithere')
-        if self.serialize() == b'h\0a\0i\0t\0h\0e\0r\0e\0' and self.blocksize() == 0 and self.size() == 16:
+        if self.serialize() == b'h\0a\0i\0t\0h\0e\0r\0e\0' and self.blocksize() == 16 and self.size() == 16:
             raise Success
 
     @TestCase
     def test_str_wide_set_nolength_bytes():
         self = pstr.wstring().set(b'haithere')
-        if self.serialize() == b'haithere' and self.blocksize() == 0 and self.size() == 8:
+        if self.serialize() == b'haithere' and self.blocksize() == 8 and self.size() == 8:
+            raise Success
+
+    @TestCase
+    def test_str_wide_empty_length_str():
+        self = pstr.wstring(length=5).alloc(length=41)
+        if self.serialize() == 82 * b'\0' and self.blocksize() == 10 and self.size() == 82:
             raise Success
 
     @TestCase
@@ -937,17 +968,29 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
+    def test_str_multi_empty_nolength_str():
+        self = pstr.string(encoding='utf-8').alloc(length=41)
+        if self.serialize() == 41 * b'\0' and self.blocksize() == 41 and self.size() == 41:
+            raise Success
+
+    @TestCase
     def test_str_multi_set_nolength_str():
         s = u'\u30b3\u30fc\u30c9'
         self = pstr.string(encoding='utf-8').set(s)
-        if self.serialize() == b'\xe3\x82\xb3\xe3\x83\xbc\xe3\x83\x89' and self.blocksize() == 0 and self.size() == 9:
+        if self.serialize() == b'\xe3\x82\xb3\xe3\x83\xbc\xe3\x83\x89' and self.blocksize() == 9 and self.size() == 9:
             raise Success
 
     @TestCase
     def test_str_multi_set_nolength_bytes():
         data = b'\xe3\x82\xb3\xe3\x83\xbc\xe3\x83\x89'
         self = pstr.string(encoding='utf-8').set(data)
-        if self.serialize() == data and self.blocksize() == 0 and self.size() == 9:
+        if self.serialize() == data and self.blocksize() == 9 and self.size() == 9:
+            raise Success
+
+    @TestCase
+    def test_str_multi_empty_length_str():
+        self = pstr.string(encoding='utf-8', length=12).alloc(length=41)
+        if self.serialize() == 41 * b'\0' and self.blocksize() == 12 and self.size() == 41:
             raise Success
 
     @TestCase
