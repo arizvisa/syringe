@@ -99,6 +99,15 @@ class AllocationTable(parray.type):
     def _object_(self):
         raise NotImplementedError
 
+    def set(self, *values, **attrs):
+        '''Overwrite the sector values with the list of values while preserving the table size.'''
+        if not values:
+            return super(AllocationTable, self).set(*values, **attrs)
+        [value] = values
+        iterable = value if len(self) <= len(value) else itertools.chain(value, ['FREESECT'] * len(self))
+        items = [item for _, item in zip(range(len(self)), iterable)]
+        return super(AllocationTable, self).set(items, **attrs)
+
     # Walk the linked-list of sectors
     def chain(self, index):
         '''Yield the index of each sector in the chain starting at the given index.'''
@@ -129,23 +138,7 @@ class AllocationTable(parray.type):
         '''Yield the pointer for each item within the table.'''
         return (item for _, item in self.enumerate(*args, **kwargs))
 
-    def filter(self, type):
-        '''Yield the index of each item within the table that satisfies the given type.'''
-        critique = type if callable(type) else (lambda item, type=type: item.object[type])
-        return (index for index, item in enumerate(self) if critique(item))
-
-    def contiguous(self, start, count, type='FREESECT'):
-        '''Yield each chain from the allocation table containing a contiguous count of sectors.'''
-        critique = type if callable(type) else (lambda item, type=type: item.object[type])
-        available = (index for index in range(start, len(self)) if critique(self[index]))
-        iterable = ((index, index + count) for index in available)
-        for left, right in iterable:
-            items = self[left : right]
-            if len(items) == count and all(critique(item) for item in items):
-                yield [index for index in range(left, right)]
-            continue
-        return
-
+    # Updating a chain within the allocation table
     def link(self, chain):
         '''Link a given chain of sectors together overwriting any previous entries but leaving the entries uncommitted.'''
         result, chain = [], [index for index in chain]
@@ -167,13 +160,8 @@ class AllocationTable(parray.type):
         [self[index].set(type) for index in chain]
         return chain
 
-    def available(self, start=0, stop=None, type='FREESECT'):
-        '''Yield the index of each sector that is available and unused.'''
-        critique = type if callable(type) else (lambda item, type=type: item.object[type])
-        iterable = range(start, len(self) if stop is None else stop)
-        return (index for index in range(start, len(self)) if critique(self[index]))
-
-    def reduce(self, chain, amount, type='FREESECT'):
+    # Resizing a chain within the allocation table.
+    def reduceChain(self, chain, amount, type='FREESECT'):
         '''Reduce a chain by releasing the specified number of sectors, leaving them uncommitted, and returning the new smaller chain.'''
         chain = [index for index in chain] if hasattr(chain, '__iter__') else [index for index in self.chain(chain)]
         result = self.link(chain[:-amount] if amount else chain)
@@ -181,32 +169,24 @@ class AllocationTable(parray.type):
         [self[index].set(type) for index in released]
         return result
 
-    def grow(self, chain, amount, available=None):
+    def growChain(self, chain, amount, available=None):
         '''Grow a chain by adding the specified count of sectors from available, leaving then uncommitted, and returning the new larger chain.'''
         chain = [index for index in chain] if hasattr(chain, '__iter__') else [index for index in self.chain(chain)]
-        source = self.available() if available is None else (index for index in available)
+        source = self.availableEntries() if available is None else (index for index in available)
         additional = (index for _, index in zip(range(amount), source))
         return self.link(chain + [index for index in additional])
 
-    def set(self, *values, **attrs):
-        '''Overwrite the sector values with the list of values while preserving the table size.'''
-        if not values:
-            return super(AllocationTable, self).set(*values, **attrs)
-        [value] = values
-        iterable = value if len(self) <= len(value) else itertools.chain(value, ['FREESECT'] * len(self))
-        items = [item for _, item in zip(range(len(self)), iterable)]
-        return super(AllocationTable, self).set(items, **attrs)
-
-    def resize(self, chain, count, available=None):
+    def resizeChain(self, chain, count, available=None):
         '''Modify the length of a chain to the specified count, leaving each entry in the allocation table uncommitted, and then return the new chain.'''
         chain = [index for index in chain] if hasattr(chain, '__iter__') else [index for index in self.chain(chain)]
         if count < len(chain):
-            return self.reduce(chain, len(chain) - count)
+            return self.reduceChain(chain, len(chain) - count)
         elif count > len(chain):
-            return self.grow(chain, count - len(chain), available=available)
+            return self.growChain(chain, count - len(chain), available=available)
         return chain
 
-    def sector(self):
+    # Calculations using things from the allocation table
+    def sectorSize(self):
         '''Return the number of bytes occupied by a sector being described by the current allocation table.'''
         pointer_t = self._object_ if ptypes.istype(self._object_) else self._object_()
         assert(issubclass(pointer_t, Pointer)), "{:s} is not a subclass of {:s}.".format(pointer_t.typename(), Pointer.typename())
@@ -215,23 +195,18 @@ class AllocationTable(parray.type):
         sector = sector_t()
         return sector.blocksize()
 
-    def required(self, bytes):
-        '''Return the required number of sectors in order to store the specified number of bytes.'''
-        size = self.sector()
+    def entries(self, bytes):
+        '''Return the required number of entries in order to store the specified number of bytes.'''
+        size = self.sectorSize()
         count, extra = divmod(bytes, size) if size else 0
         return 1 + count if extra else count
 
     def used(self, chain):
         '''Return the total number of bytes used by the given `chain`.'''
-        return self.count(chain) * self.sector()
+        return self.count(chain) * self.sectorSize()
 
-    def estimate(self, length):
-        '''Estimate the size of an allocation table that holds the specified number of entries and return it.'''
-        count = length if isinstance(length, (int, type(1 + sys.maxsize))) else len(length)
-        return count * self.new(self._object_).a.size()
-
-    def needed(self, *chain):
-        '''Return the minimum number of sectors needed to support the specified chain or all the indices from the table if a chain is not provided.'''
+    def required(self, *chain):
+        '''Return the minimum number of sectors required to store the specified chain or all the table entries if a chain is not provided.'''
         maxregsect = SectorType.byname('MAXREGSECT')
         ignored = {maxregsect} | {SectorType.byname(name) for name in ['FREESECT', 'NotApplicable']}
         if not chain:
@@ -248,6 +223,36 @@ class AllocationTable(parray.type):
         # of required sectors. We only have 0 if nothing in the table was set.
         used = {index for index in iterable}
         return 1 + max(used) if used else 0
+
+    # General utilities used for calculating sizes.
+    def tableSize(self, length):
+        '''Return the size of an allocation table that can hold the specified number of entries.'''
+        count = length if isinstance(length, (int, type(1 + sys.maxsize))) else len(length)
+        return count * self.new(self._object_).a.size()
+
+    def streamSize(self, length):
+        '''Return the size of a stream containing the specified number of sectors from the allocation table.'''
+        count = length if isinstance(length, (int, type(1 + sys.maxsize))) else len(length)
+        return self.sectorSize() * count
+
+    # Methods that can be used to search for entries of specific types.
+    def contiguousEntries(self, start, count, type='FREESECT'):
+        '''Yield each chain from the allocation table at index `start` that represents a contiguous number of entries as specified by `count`.'''
+        critique = type if callable(type) else (lambda item, type=type: item.object[type])
+        available = (index for index in range(start, len(self)) if critique(self[index]))
+        iterable = ((index, index + count) for index in available)
+        for left, right in iterable:
+            items = self[left : right]
+            if len(items) == count and all(critique(item) for item in items):
+                yield [index for index in range(left, right)]
+            continue
+        return
+
+    def availableEntries(self, start=0, stop=None, type='FREESECT'):
+        '''Yield each entry of the allocation table that is available and unused.'''
+        critique = type if callable(type) else (lambda item, type=type: item.object[type])
+        iterable = range(start, len(self) if stop is None else stop)
+        return (index for index in range(start, len(self)) if critique(self[index]))
 
 class FAT(AllocationTable):
     class Pointer(Pointer):
