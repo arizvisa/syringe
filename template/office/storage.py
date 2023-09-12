@@ -335,8 +335,9 @@ class MINIFAT(AllocationTable):
     class Pointer(Pointer):
         def _calculate_(self, next_index_from_chain):
             if not hasattr(self, '__minisource__'):
-                sector, index = self.__sector__, self.__index__
-                return sector.getoffset() + self._uMiniSectorSize * index
+                sector, index, count = self.__sector__, self.__index__, self._uSectorSize // self._uMiniSectorSize
+                sector_index = index % count
+                return sector.getoffset() + self._uMiniSectorSize * sector_index
             elif hasattr(self, '__index__'):
                 return self.__index__ * self._uMiniSectorSize
             raise NotImplementedError
@@ -350,7 +351,7 @@ class MINIFAT(AllocationTable):
         parent, index = self.getparent(File), len(self.value)
         count, table = self._uSectorSize // self._uMiniSectorSize, self.__minitable__ if hasattr(self, '__minitable__') else [item for item in parent.__ministream_sectors__()]
         sector = table[index // count] if index // count < len(table) else None
-        return dyn.clone(self.Pointer, _object_=parent.MiniSector, __index__=index % count, __sector__=sector, __minisource__=ptypes.provider.disorderly(table, autocommit={}))
+        return dyn.clone(self.Pointer, _object_=parent.MiniSector, __index__=index, __sector__=sector, __minisource__=ptypes.provider.disorderly(table, autocommit={}))
 
 ### Header types
 class uByteOrder(pint.enum, USHORT):
@@ -511,6 +512,12 @@ class DirectoryEntryData(ptype.block):
             res['index'] = int(parent.__name__)
             res['type'] = parent['Type'].str()
         return res
+
+class DirectoryEntryRootData(parray.type):
+    '''MiniStream'''
+    def _object_(self):
+        raise NotImplementedError
+
 class DirectoryEntryType(pint.enum, BYTE):
     _values_=[('Unknown', 0), ('Storage', 1), ('Stream', 2), ('Root', 5)]
 class DirectoryEntryFlag(pint.enum, BYTE):
@@ -578,13 +585,25 @@ class DirectoryEntry(pstruct.type):
         """
         F = self.getparent(File)
 
+        # Check if we've been asked to clamp the directory entry data or not.
+        iterable = (clamp.pop(kwarg) for kwarg in ['clamp', 'clamped'] if kwarg in clamp)
+        is_clamped = next(iterable, True)
+
         # If the entry is a root type, then the data uses the fat and represents the mini-sector data.
         if self['Type']['Root']:
-            minisector = dyn.block(self._uMiniSectorSize, __name__='MiniSector')
-            datatype = dyn.blockarray(minisector, self['qwSize'].int())
-            stream = F.Stream(self['sectLocation'].int())
+            parent, stream, size = self.getparent(File), F.Stream(self['sectLocation'].int()), self['qwSize'].int()
             source = ptypes.provider.proxy(stream, autocommit={})
-            result = self.new(datatype, source=source)
+
+            # Figure out the correct type to use for the MiniStream.
+            count, unaligned = divmod(size, self._uMiniSectorSize)
+            Fobject = lambda self, sector=parent.MiniSector, last=dyn.block(unaligned): sector if len(self.value) < count else last
+            clamped_t = dyn.clone(DirectoryEntryRootData, length=count + 1 if unaligned else count, _object_=Fobject)
+            backing_t = dyn.clone(DirectoryEntryRootData, length=count + 1 if unaligned else count, _object_=parent.MiniSector)
+
+            # Figure out if we need it to be casted to a type of some sort.
+            [datatype] = type if len(type) else [None]
+            backing = self.new(clamped_t if is_clamped else backing_t, source=source)
+            result = backing if datatype is None else self.new(datatype, source=ptypes.provider.proxy(backing.l, autocommit={}), **clamp)
 
         # Determine whether the data is stored in the minifat or the regular fat, and
         # then use it to fetch the data using the correct reference.
@@ -603,8 +622,7 @@ class DirectoryEntry(pstruct.type):
             [datatype] = type if len(type) else [DirectoryStream.lookup(streamname, None)]
 
             # Load the correct child type from whatever was requested.
-            iterable = (clamp.pop(kwarg) for kwarg in ['clamp', 'clamped'] if kwarg in clamp)
-            if next(iterable, True):
+            if is_clamped:
                 res = clamped if datatype is None else self.new(datatype, source=ptypes.provider.proxy(clamped.l, autocommit={}), **clamp)
             else:
                 res = backing if datatype is None else self.new(datatype, source=source, **clamp)
