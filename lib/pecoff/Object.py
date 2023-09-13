@@ -79,6 +79,11 @@ class File(pstruct.type, headers.Header, ptype.boundary):
         count = self['NumberOfSections'].li
         return dynamic.clone(SegmentTableArray, length=count.int())
 
+    def __align_SymbolTable(self):
+        header, fields = self['Header'].li, ['Machine', 'NumberOfSections', 'Header', 'Sections', 'Segments']
+        res, size = header['PointerToSymbolTable'].li, sum(self[fld].li.size() for fld in fields)
+        return dyn.block(max(0, res.int() - size))
+
     def __SymbolTable(self):
         header = self['Header'].li
         if isinstance(header, ImportHeader):
@@ -97,6 +102,7 @@ class File(pstruct.type, headers.Header, ptype.boundary):
         #        a completely different order.
 
         (__Segments, 'Segments'),
+        (__align_SymbolTable, 'align(SymbolTable)'),
         (__SymbolTable, 'SymbolTable'),
     ]
 
