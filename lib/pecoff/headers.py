@@ -62,8 +62,12 @@ def CalculateRelativeAddress(self, address):
     # file
     if not issubclass(self.source.__class__, ptypes.provider.memorybase):
         pe = LocateHeader(self)
-        section = pe['Sections'].getsectionbyaddress(address)
-        return base + section.getoffsetbyaddress(address)
+        try:
+            section = pe['Sections'].getsectionbyaddress(address)
+            offset = section.getoffsetbyaddress(address)
+        except KeyError:
+            offset = address
+        return base + offset
 
     # memory
     return base + address
@@ -78,9 +82,14 @@ def CalculateRelativeOffset(self, offset):
 
     # memory
     pe = LocateHeader(self)
-    section = pe['Sections'].getsectionbyoffset(offset)
-    o = offset - section['PointerToRawData'].int()
-    return base + section['VirtualAddress'].int() + o
+    try:
+        section = pe['Sections'].getsectionbyoffset(offset)
+        delta = offset - section['PointerToRawData'].int()
+        result = section['VirtualAddress'].int() + delta
+    except KeyError:
+        result = offset
+
+    return base + result
 
 def CalculateRealAddress(self, address):
     """given an rva, return offset relative to the baseaddress"""
@@ -92,8 +101,12 @@ def CalculateRealAddress(self, address):
     # file
     if not issubclass(self.source.__class__, ptypes.provider.memorybase):
         pe = LocateHeader(self)
-        section = pe['Sections'].getsectionbyaddress(offset)
-        return base + section.getoffsetbyaddress(offset)
+        try:
+            section = pe['Sections'].getsectionbyaddress(offset)
+            result = section.getoffsetbyaddress(offset)
+        except KeyError:
+            result = offset
+        return base + result
 
     # memory
     return base + offset
