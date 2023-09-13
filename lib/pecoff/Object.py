@@ -36,7 +36,9 @@ class FileSegmentEntry(pstruct.type):
 
     def __Relocations(self):
         section = self.Section
-        return dyn.clone(portable.relocations.RelocationTable, length=section['NumberOfRelocations'].int())
+        if section['PointerToRelocations'].int() == self.getoffset() + section['SizeOfRawData'].li.int():
+            return dyn.clone(portable.relocations.RelocationTable, length=section['NumberOfRelocations'].int())
+        return portable.relocations.RelocationTable
 
     _fields_ = [
         (__Data, 'Data'),
@@ -96,10 +98,14 @@ class File(pstruct.type, headers.Header, ptype.boundary):
         (__Header, 'Header'),
         (__Sections, 'Sections'),
 
-        # FIXME: we're actually assuming that these fields are packed and
-        #        aligned, so there's a large chance that empty space could
-        #        exist in between each item, or the segments could be in
-        #        a completely different order.
+        # FIXME: everything after this could be laid out in any sorta way since
+        #        these are all referenced by pointers within the list of sections
+        #        and the header. so, we're actually assuming that these fields
+        #        are packed and aligned. the relocations could be at the end of
+        #        its corresponding segment, before the symboltable, or afterwards.
+        #        the segments could also be in a completely different order, even.
+        #        the right way would be to gather all the pointers and sort them
+        #        into a flat array with each element padded until the next one.
 
         (__Segments, 'Segments'),
         (__align_SymbolTable, 'align(SymbolTable)'),
@@ -120,6 +126,19 @@ class File(pstruct.type, headers.Header, ptype.boundary):
         if self.ImportLibraryQ():
             return self['Header']['Machine']
         return self['Machine']
+
+    def Sections(self):
+        '''Iterate through all of the sections within the file and yield each one.'''
+        for index, section in enumerate(self['Sections']):
+            yield section
+        return
+
+    def Segments(self):
+        '''Iterate through all of the segments within the file and yield each one.'''
+        for index, section in enumerate(self['Sections']):
+            segment = section['PointerToRawData'].d
+            yield segment.li
+        return
 
 if __name__ == '__main__':
     ## parse the file

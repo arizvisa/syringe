@@ -87,7 +87,7 @@ class IMAGE_SECTION_HEADER(pstruct.type):
     def __VirtualAddress(target):
         parent = target.parent
         expected = parent.getloadedsize()
-        if not issubclass(parent.source.__class__, ptypes.provider.memorybase):
+        if expected and not issubclass(parent.source.__class__, ptypes.provider.memorybase):
             corrected = parent.getreadsize()
             logging.warning("{:s} : Refusing to decode field \"{:s}\" using the in-memory size ({:+#x}) due to the source being file-backed. Using on-disk size ({:+#x}) instead.".format(parent.instance(), 'VirtualAddress', expected, corrected))
             return dyn.block(corrected)
