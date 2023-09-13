@@ -68,15 +68,15 @@ class LinkerInternal(DictionaryBase):
             res += (symbolbase + symbolvalue)
             data = [(res & (pow(0x100, octet) * 0xff)) // pow(0x100, octet) for octet in range(4)]
         elif type['ADDR32']:
-            raise TypeError(type)   # This would make the code non-relocatable
+            raise TypeError(type, "This relocation type would make the generated code non-relocatable")
         elif type['DIR32NB']:
-            raise TypeError(type)   # Untested..
+            raise TypeError(type, "This relocation type would make the generated code non-relocatable")
             res = functools.reduce(lambda agg, by: agg * 0x100 + by, reversed(segment[offset : offset + 4]))
             res += symbolvalue
         elif type['DIR32']:
-            raise TypeError(type)   # This would make the code non-relocatable
+            raise TypeError(type, "This relocation type would make the generated code non-relocatable")
         else:
-            raise TypeError(type)
+            raise TypeError(type, "This relocation type would make the generated code non-relocatable")
         segment[offset : offset + len(data)] = array.array('B', data)
         return segment
 
@@ -357,9 +357,9 @@ class Linker(object):
             self.__process_section(object, section)
         return
 
-    def segment(self, section, align=''):
+    def segment(self, section, align=b''):
         res = section['pointertorawdata'].d
-        data = '\0' * section['sizeofrawdata'].int() if section['characteristics']['CNT_UNINITIALIZED_DATA'] else res.li.serialize()
+        data = b'\0' * section['sizeofrawdata'].int() if section['characteristics']['CNT_UNINITIALIZED_DATA'] else res.li.serialize()
         alignment = pow(2, section['characteristics']['ALIGN'] if align else 0)
         padding = (alignment - len(data) % alignment) & (alignment - 1)
         self.__add_segment(section, data + align * padding)
