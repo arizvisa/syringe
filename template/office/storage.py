@@ -684,11 +684,21 @@ class DirectoryEntry(pstruct.type):
 
     def valid(self):
         '''Validate the DirectoryEntry by checking that some of its fields are within bounds.'''
-        checks = []
-        checks.append(('Type', {0, 1, 2, 5}))
-        checks.append(('Flag', {0, 1}))
-        checks.append(('uName', {size for size in range(self['Name'].size())}))
-        return functools.reduce(lambda ok, field_range: (lambda field, range: ok and self[field].int() in range)(*field_range), checks, True)
+        integer_checks = []
+        integer_checks.append((operator.itemgetter('Type'), functools.partial(operator.contains, {0, 1, 2, 5})))
+        integer_checks.append((operator.itemgetter('Flag'), functools.partial(operator.contains, {0, 1})))
+        integer_checks.append((operator.itemgetter('uName'), functools.partial(operator.contains, {size for size in range(self['Name'].size())})))
+        integer_checks.append((operator.itemgetter('sectLocation'), lambda integer: integer <= MAXREGSECT.type))
+        return functools.reduce(lambda ok, field_check: (lambda Fgetitem, Fcheck: ok and Fcheck(Fgetitem(self).int()))(*field_check), integer_checks, True)
+
+    def used(self):
+        '''Return whether the DirectoryEntry is valid and actually being used.'''
+        integer_checks = []
+        integer_checks.append((operator.itemgetter('Type'), functools.partial(operator.contains, {1, 2, 5})))
+        integer_checks.append((operator.itemgetter('Flag'), functools.partial(operator.contains, {0, 1})))
+        integer_checks.append((operator.itemgetter('uName'), functools.partial(operator.contains, {size for size in range(1, self['Name'].size())})))
+        integer_checks.append((operator.itemgetter('sectLocation'), lambda integer: integer <= MAXREGSECT.type))
+        return functools.reduce(lambda ok, field_check: (lambda Fgetitem, Fcheck: ok and Fcheck(Fgetitem(self).int()))(*field_check), integer_checks, True)
 
     def __sector_space(self):
         '''Private method that returns a tuple of the sector size and number of sectors that the directory entry occupies.'''
@@ -773,7 +783,7 @@ class Directory(parray.block):
 
         # if we couldn't find a root entry, then do a quick sanity check over the directory to raise an exception.
         if result is None:
-            count, invalid = len(self), [index for index, entry in enumerate(self) if not entry.valid()]
+            count, invalid = len(self), [index for index, entry in enumerate(self) if not entry.used()]
             descriptions = [string for string in itertools.chain(map("{:d}".format, invalid[:-1]), map("and {:d}".format, invalid[-1:]))] if len(invalid) > 1 else ["{:d}".format(*invalid)] if invalid else []
             complaints = ', '.join(descriptions) if len(descriptions) > 2 else ' '.join(descriptions)
             raise KeyError("{:s}.RootEntry(): Unable to find a \"{:s}\" directory entry out of {:d} entr{:s}{:s}.".format(self.classname(), type, count, 'y' if count == 1 else 'ies', " (entr{:s} {:s} possibly corrupted)".format('y' if len(descriptions) == 1 else 'ies', complaints) if descriptions else ''))
