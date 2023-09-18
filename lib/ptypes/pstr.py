@@ -461,7 +461,7 @@ class string(ptype.type):
         if '#' in prefix and spec in 's':
             data = self.serialize()
             decoded, length = self.encoding.decode(data, errors='ignore')
-            return "{:{:s}s}".format(string_escape(decoded), ''.join(char for char in prefix if char != '#'))
+            return "{:{:s}s}".format(string_escape(decoded.rstrip('\0')), ''.join(char for char in prefix if char != '#'))
         elif spec in 's':
             return "{:{:s}s}".format(self.str(), prefix)
         elif spec in 'xX':
