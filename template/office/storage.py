@@ -190,10 +190,12 @@ class AllocationTable(parray.type):
         '''Return the number of bytes occupied by a sector being described by the current allocation table.'''
         pointer_t = self._object_ if ptypes.istype(self._object_) else self._object_()
         assert(issubclass(pointer_t, Pointer)), "{:s} is not a subclass of {:s}.".format(pointer_t.typename(), Pointer.typename())
-        sector_t = pointer_t._object_ if ptypes.istype(pointer_t._object_) else pointer_t._object_()
-        assert(ptypes.istype(sector_t)), "{!s} is not a type.".format(sector_t)
-        sector = sector_t()
-        return sector.blocksize()
+        sector_t = pointer_t._object_
+        sector = self.new(sector_t) if any(F(sector_t) for F in [ptypes.istype, callable]) else sector_t
+        assert(ptypes.isinstance(sector)), "{!s} is not an instance.".format(sector_t)
+        try: result = sector.blocksize()
+        except ptypes.error.InitializationError: result = sector.a.blocksize()
+        return result
 
     def entries(self, bytes):
         '''Return the required number of entries in order to store the specified number of bytes.'''
@@ -330,6 +332,30 @@ class DIFAT(AllocationTable):
             F = self.getparent(File)
             logger.error("{:s}: Encountered table {:s} that references header {:s} instead of a valid sector.".format('.'.join([cls.__module__, cls.__name__]), this.instance(), F.instance()))
         return
+
+    def tableSize(self, length):
+        '''Return the size of a DIFAT table that can hold the specified number of entries (including the link entry).'''
+
+        # we need to handle this specially because the last entry of each sector
+        # will occupy the link for the entries in the DIFAT table.
+        size, esize = self.sectorSize(), self.new(self._object_).a.size()
+        count, extra = divmod(size, esize)
+        assert(not(extra))
+
+        # if the number of entries fits within a single sector,
+        # then we're good and can use it to calculate our length.
+        if length <= count:
+            return length * esize
+
+        # otherwise, we need to figure out how many sectors are actually
+        # needed to store the entries and include the link in the calculation.
+        sectors, extra = divmod(length, count - 1)
+        assert(sectors)
+
+        # now we can calculate the total number of entries (including the link
+        # entry) that are needed to store the requested number of entries.
+        res = sectors * count + extra if extra > 1 else sectors * count + extra - 1
+        return esize * res
 
 class MINIFAT(AllocationTable):
     class Pointer(Pointer):
