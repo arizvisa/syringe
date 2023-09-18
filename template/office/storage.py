@@ -580,7 +580,7 @@ class DirectoryEntry(pstruct.type):
 
     def alloc(self, **fields):
         res = super(DirectoryEntry, self).alloc(**fields)
-        res if 'sectLocation' in fields else res.set(sectLocation='ENDOFCHAIN')
+        res if 'sectLocation' in fields else res.set(sectLocation=0 if res['Type']['Unknown'] else 'ENDOFCHAIN')
         res if 'qwSize' in fields else res.set(qwSize=0)
         return res
 
@@ -767,7 +767,7 @@ class Directory(parray.block):
         return super(Directory, self).alloc([item.a for item in initialized], **attrs)
 
     def details(self):
-        Fescape = lambda self: eval("{!r}".format(self).replace('\\', '\\\\'))
+        Fescape = lambda self: "{!r}".format(self)[+1 : -1]
 
         maxoffsetlength = max(len("[{:x}]".format(item.getoffset())) for item in self) if len(self) else 0
         maxindexlength = len("{:d}".format(len(self)))
