@@ -121,7 +121,7 @@ class AllocationTable(parray.type):
 
     def count(self, index):
         '''Return the number of sectors contained by a chain starting at the specified index until termination or encountering a cycle.'''
-        visited, iterable = {index for index in []}, self.chain(index) if isinstance(index, (int, type(1 + sys.maxsize))) else index
+        visited, iterable = {index for index in []}, self.chain(index) if isinstance(index, (int, (1 + sys.maxsize).__class__)) else index
         for index in iterable:
             if index in visited:
                 break
@@ -229,12 +229,12 @@ class AllocationTable(parray.type):
     # General utilities used for calculating sizes.
     def tableSize(self, length):
         '''Return the size of an allocation table that can hold the specified number of entries.'''
-        count = length if isinstance(length, (int, type(1 + sys.maxsize))) else len(length)
+        count = length if isinstance(length, (int, (1 + sys.maxsize).__class__)) else len(length)
         return count * self.new(self._object_).a.size()
 
     def streamSize(self, length):
         '''Return the size of a stream containing the specified number of sectors from the allocation table.'''
-        count = length if isinstance(length, (int, type(1 + sys.maxsize))) else len(length)
+        count = length if isinstance(length, (int, (1 + sys.maxsize).__class__)) else len(length)
         return self.sectorSize() * count
 
     # Methods that can be used to search for entries of specific types.
@@ -306,7 +306,7 @@ class DIFAT(AllocationTable):
     def collect(self):
         """Yield each sector that follows the current DIFAT sector.
 
-        If the current DIFAT instance is stored in the header, then no sectors will be returned.
+        If the current DIFAT instance is stored in the header, then no sectors will be returned.
         """
         cls = self.__class__
         if self.getoffset() < self._uHeaderSize:
@@ -767,7 +767,7 @@ class Directory(parray.block):
         return super(Directory, self).alloc([item.a for item in initialized], **attrs)
 
     def details(self):
-        Fescape = lambda self: "{!r}".format(self)[+1 : -1]
+        Fescape = (lambda self: "{!r}".format(self)[+1 : -1]) if isinstance(u'', str) else (lambda self: eval("{!r}".format(self).replace('\\', '\\\\')))
 
         maxoffsetlength = max(len("[{:x}]".format(item.getoffset())) for item in self) if len(self) else 0
         maxindexlength = len("{:d}".format(len(self)))
