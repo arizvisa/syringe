@@ -644,7 +644,7 @@ if __name__ == '__main__':
     logger.setLevel(logging.DEBUG)
     logger.addHandler(handler)
 
-    rp, __name__ = sys.argv[1:]
+    rp, __name__ = sys.argv[1:] if len(sys.argv) == 3 else itertools.islice(itertools.chain(sys.argv[1:], [''] * 2), 2)
 
     source = ptypes.provider.file(rp, 'rw')
     source = ptypes.setsource(source)
@@ -926,9 +926,7 @@ if __name__.upper() == 'DEFRAG':
     logger.info("{}".format(newfat))
     logger.info("{}".format(newminifat))
 
-    sys.exit(0)
-
-if __name__.upper() == 'TELEFRAG':
+elif __name__.upper() == 'TELEFRAG':
     import random
     state = random.Random()
 
@@ -1083,3 +1081,7 @@ if __name__.upper() == 'TELEFRAG':
 
     # we're done, so we just close everything and let the i/o cache do its thing.
     source.close()
+
+else:
+    import sys
+    print("Usage: {:s} FILE [defrag|telefrag]".format(sys.argv[0] if sys.argv else __file__))
