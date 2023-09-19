@@ -878,6 +878,13 @@ class Directory(parray.block):
             continue
         return
 
+    def entries(self, bytes):
+        '''Return the number of directory entries that can fit inside the specified number of bytes.'''
+        res = self.new(self._object_).a
+        size = res.size()
+        count, extra = divmod(bytes, size) if size else 0
+        return 1 + count if extra else count
+
 ### Sector types
 class SectorContent(ptype.block):
     @classmethod
@@ -1190,7 +1197,7 @@ class File(pstruct.type):
         '''Return the contents of the sectors that contain the Directory for the file as a list.'''
         fat, directory = self.Fat(), self['Fat']['sectDirectory'].int()
         iterable = (sector.li for sector in self.fatsectors(fat.chain(directory)))
-        return [sector.cast(Directory) for sector in iterable]
+        return [sector.asDirectory() for sector in iterable]
 
     def difatchain(self):
         '''Return the fat chain for the DIFAT as a list of sector numbers.'''
@@ -1222,7 +1229,7 @@ class File(pstruct.type):
 
         # Warn the user if the last sector is not the ENDOFCHAIN.
         cls, expected = self.__class__, object.set('ENDOFCHAIN')
-        logger.warning("{:s}.chain({:d}): The fat chain ({:d} sector{:s}) was truncated due to being terminated by {:s} instead of {:s} as expected.".format('.'.join([cls.__module__, cls.__name__]), sector, len(truncated), '' if len(truncated) == 1 else 's', object, expected))
+        logger.warning("{:s}.chain({:d}): The fat chain ({:d} sector{:s}) was truncated due to being terminated by {:s} instead of {:s} as expected.".format('.'.join([cls.__module__, cls.__name__]), sector, len(truncated), '' if len(truncated) == 1 else 's', entry.object, expected))
         return truncated
 
     def minichain(self, sector):
@@ -1243,7 +1250,7 @@ class File(pstruct.type):
 
         # Otherwise we log a warning suggesting that we truncated it.
         cls, expected = self.__class__, object.set('ENDOFCHAIN')
-        logger.warning("{:s}.minichain({:d}): The minifat chain ({:d} minisector{:s}) was truncated due to being terminated by {:s} instead of {:s} as expected.".format('.'.join([cls.__module__, cls.__name__]), sector, len(truncated), '' if len(truncated) == 1 else 's', object, expected))
+        logger.warning("{:s}.minichain({:d}): The minifat chain ({:d} minisector{:s}) was truncated due to being terminated by {:s} instead of {:s} as expected.".format('.'.join([cls.__module__, cls.__name__]), sector, len(truncated), '' if len(truncated) == 1 else 's', entry.object, expected))
         return truncated
 
     def Stream(self, sector):
