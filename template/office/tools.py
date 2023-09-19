@@ -85,7 +85,7 @@ def ModifyDirectoryEntryData(store, directory, type=None):
         directory['sectLocation'].set(res[0] if res else 'ENDOFCHAIN').c
         directory['qwSize'].set(newtable.used(res)).c
 
-    # if there aren't enough sectors within the file, then add whatever's needed.
+    # if there aren't enough sectors within the file, then add whatever's needed.
     needed, size = (size * newtable.required(res) for size in [1, newtable.sectorSize()])
     if not which and len(store['Data']) < needed:
         iterable = (store['Data'].append(store.FileSector) for item in range(needed - len(store['Data'])))
@@ -1082,6 +1082,6 @@ elif __name__.upper() == 'TELEFRAG':
     # we're done, so we just close everything and let the i/o cache do its thing.
     source.close()
 
-else:
+elif __name__.split('.')[0] != __package__:
     import sys
     print("Usage: {:s} FILE [defrag|telefrag]".format(sys.argv[0] if sys.argv else __file__))
