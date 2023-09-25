@@ -19,11 +19,10 @@ def ModifyDirectoryEntryData(store, directory, type=None):
     newstream = ptype.block(source=oldstream.source) if type is None else type(source=oldstream.source)
 
     try:
-        yield oldstream, newstream
         abort = None
+        yield oldstream, newstream
     except StopIteration:
         logger.info("Aborting overwrite of stream ({:d} byte{:s}) due to user request.".format(oldstream.size(), '' if oldstream.size() == 1 else 's'))
-        abort = None
         return
     except Exception as exception:
         logger.error("Aborting overwrite of stream ({:d} byte{:s}) due to exception...".format(oldstream.size(), '' if oldstream.size() == 1 else 's'))
@@ -152,11 +151,10 @@ def ModifyDirectory(store):
     iterable = fat.chain(header['sectDirectory'].int())
     oldchain, newchain = [index for index in iterable], []
     try:
-        yield oldchain, newchain
         abort = None
+        yield oldchain, newchain
     except StopIteration:
         logger.info("Aborting modification of directory stream ({:d} sector{:s}) due to user request.".format(len(oldchain), '' if len(oldchain) == 1 else 's'))
-        abort = None
         return
     except Exception as exception:
         logger.error("Aborting modification of directory stream ({:d} sector{:s}) due to exception...".format(len(oldchain), '' if len(oldchain) == 1 else 's'))
@@ -231,11 +229,10 @@ def ModifyFatChain(store, chain):
     iterable = (index for index in chain) if hasattr(chain, '__iter__') else fat.chain(chain)
     oldchain, newchain = [index for index in iterable], []
     try:
-        yield oldchain, newchain
         abort = None
+        yield oldchain, newchain
     except StopIteration:
         logger.info("Aborting modification of stream ({:d} sector{:s}) due to user request.".format(len(oldchain), '' if len(oldchain) == 1 else 's'))
-        abort = None
         return
     except Exception as exception:
         logger.error("Aborting modification of stream ({:d} sector{:s}) due to exception...".format(len(oldchain), '' if len(oldchain) == 1 else 's'))
@@ -293,11 +290,10 @@ def ModifyMiniFatChain(store, chain):
     iterable = (index for index in chain) if hasattr(chain, '__iter__') else mfat.chain(chain)
     oldchain, newchain = [index for index in iterable], []
     try:
-        yield oldchain, newchain
         abort = None
+        yield oldchain, newchain
     except StopIteration:
         logger.info("Aborting modification of stream ({:d} minisector{:s}) due to user request.".format(len(oldchain), '' if len(oldchain) == 1 else 's'))
-        abort = None
         return
     except Exception as exception:
         logger.error("Aborting modification of stream ({:d} minisector{:s}) due to exception...".format(len(oldchain), '' if len(oldchain) == 1 else 's'))
@@ -353,11 +349,10 @@ def ModifyFat(store):
 
     oldchain, newchain = sectors[:], []
     try:
-        yield oldchain, newchain
         abort = None
+        yield oldchain, newchain
     except StopIteration:
         logger.info("Aborting modification of {:s} ({:d} sector{:s}) due to user request.".format(fat.instance(), len(oldchain), '' if len(oldchain) == 1 else 's'))
-        abort = None
         return
     except Exception as exception:
         logger.error("Aborting modification of {:s} ({:d} sector{:s}) due to exception...".format(fat.instance(), len(oldchain), '' if len(oldchain) == 1 else 's'))
@@ -455,11 +450,10 @@ def ModifyDiFat(store):
 
     oldchain, newchain = dfchain[:], []
     try:
-        yield oldchain, newchain
         abort = None
+        yield oldchain, newchain
     except StopIteration:
         logger.info("Aborting modification of {:s} ({:d} sector{:s}) due to user request.".format(difat.instance(), len(oldchain), '' if len(oldchain) == 1 else 's'))
-        abort = None
         return
     except Exception as exception:
         logger.error("Aborting modification of {:s} ({:d} sector{:s}) due to exception...".format(difat.instance(), len(oldchain), '' if len(oldchain) == 1 else 's'))
@@ -553,11 +547,10 @@ def ModifyMiniFat(store):
         logger.error("Number of sectors in header ({:d}) to not correspond to length of chain ({:d}) containing the {:s}.".format(count, len(oldchain), mfat.instance()))
 
     try:
-        yield oldchain, newchain
         abort = None
+        yield oldchain, newchain
     except StopIteration:
         logger.info("Aborting modification of {:s} ({:d} sector{:s}) due to user request.".format(mfat.instance(), len(oldchain), '' if len(oldchain) == 1 else 's'))
-        abort = None
         return
     except Exception as exception:
         logger.error("Aborting modification of {:s} ({:d} sector{:s}) due to exception...".format(mfat.instance(), len(oldchain), '' if len(oldchain) == 1 else 's'))
