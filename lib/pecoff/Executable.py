@@ -1064,29 +1064,39 @@ if __name__ == '__main__':
                 pass
             filename = '../'+filename
 
+    print(self)
+    print(self['next']['header']['fileheader'])
+    print(self['next']['header']['optionalheader'])
+    print(self['next']['header']['datadirectory'])
+    print(self['next']['header']['sections'])
+
     v=z['next']['header']
     sections = v['Sections']
     exports = v['DataDirectory'][0]
-    while exports['Address'].int() != 0:
-        exports = exports['Address'].d.l
+    if exports['Address'].int():
+        exports = exports['Address'].d
         print(exports.l)
-        break
 
     imports = v['DataDirectory'][1]
-    while imports['Address'].int() != 0:
-        imports = imports['Address'].d.l
+    if imports['Address'].int():
+        imports = imports['Address'].d
         print(imports.l)
-        break
 
-    relo = v['DataDirectory'][5]['Address'].d.l
+    relocations = v['DataDirectory'][5]
+    if relocations['Address'].int():
+        relocations = relocations['Address'].d
+        print(relocations.l)
+
     baseaddress = v['OptionalHeader']['ImageBase']
-    section = sections[0]
-    data = section.data().serialize()
-    for item in relo.filter(section):
-        grouped = {}
-        [ grouped.setdefault(type, []).append(offset) for type, offset in item.getrelocations(section) ]
-        print("{}".format(item))
-        for type in sorted(grouped):
-            print("\ttype {:d} : ...{:d} entries...".format(type, len(grouped[type])))
+    for section in sections:
+        print(section)
+        data = section.data().serialize()
+        for item in relocations.filter(section):
+            grouped = {}
+            [ grouped.setdefault(type, []).append(offset) for type, offset in item.getrelocations(section) ]
+            print("{}".format(item))
+            for type in sorted(grouped):
+                print("\ttype {:d} : ...{:d} entries...".format(type, len(grouped[type])))
+            continue
         continue
 
