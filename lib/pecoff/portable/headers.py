@@ -124,12 +124,14 @@ class IMAGE_SECTION_HEADER(pstruct.type):
         except KeyError:
             alignment = 1
 
-        res = (alignment - self['SizeOfRawData'].int() % alignment) & (alignment - 1)
+        _, remainder = divmod(self['SizeOfRawData'].int(), alignment) if alignment else (0, 0)
+        res = (alignment - remainder) & (alignment - 1)
         return self['SizeOfRawData'].int() + res
 
     def getloadedsize(self):
         alignment = 0x1000
-        res = (alignment - self['VirtualSize'].int() % alignment) & (alignment - 1)
+        _, remainder = divmod(self['VirtualSize'].int(), alignment) if alignment else (0, 0)
+        res = (alignment - remainder) & (alignment - 1)
         return self['VirtualSize'].int() + res
 
     def containsaddress(self, address):
