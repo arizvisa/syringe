@@ -580,8 +580,12 @@ class DirectoryEntry(pstruct.type):
 
     def alloc(self, **fields):
         res = super(DirectoryEntry, self).alloc(**fields)
+        res if 'uName' in fields else res.set(uName=max(res['Name'].size(), pstr.szwstring().set(res['Name'].str()).size()))
         res if 'sectLocation' in fields else res.set(sectLocation=0 if res['Type']['Unknown'] else 'ENDOFCHAIN')
         res if 'qwSize' in fields else res.set(qwSize=0)
+        res if 'iChild' in fields else res.set(iChild='NOSTREAM')
+        res if 'iLeftSibling' in fields else res.set(iLeftSibling='NOSTREAM')
+        res if 'iRightSibling' in fields else res.set(iRightSibling='NOSTREAM')
         return res
 
     def summary(self):
