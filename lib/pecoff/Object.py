@@ -9,6 +9,40 @@ import logging
 class ObjectHeader(portable.IMAGE_FILE_HEADER):
     _fields_ = portable.IMAGE_FILE_HEADER._fields_[2:]
 
+class FakeOptionalHeader(portable.IMAGE_OPTIONAL_HEADER):
+    _fields_ = [
+        ( dyn.clone(portable.headers.IMAGE_NT_OPTIONAL_MAGIC, length=0), 'Magic' ),
+        ( pint.uint_t, 'MajorLinkerVersion' ),
+        ( pint.uint_t, 'MinorLinkerVersion' ),
+        ( pint.uint_t, 'SizeOfCode' ),
+        ( pint.uint_t, 'SizeOfInitializedData' ),
+        ( pint.uint_t, 'SizeOfUninitializedData' ),
+        ( virtualaddress(ptype.undefined, type=pint.uint_t), 'AddressOfEntryPoint' ),
+        ( pint.uint_t, 'BaseOfCode' ),
+        ( pint.uint_t, 'BaseOfData' ),
+        ( pint.uint_t, 'ImageBase' ),
+        ( pint.uint_t, 'SectionAlignment' ),
+        ( pint.uint_t, 'FileAlignment' ),
+        ( pint.uint_t, 'MajorOperatingSystemVersion' ),
+        ( pint.uint_t, 'MinorOperatingSystemVersion' ),
+        ( pint.uint_t, 'MajorImageVersion' ),
+        ( pint.uint_t, 'MinorImageVersion' ),
+        ( pint.uint_t, 'MajorSubsystemVersion' ),
+        ( pint.uint_t, 'MinorSubsystemVersion' ),
+        ( pint.uint_t, 'Win32VersionValue' ),
+        ( pint.uint_t, 'SizeOfImage' ),
+        ( pint.uint_t, 'SizeOfHeaders' ),
+        ( pint.uint_t, 'CheckSum' ),
+        ( dyn.clone(portable.headers.IMAGE_SUBSYSTEM_, length=0), 'Subsystem' ),
+        ( pbinary.flags, 'DllCharacteristics' ),
+        ( pint.uint_t, 'SizeOfStackReserve' ),
+        ( pint.uint_t, 'SizeOfStackCommit' ),
+        ( pint.uint_t, 'SizeOfHeapReserve' ),
+        ( pint.uint_t, 'SizeOfHeapCommit' ),
+        ( pint.uint_t, 'LoaderFlags' ),
+        ( pint.uint_t, 'NumberOfRvaAndSizes' ),
+    ]
+
 class ImportHeader(pstruct.type):
     _fields_ = [
         (uint16, 'Version'),
@@ -65,6 +99,41 @@ class File(pstruct.type, headers.Header, ptype.boundary):
             return ImportHeader
         return ObjectHeader
 
+    def __OptionalHeader(self):
+        res = self['Header'].li
+        if isinstance(res, ObjectHeader) and res['SizeOfOptionalHeader'].int():
+            return portable.IMAGE_OPTIONAL_HEADER
+        return FakeOptionalHeader
+
+    def __DataDirectory(self):
+        cls = self.__class__
+        hdr, optional = (self[fld].li for fld in ['Header', 'OptionalHeader'])
+        if not isinstance(optional, portable.IMAGE_OPTIONAL_HEADER):
+            return dyn.clone(portable.DataDirectory, length=0)
+
+        length, directory = optional['NumberOfRvaAndSizes'].int(), 8
+
+        if hdr['SizeOfOptionalHeader'].int() < optional.size():
+            logging.warning("{:s} : FileHeader.SizeOfOptionalHeader ({:+#x}) is smaller than the OptionalHeader ({:+#x}). Ignoring the OptionalHeader.NumberOfRvaAndSizes ({:d}) and thus the DataDirectory.".format('.'.join([cls.__module__, cls.__name__]), hdr['SizeOfOptionalHeader'].size(), optional.size(), length))
+            length = 0
+
+        elif length * directory != hdr['SizeOfOptionalHeader'].int() - optional.size():
+            available = hdr['SizeOfOptionalHeader'].int() - optional.size()
+            logging.warning("{:s} : OptionalHeader.NumberOfRvaAndSizes ({:d}) does not correspond to FileHeader.SizeOfOptionalHeader ({:+#x}). Available space ({:+#x}) results in only {:d} entries.".format('.'.join([cls.__module__, cls.__name__]), length, optional.size(), available, available // directory))
+            length = available // directory
+
+        elif length > 0x10:
+            logging.warning("{:s} : OptionalHeader.NumberOfRvaAndSizes ({:d}) is larger than {:d}. Assuming the maximum number of DataDirectory entries ({:d}).".format('.'.join([cls.__module__, cls.__name__]), length, 0x10, 0x10))
+
+        return dyn.clone(portable.DataDirectory, length=min(0x10, length))
+
+    def __OptionalHeaderPadding(self):
+        hdr, fields = self['Header'].li, ['OptionalHeader', 'DataDirectory']
+        if isinstance(hdr, ObjectHeader):
+            expected = hdr['SizeOfOptionalHeader'].int()
+            return dyn.block(max(0, expected - sum(self[fld].li.size() for fld in fields)))
+        return dyn.block(0)
+
     def __Sections(self):
         header = self['Header'].li
         if isinstance(header, ImportHeader):
@@ -82,7 +151,7 @@ class File(pstruct.type, headers.Header, ptype.boundary):
         return dynamic.clone(SegmentTableArray, length=count.int())
 
     def __align_SymbolTable(self):
-        header, fields = self['Header'].li, ['Machine', 'NumberOfSections', 'Header', 'Sections', 'Segments']
+        header, fields = self['Header'].li, ['Machine', 'NumberOfSections', 'Header', 'OptionalHeader', 'DataDirectory', 'Padding(OptionalHeader,DataDirectory)', 'Sections', 'Segments']
         res, size = header['PointerToSymbolTable'].li, sum(self[fld].li.size() for fld in fields)
         return dyn.block(max(0, res.int() - size))
 
@@ -96,6 +165,9 @@ class File(pstruct.type, headers.Header, ptype.boundary):
         (headers.IMAGE_FILE_MACHINE_, 'Machine'),
         (uint16, 'NumberOfSections'),
         (__Header, 'Header'),
+        (__OptionalHeader, 'OptionalHeader'),
+        (__DataDirectory, 'DataDirectory'),
+        (__OptionalHeaderPadding, 'Padding(OptionalHeader,DataDirectory)'),
         (__Sections, 'Sections'),
 
         # FIXME: everything after this could be laid out in any sorta way since
