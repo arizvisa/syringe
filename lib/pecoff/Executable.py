@@ -1083,7 +1083,10 @@ if __name__ == '__main__':
     section = sections[0]
     data = section.data().serialize()
     for item in relo.filter(section):
-        for type, offset in item.getrelocations(section):
-            print(type, offset)
+        grouped = {}
+        [ grouped.setdefault(type, []).append(offset) for type, offset in item.getrelocations(section) ]
+        print("{}".format(item))
+        for type in sorted(grouped):
+            print("\ttype {:d} : ...{:d} entries...".format(type, len(grouped[type])))
         continue
 

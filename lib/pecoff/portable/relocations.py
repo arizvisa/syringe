@@ -300,6 +300,10 @@ class IMAGE_BASERELOC_DIRECTORY_ENTRY(pstruct.type):
 #        (lambda self: dyn.clone(BaseRelocationArray, blocksize=lambda _: self['Size'].li.int() - 8), 'Relocations')
     ]
 
+    def summary(self):
+        res = self['Relocations'].array()
+        return "Page RVA={:#x} Size={:#x} Relocations=...{:d} entr{:s}...".format(self['Page RVA'], self['Size'], len(res), 'y' if len(res) == 1 else 'ies')
+
     def extract(self):
         '''Return a list of tuples containing the relocation type and offset contained within this entry.'''
         block = self['Relocations'].serialize()
