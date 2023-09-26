@@ -89,7 +89,7 @@ class IMAGE_SECTION_HEADER(pstruct.type):
         expected = parent.getloadedsize()
         if expected and not issubclass(parent.source.__class__, ptypes.provider.memorybase):
             corrected = parent.getreadsize()
-            logging.warning("{:s} : Refusing to decode field \"{:s}\" using the in-memory size ({:+#x}) due to the source being file-backed. Using on-disk size ({:+#x}) instead.".format(parent.instance(), 'VirtualAddress', expected, corrected))
+            logging.debug("{:s} : Choosing the on-disk size ({:+#x}) to decode field \"{:s}\" instead of the in-memory size ({:+#x}) due to the source being file-backed.".format(parent.instance(), corrected, 'VirtualAddress', expected))
             return dyn.block(corrected)
         return dyn.block(expected)
 
