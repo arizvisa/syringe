@@ -57,32 +57,42 @@ class LinkerInternal(DictionaryBase):
         self.__defined = {}
 
     @classmethod
-    def apply(cls, segment, segmentbase, relocation, symbolbase, symbolvalue):
+    def apply(cls, section_relocation, segment_base, symbol_base_value):
+        (segment, segmentbase) = segment_base
+        (section, relocation) = section_relocation
+        (symbol, symbolbase, symbolvalue) = symbol_base_value
+
         offset, type = relocation['VirtualAddress'].int(), relocation['Type']
+
         if type['REL32']:
             res = functools.reduce(lambda agg, by: agg * 0x100 + by, reversed(segment[offset : offset + 4]))
             res += (symbolbase + symbolvalue) - (segmentbase + offset + 4)
             data = [(res & (pow(0x100, octet) * 0xff)) // pow(0x100, octet) for octet in range(4)]
+            logging.info("applying relocation {:s} for \"{:s}\" ({:+#x}) in section \"{:s}{:+#x}\" ({:s}) as {:s}.".format(type, symbol.Name(), symbolvalue, section['Name'], offset, section.source.file.name, bytes(bytearray(data)[::-1]).encode('hex') if sys.version_info.major < 3 else bytearray(data)[::-1].hex()))
+
         elif type['ADDR32NB']:
             res = functools.reduce(lambda agg, by: agg * 0x100 + by, reversed(segment[offset : offset + 4]))
             res += (symbolbase + symbolvalue)
             data = [(res & (pow(0x100, octet) * 0xff)) // pow(0x100, octet) for octet in range(4)]
-        elif type['ADDR32']:
-            raise TypeError(type, "This relocation type would make the generated code non-relocatable")
-        elif type['DIR32NB']:
-            raise TypeError(type, "This relocation type would make the generated code non-relocatable")
-            res = functools.reduce(lambda agg, by: agg * 0x100 + by, reversed(segment[offset : offset + 4]))
-            res += symbolvalue
+            logging.info("applying relocation {:s} for \"{:s}\" ({:+#x}) in section \"{:s}{:+#x}\" ({:s}) as {:s}.".format(type, symbol.Name(), symbolvalue, section['Name'], offset, section.source.file.name, bytes(bytearray(data)[::-1]).encode('hex') if sys.version_info.major < 3 else bytearray(data)[::-1].hex()))
+
         elif type['DIR32']:
-            raise TypeError(type, "This relocation type would make the generated code non-relocatable")
+            logging.warning("skipping relocation {:s} for \"{:s}\" ({:#x}{:+#x}) in section \"{:s}{:+#x}\" ({:s}) as it requires the base address.".format(type, symbol.Name(), symbolbase, symbolvalue, section['Name'], offset, section.source.file.name))
+            data = segment[offset : offset + 4]
+
+        elif type['DIR32NB']:
+            logging.warning("skipping relocation {:s} for \"{:s}\" ({:#x}{:+#x}) in section \"{:s}{:+#x}\" ({:s}) as it requires the base address.".format(type, symbol.Name(), symbolbase, symbolvalue, section['Name'], offset, section.source.file.name))
+            data = segment[offset : offset + 4]
+
         else:
-            raise TypeError(type, "This relocation type would make the generated code non-relocatable")
+            logging.warning("skipping relocation {:s} for \"{:s}\" ({:#x}{:+#x}) in section \"{:s}{:+#x}\" ({:s}) as it is unsupported.".format(type, symbol.Name(), symbolbase, symbolvalue, section['Name'], offset, section.source.file.name))
+            data = segment[offset : offset + 4]
+
         segment[offset : offset + len(data)] = array.array('B', data)
         return segment
 
     @classmethod
     def location(cls, section, value=None):
-
         if section is None:
             fmt = "<external>{:s}".format
         else:
@@ -280,7 +290,7 @@ class LinkerInternal(DictionaryBase):
                 base, res = 0x0, self[symbol.Name()]
             else:
                 base, res = segmentbases[symbol_section], value
-            segment = self.apply(segment, segmentbases[section], relocation, base, res)
+            segment = self.apply((section, relocation), (segment, segmentbases[section]), (symbol, base, res))
         return segment
 
     def section(self, symbol):
@@ -493,10 +503,10 @@ if __name__ == '__main__':
 
     if Args.link:
         if len(undefined) > 0:
-            logging.warning("The following symbols are currently {:s}...".format('being redefined' if Args.force else 'undefined'))
+            logging.warning("the following symbols are currently {:s}...".format('being redefined' if Args.force else 'undefined'))
             print('\n'.join("[{:d}] {:s}".format(1 + index, symbol) for index, symbol in enumerate(undefined)))
         else:
-            logging.info('No undefined symbols were found!')
+            logging.info('all undefined symbols in linked objects have been resolved succesfully.')
 
     if Args.force:
         for index, key in enumerate(undefined):
@@ -514,7 +524,7 @@ if __name__ == '__main__':
 
     if Args.link:
         data = command(Args.address)
-        logging.info("Writing {:d} bytes".format(len(data)))
+        logging.info("writing {:d} bytes".format(len(data)))
         data.tofile(Args.outfile)
         Args.outfile.close()
 
