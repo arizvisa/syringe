@@ -1087,7 +1087,7 @@ try:
 
     # Define the ctypes parameters for the windows api used by win32error
     k32.GetLastError.restype = ctypes.c_uint32
-    k32.FormatMessageA.argtypes = [ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_char_p, ctypes.c_uint32]
+    k32.FormatMessageA.argtypes = [ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p]
     k32.FormatMessageA.restype = ctypes.c_uint32
     k32.LocalFree.argtypes = [ctypes.c_void_p]
     k32.LocalFree.restype = ctypes.c_void_p
@@ -1106,7 +1106,7 @@ try:
                 0, ctypes.pointer(p_string), 0, None
             )
             res = ctypes.cast(p_string, ctypes.c_char_p)
-            errorString = str(res.value)
+            errorString = builtins.bytes(res.value)
             res = k32.LocalFree(res)
             if res == 0:
                 raise AssertionError("KERNEL32.dll!LocalFree failed. Error {:#0{:d}x}.".format(k32.GetLastError(), 2 + 8))
