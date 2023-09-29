@@ -2357,6 +2357,9 @@ class wrapper_t(type):
         options.setdefault('offset', self.getoffset())
         return super(wrapper_t, self).details(**options)
 
+    def __format__(self, spec):
+        return self.object.__format__(spec)
+
 class encoded_t(wrapper_t):
     """This type represents an element that can be decoded/encoded to/from another element.
 
@@ -2560,6 +2563,23 @@ class pointer_t(encoded_t):
                 return Config.integer.size if self.value is None else len(self.value)
             return blocksize
 
+        def __format__(self, spec):
+            if self.value is None or not spec:
+                return super(pointer_t._value_, self).__format__(spec)
+
+            prefix, spec = spec[:-1], spec[-1:]
+            if spec in 'don' and prefix:
+                return "{:{:s}{:s}}".format(self.__getvalue__(), prefix, spec)
+            elif spec in 'don':
+                return "{:{:s}}".format(self.__getvalue__(), spec)
+            elif prefix == '#' and spec in 'xX':
+                return "{:#0{:d}{:s}}".format(self.__getvalue__(), 2 + 2 * self.size(), spec)
+            elif not prefix and spec in 'xX':
+                return "{:0{:d}{:s}}".format(self.__getvalue__(), 2 * self.size(), spec)
+            elif spec in 'xX':
+                return "{:{:s}{:s}}".format(self.__getvalue__(), prefix, spec)
+            return super(pointer_t._value_, self).__format__(prefix + spec)
+
     def decode(self, object, **attrs):
         return object.cast(self._value_, **attrs)
 
@@ -2613,23 +2633,6 @@ class pointer_t(encoded_t):
     def __setstate__(self, state):
         state, self._object_ = state
         super(wrapper_t, self).__setstate__(state)
-
-    def __format__(self, spec):
-        if self.value is None or not spec:
-            return super(pointer_t, self).__format__(spec)
-
-        prefix, spec = spec[:-1], spec[-1:]
-        if spec in 'don' and prefix:
-            return "{:{:s}{:s}}".format(self.int(), prefix, spec)
-        elif spec in 'don':
-            return "{:{:s}}".format(self.int(), spec)
-        elif prefix == '#' and spec in 'xX':
-            return "{:#0{:d}{:s}}".format(self.int(), 2 + 2 * self.size(), spec)
-        elif not prefix and spec in 'xX':
-            return "{:0{:d}{:s}}".format(self.int(), 2 * self.size(), spec)
-        elif spec in 'xX':
-            return "{:{:s}{:s}}".format(self.int(), prefix, spec)
-        return super(type, self).__format__(prefix + spec)
 
 class rpointer_t(pointer_t):
     """a pointer_t that's at an offset relative to a specific object"""
