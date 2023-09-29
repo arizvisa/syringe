@@ -748,7 +748,7 @@ class TEB(pstruct.type, versioned):
             ])
         return
 
-class THREAD_INFORMATION_CLASS(pint.enum):
+class THREADINFOCLASS(pint.enum):
     _values_ = [(name, value) for value, name in [
         (0, 'ThreadBasicInformation'),
         (1, 'ThreadTimes'),
@@ -793,7 +793,7 @@ class THREAD_INFORMATION_CLASS(pint.enum):
     ]]
 
 class THREAD_BASIC_INFORMATION(pstruct.type, versioned):
-    type = THREAD_INFORMATION_CLASS.byname('ThreadBasicInformation')
+    type = THREADINFOCLASS.byname('ThreadBasicInformation')
     def __init__(self, **attrs):
         super(THREAD_BASIC_INFORMATION, self).__init__(**attrs)
         self._fields_ = [
@@ -806,7 +806,7 @@ class THREAD_BASIC_INFORMATION(pstruct.type, versioned):
         ]
 
 class THREAD_PROPERTY_INFORMATION(pstruct.type):
-    type = THREAD_INFORMATION_CLASS.byname('ThreadProperty')
+    type = THREADINFOCLASS.byname('ThreadProperty')
     _fields_ = [
         (ULONGLONG, 'Key'),
         (PVOID, 'Object'),
@@ -815,6 +815,162 @@ class THREAD_PROPERTY_INFORMATION(pstruct.type):
     ]
 
 class PROCESS_INFORMATION_CLASS(pint.enum):
+    _values_ = [(name, value) for value, name in [
+        (0, 'ProcessMemoryPriority'),
+        (1, 'ProcessMemoryExhaustionInfo'),
+        (2, 'ProcessAppMemoryInfo'),
+        (3, 'ProcessInPrivateInfo'),
+        (4, 'ProcessPowerThrottling'),
+        (5, 'ProcessReservedValue1'),
+        (6, 'ProcessTelemetryCoverageInfo'),
+        (7, 'ProcessProtectionLevelInfo'),
+        (8, 'ProcessLeapSecondInfo'),
+        (9, 'ProcessMachineTypeInfo'),
+    ]]
+
+class ProcessInformationClass(ptype.definition):
+    cache = {}
+    __key__ = staticmethod(lambda object: PROCESS_INFORMATION_CLASS.byname(object.type, object.type))
+    __get__ = classmethod(lambda cls, key, *args, **kwargs: super(ProcessInformationClass, cls).__get__(key if isinstance(key, tuple(integer.__class__ for integer in [sys.maxsize, sys.maxsize + 1])) else PROCESS_INFORMATION_CLASS.byname(key), *args, **kwargs))
+    __set__ = classmethod(lambda cls, key, object, **kwargs: setattr(object, cls.attribute, key) or super(ProcessInformationClass, cls).__set__(key, object, **kwargs))
+
+class MEMORY_PRIORITY_(pint.enum):
+    _values_ = [
+        ('VERY_LOW', 1),
+        ('LOW', 2),
+        ('MEDIUM', 3),
+        ('BELOW_NORMAL', 4),
+        ('NORMAL', 5),
+    ]
+
+@ProcessInformationClass.define
+class MEMORY_PRIORITY_INFORMATION(pstruct.type):
+    type = 'ProcessMemoryPriority'
+    class _MemoryPriority(MEMORY_PRIORITY_, ULONG): pass
+    _fields_ = [(_MemoryPriority, 'MemoryPriority')]
+
+class PROCESS_MEMORY_EXHAUSTION_TYPE(pint.enum):
+    _values_ = []
+    # PMETypeFailFastOnCommitFailure
+
+@ProcessInformationClass.define
+class PROCESS_MEMORY_EXHAUSTION_INFO(pstruct.type):
+    type = 'ProcessMemoryExhaustionInfo'
+    class _Type(PROCESS_MEMORY_EXHAUSTION_TYPE, ULONG): pass
+    _fields_ = [
+        (USHORT, 'Version'),
+        (USHORT, 'Reserved'),
+        (_Type, 'Type'),
+        (ULONG_PTR, 'Value'),
+    ]
+
+@ProcessInformationClass.define
+class APP_MEMORY_INFORMATION(pstruct.type):
+    type = 'ProcessAppMemoryInfo'
+    _fields_ = [
+        (ULONG64, 'AvailableCommit'),
+        (ULONG64, 'PrivateCommitUsage'),
+        (ULONG64, 'PeakPrivateCommitUsage'),
+        (ULONG64, 'TotalCommitUsage'),
+    ]
+
+ProcessInformationClass.define(type='ProcessInPrivateInfo')(ptype.undefined)
+
+@ProcessInformationClass.define
+class PROCESS_POWER_THROTTLING_STATE(pstruct.type):
+    type = 'ProcessPowerThrottling'
+    _fields_ = [
+        (ULONG, 'Version'),
+        (ULONG, 'ControlMask'),
+        (ULONG, 'StateMask'),
+    ]
+
+class PROTECTION_LEVEL_(pint.enum):
+    _values_ = [
+        ('WINTCB_LIGHT', 1),
+        ('WINDOWS', 2),
+        ('WINDOWS_LIGHT', 3),
+        ('ANTIMALWARE_LIGHT', 4),
+        ('LSA_LIGHT', 5),
+        ('WINTCB', 6),
+        ('CODEGEN_LIGHT', 7),
+        ('AUTHENTICODE', 8),
+        ('PPL_APP', 9),
+        ('NONE', 10),
+    ]
+
+@ProcessInformationClass.define
+class PROCESS_PROTECTION_LEVEL_INFORMATION(pstruct.type):
+    type = 'ProcessProtectionLevelInfo'
+    class _ProtectionLevel(PROTECTION_LEVEL_, DWORD): pass
+    _fields_ = [
+        (_ProtectionLevel, 'ProtectionLevel'),
+    ]
+
+@ProcessInformationClass.define
+class PROCESS_LEAP_SECOND_INFO(pstruct.type):
+    type = 'ProcessLeapSecondInfo'
+    _fields_ = [
+        (ULONG, 'Flags'),
+        (ULONG, 'Reserved'),
+    ]
+
+@pbinary.littleendian
+class MACHINE_ATTRIBUTES(pbinary.flags):
+    _fields_ = [
+        (29, 'Reserved'),
+        (1, 'Wow64Container'),
+        (1, 'KernelEnabled'),
+        (1, 'UserEnabled'),
+    ]
+
+class IMAGE_FILE_MACHINE_(pint.enum):
+    _values_ = [
+        ('UNKNOWN', 0),
+        ('TARGET_HOST', 0x0001),
+        ('I386', 0x014c),
+        ('R3000', 0x0162),
+        ('R4000', 0x0166),
+        ('R10000', 0x0168),
+        ('WCEMIPSV2', 0x0169),
+        ('ALPHA', 0x0184),
+        ('SH3', 0x01a2),
+        ('SH3DSP', 0x01a3),
+        ('SH3E', 0x01a4),
+        ('SH4', 0x01a6),
+        ('SH5', 0x01a8),
+        ('ARM', 0x01c0),
+        ('THUMB', 0x01c2),
+        ('ARMNT', 0x01c4),
+        ('AM33', 0x01d3),
+        ('POWERPC', 0x01F0),
+        ('POWERPCFP', 0x01f1),
+        ('IA64', 0x0200),
+        ('MIPS16', 0x0266),
+        ('ALPHA64', 0x0284),
+        ('MIPSFPU', 0x0366),
+        ('MIPSFPU16', 0x0466),
+        ('AXP64', 0x0284),
+        ('TRICORE', 0x0520),
+        ('CEF', 0x0CEF),
+        ('EBC', 0x0EBC),
+        ('AMD64', 0x8664),
+        ('M32R', 0x9041),
+        ('ARM64', 0xAA64),
+        ('CEE', 0xC0EE),
+    ]
+
+@ProcessInformationClass.define
+class PROCESS_MACHINE_INFORMATION(pstruct.type):
+    type = 'ProcessMachineTypeInfo'
+    class _ProcessMachine(IMAGE_FILE_MACHINE_, USHORT): pass
+    _fields_ = [
+        (_ProcessMachine, 'ProcessMachine'),
+        (USHORT, 'Res0'),
+        (MACHINE_ATTRIBUTES, 'MachineAttributes'),
+    ]
+
+class PROCESSINFOCLASS(pint.enum):
     _values_ = [(name, value) for value, name in [
         (0, 'ProcessBasicInformation'),
         (1, 'ProcessQuotaLimits'),
@@ -893,7 +1049,7 @@ class PROCESS_INFORMATION_CLASS(pint.enum):
         (74, 'ProcessHighGraphicsPriorityInformation'),
         (75, 'ProcessSubsystemInformation'),
         (76, 'ProcessEnergyValues'),
-        (77, 'ProcessActivityThrottleState'),
+        (77, 'ProcessActivityThrottlingState'),
         (78, 'ProcessActivityThrottlePolicy'),
         (79, 'ProcessWin32kSyscallFilterInformation'),
         (80, 'ProcessDisableSystemAllowedCpuSets'),
@@ -916,14 +1072,29 @@ class PROCESS_INFORMATION_CLASS(pint.enum):
         (97, 'ProcessLeapSecondInformation'),
         (98, 'ProcessFiberShadowStackAllocation'),
         (99, 'ProcessFreeFiberShadowStackAllocation'),
+        (100, 'ProcessAltSystemCallInformation'),
+        (101, 'ProcessDynamicEHContinuationTargets'),
+        (102, 'ProcessDynamicEnforcedCetCompatibleRanges'),
+        (103, 'ProcessCreateStateChange'),
+        (104, 'ProcessApplyStateChange'),
+        (105, 'ProcessEnableOptionalXStateFeatures'),
+        (106, 'ProcessAltPrefetchParam'),
+        (107, 'ProcessAssignCpuPartitions'),
+        (108, 'ProcessPriorityClassEx'),
+        (109, 'ProcessMembershipInformation'),
+        (110, 'ProcessEffectiveIoPriority'),
+        (111, 'ProcessEffectivePagePriority'),
     ]]
 
-class ProcessInformationClass(ptype.definition):
-    cache, __key__ = {}, staticmethod(lambda object: PROCESS_INFORMATION_CLASS.byname(object.type, object.type))
+class ProcessInfoClass(ptype.definition):
+    cache = {}
+    __key__ = staticmethod(lambda object: PROCESSINFOCLASS.byname(object.type, object.type))
+    __get__ = classmethod(lambda cls, key, *args, **kwargs: super(ProcessInfoClass, cls).__get__(key if isinstance(key, tuple(integer.__class__ for integer in [sys.maxsize, sys.maxsize + 1])) else PROCESSINFOCLASS.byname(key), *args, **kwargs))
+    __set__ = classmethod(lambda cls, key, object, **kwargs: setattr(object, cls.attribute, key) or super(ProcessInfoClass, cls).__set__(key, object, **kwargs))
 
-## ProcessInformationClass definitions
-@ProcessInformationClass.define
-class PROCESS_BASIC_INFORMATION(pstruct.type):
+## ProcessInfoClass definitions
+@ProcessInfoClass.define
+class PROCESS_BASIC_INFORMATION(pstruct.type, versioned):
     type = 'ProcessBasicInformation'
 
     # XXX: there's 2 versions of this structure on server 2016
@@ -940,8 +1111,8 @@ class PROCESS_BASIC_INFORMATION(pstruct.type):
         (HANDLE, 'InheritedFromUniqueProcessId'),
     ]
 
-#@ProcessInformationClass.define
-class QUOTA_LIMITS(pstruct.type):
+#@ProcessInfoClass.define
+class QUOTA_LIMITS(pstruct.type, versioned):
     type = 'ProcessQuotaLimits'
     _fields_ = [
         (SIZE_T, 'PagedPoolLimit'),
@@ -963,8 +1134,8 @@ class RATE_QUOTA_LIMIT(dynamic.union):
         (_ANONYMOUS_STRUCT, 'DUMMYSTRUCTNAME'),
     ]
 
-@ProcessInformationClass.define
-class QUOTA_LIMITS_EX(pstruct.type):
+@ProcessInfoClass.define
+class QUOTA_LIMITS_EX(pstruct.type, versioned):
     type = 'ProcessQuotaLimits'
     _fields_ = [
         (SIZE_T, 'PagedPoolLimit'),
@@ -981,8 +1152,8 @@ class QUOTA_LIMITS_EX(pstruct.type):
         (RATE_QUOTA_LIMIT, 'CpuRateLimit'),
     ]
 
-@ProcessInformationClass.define
-class IO_COUNTERS(pstruct.type):
+@ProcessInfoClass.define
+class IO_COUNTERS(pstruct.type, versioned):
     type = 'ProcessIoCounters'
     _fields_ = [
         (ULONGLONG, 'ReadOperationCount'),
@@ -993,8 +1164,8 @@ class IO_COUNTERS(pstruct.type):
         (ULONGLONG, 'OtherTransferCount'),
     ]
 
-@ProcessInformationClass.define
-class VM_COUNTERS(pstruct.type):
+@ProcessInfoClass.define
+class VM_COUNTERS(pstruct.type, versioned):
     type = 'ProcessVmCounters'
     _fields_ = [
         (SIZE_T, 'PeakVirtualSize'),
@@ -1009,8 +1180,8 @@ class VM_COUNTERS(pstruct.type):
         (SIZE_T, 'PagefileUsage'),
         (SIZE_T, 'PeakPagefileUsage'),
     ]
-#@ProcessInformationClass.define
-class VM_COUNTERS_EX(pstruct.type):
+#@ProcessInfoClass.define
+class VM_COUNTERS_EX(pstruct.type, versioned):
     type = 'ProcessVmCounters'
     _fields_ = [
         (SIZE_T, 'PeakVirtualSize'),
@@ -1026,16 +1197,16 @@ class VM_COUNTERS_EX(pstruct.type):
         (SIZE_T, 'PeakPagefileUsage'),
         (SIZE_T, 'PrivateUsage'),
     ]
-#@ProcessInformationClass.define
-class VM_COUNTERS_EX2(pstruct.type):
+#@ProcessInfoClass.define
+class VM_COUNTERS_EX2(pstruct.type, versioned):
     type = 'ProcessVmCounters'
     _fields_ = [
         (VM_COUNTERS_EX, 'CountersEx'),
         (SIZE_T, 'PrivateWorkingSetSize'),
         (SIZE_T, 'SharedCommitUsage'),
     ]
-@ProcessInformationClass.define
-class KERNEL_USER_TIMES(pstruct.type):
+@ProcessInfoClass.define
+class KERNEL_USER_TIMES(pstruct.type, versioned):
     type = 'ProcessTimes'
     _fields_ = [
         (LARGE_INTEGER, 'CreateTime'),
@@ -1044,28 +1215,28 @@ class KERNEL_USER_TIMES(pstruct.type):
         (LARGE_INTEGER, 'UserTime'),
     ]
 
-ProcessInformationClass.define(type='ProcessBasePriority')(umtypes.KPRIORITY)
-ProcessInformationClass.define(type='ProcessRaisePriority')(ULONG)
-ProcessInformationClass.define(type='ProcessDebugPort')(HANDLE)
+ProcessInfoClass.define(type='ProcessBasePriority')(umtypes.KPRIORITY)
+ProcessInfoClass.define(type='ProcessRaisePriority')(ULONG)
+ProcessInfoClass.define(type='ProcessDebugPort')(HANDLE)
 
-@ProcessInformationClass.define
-class PROCESS_EXCEPTION_PORT(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_EXCEPTION_PORT(pstruct.type, versioned):
     type = 'ProcessExceptionPort'
     _fields_ = [
         (HANDLE, 'ExceptionPortHandle'),
         (ULONG, 'StateFlags'),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_ACCESS_TOKEN(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_ACCESS_TOKEN(pstruct.type, versioned):
     type = 'ProcessAccessToken'
     _fields_ = [
         (HANDLE, 'Token'),
         (HANDLE, 'Thread'),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_LDT_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_LDT_INFORMATION(pstruct.type, versioned):
     type = 'ProcessLdtInformation'
     _fields_ = [
         (ULONG, 'Start'),
@@ -1073,14 +1244,14 @@ class PROCESS_LDT_INFORMATION(pstruct.type):
         (dyn.array(ketypes.LDT_ENTRY, 1), 'LdtEntries'),    # FIXME
     ]
 
-@ProcessInformationClass.define
-class PROCESS_LDT_SIZE(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_LDT_SIZE(pstruct.type, versioned):
     type = 'ProcessLdtSize'
     _fields_ = [
         (ULONG, 'Length'),
     ]
 
-ProcessInformationClass.define(type='ProcessDefaultHardErrorMode')(ULONG)
+ProcessInfoClass.define(type='ProcessDefaultHardErrorMode')(ULONG)
 
 class EMULATOR_PORT_ACCESS_TYPE(pint.enum, ULONG):
     _fields_ = [
@@ -1106,8 +1277,8 @@ class EMULATOR_ACCESS_ENTRY(pstruct.type):
         (PVOID, 'Routine'),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_IO_PORT_HANDLER_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_IO_PORT_HANDLER_INFORMATION(pstruct.type, versioned):
     type = 'ProcessIoPortHandlers'
     _fields_ = [
         (BOOLEAN, 'Install'),
@@ -1116,8 +1287,8 @@ class PROCESS_IO_PORT_HANDLER_INFORMATION(pstruct.type):
         (P(EMULATOR_ACCESS_ENTRY), 'EmulatorAccessEntries'),
     ]
 
-@ProcessInformationClass.define
-class POOLED_USAGE_AND_LIMITS(pstruct.type):
+@ProcessInfoClass.define
+class POOLED_USAGE_AND_LIMITS(pstruct.type, versioned):
     type = 'ProcessPooledUsageAndLimits'
     _fields_ = [
         (SIZE_T, 'PeakPagedPoolUsage'),
@@ -1131,7 +1302,7 @@ class POOLED_USAGE_AND_LIMITS(pstruct.type):
         (SIZE_T, 'PagefileLimit'),
     ]
 
-@ProcessInformationClass.define
+@ProcessInfoClass.define
 class PROCESS_WS_WATCH_INFORMATION(parray.type):
     type = 'ProcessWorkingSetWatch'
     _fields_ = [
@@ -1139,8 +1310,8 @@ class PROCESS_WS_WATCH_INFORMATION(parray.type):
         (PVOID, 'FaultingVa'),
     ]
 
-ProcessInformationClass.define(type='ProcessUserModeIOPL')(ULONG)
-ProcessInformationClass.define(type='ProcessEnableAlignmentFaultFixup')(BOOLEAN)
+ProcessInfoClass.define(type='ProcessUserModeIOPL')(ULONG)
+ProcessInfoClass.define(type='ProcessEnableAlignmentFaultFixup')(BOOLEAN)
 
 class PROCESS_PRIORITY_CLASS_(pint.enum):
     _values_ = [
@@ -1153,18 +1324,18 @@ class PROCESS_PRIORITY_CLASS_(pint.enum):
         ('ABOVE_NORMAL', 6),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_PRIORITY_CLASS(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_PRIORITY_CLASS(pstruct.type, versioned):
     type = 'ProcessPriorityClass'
     _fields_ = [
         (BOOLEAN, 'Foreground'),
         (UCHAR, 'PriorityClass'),
     ]
 
-ProcessInformationClass.define(type='ProcessWx86Information')(ULONG)
+ProcessInfoClass.define(type='ProcessWx86Information')(ULONG)
 
-#ProcessInformationClass.define(type='ProcessHandleCount')(ULONG)
-@ProcessInformationClass.define
+#ProcessInfoClass.define(type='ProcessHandleCount')(ULONG)
+@ProcessInfoClass.define
 class PROCESS_HANDLE_INFORMATION(pstruct.type, versioned):
     type = 'ProcessHandleCount'
     _fields_ = [
@@ -1172,10 +1343,10 @@ class PROCESS_HANDLE_INFORMATION(pstruct.type, versioned):
         (ULONG, 'HandleCountHighWatermark'),
     ]
 
-ProcessInformationClass.define(type='ProcessAffinityMask')(umtypes.KAFFINITY)
-ProcessInformationClass.define(type='ProcessPriorityBoost')(ULONG)
+ProcessInfoClass.define(type='ProcessAffinityMask')(umtypes.KAFFINITY)
+ProcessInfoClass.define(type='ProcessPriorityBoost')(ULONG)
 
-#@ProcessInformationClass.define
+#@ProcessInfoClass.define
 class PROCESS_DEVICEMAP_INFORMATION(dynamic.union):
     type = 'ProcessDeviceMap'
     class _Query(pstruct.type):
@@ -1188,8 +1359,8 @@ class PROCESS_DEVICEMAP_INFORMATION(dynamic.union):
         (_Query, 'Query'),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_DEVICEMAP_INFORMATION_EX(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_DEVICEMAP_INFORMATION_EX(pstruct.type, versioned):
     type = 'ProcessDeviceMap'
     class _u(PROCESS_DEVICEMAP_INFORMATION):
         pass
@@ -1198,20 +1369,20 @@ class PROCESS_DEVICEMAP_INFORMATION_EX(pstruct.type):
         (ULONG, 'Flags'),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_SESSION_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_SESSION_INFORMATION(pstruct.type, versioned):
     type = 'ProcessSessionInformation'
 
-@ProcessInformationClass.define
-class PROCESS_FOREGROUND_BACKGROUND(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_FOREGROUND_BACKGROUND(pstruct.type, versioned):
     type = 'ProcessForegroundInformation'
 
-ProcessInformationClass.define(type='ProcessWow64Information')(ULONG_PTR)
-ProcessInformationClass.define(type='ProcessImageFileName')(umtypes.UNICODE_STRING)
-ProcessInformationClass.define(type='ProcessLUIDDeviceMapsEnabled')(ULONG)
-ProcessInformationClass.define(type='ProcessBreakOnTermination')(ULONG)
-ProcessInformationClass.define(type='ProcessDebugObjectHandle')(ULONG)
-ProcessInformationClass.define(type='ProcessDebugFlags')(ULONG)
+ProcessInfoClass.define(type='ProcessWow64Information')(ULONG_PTR)
+ProcessInfoClass.define(type='ProcessImageFileName')(umtypes.UNICODE_STRING)
+ProcessInfoClass.define(type='ProcessLUIDDeviceMapsEnabled')(ULONG)
+ProcessInfoClass.define(type='ProcessBreakOnTermination')(ULONG)
+ProcessInfoClass.define(type='ProcessDebugObjectHandle')(ULONG)
+ProcessInfoClass.define(type='ProcessDebugFlags')(ULONG)
 
 class PROCESS_HANDLE_TRACING_ENTRY(pstruct.type):
     PROCESS_HANDLE_TRACING_MAX_STACKS = 16
@@ -1222,8 +1393,8 @@ class PROCESS_HANDLE_TRACING_ENTRY(pstruct.type):
         (dyn.array(PVOID, PROCESS_HANDLE_TRACING_MAX_STACKS), 'Stacks'),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_HANDLE_TRACING_QUERY(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_HANDLE_TRACING_QUERY(pstruct.type, versioned):
     type = 'ProcessHandleTracing'
     _fields_ = [
         (HANDLE, 'Handle'),
@@ -1239,12 +1410,12 @@ class _IO_PRIORITY_HINT(pint.enum):
         ('IoPriorityHigh', 3),
         ('IoPriorityCritical', 4),
     ]
-@ProcessInformationClass.define
+@ProcessInfoClass.define
 class IO_PRIORITY_HINT(_IO_PRIORITY_HINT):
     type = 'ProcessIoPriority'
     length = 4
 
-ProcessInformationClass.define(type='ProcessExecuteFlags')(ULONG)
+ProcessInfoClass.define(type='ProcessExecuteFlags')(ULONG)
 
 class THREAD_TLS_INFORMATION(pstruct.type):
     _fields_ = [
@@ -1260,8 +1431,8 @@ class PROCESS_TLS_INFORMATION_TYPE(pint.enum):
         ('ProcessTlsReplaceVector', 1),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_TLS_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_TLS_INFORMATION(pstruct.type, versioned):
     type = 'ProcessResourceManagement'
     'ProcessTlsInformation'
     _fields_ = [
@@ -1273,26 +1444,26 @@ class PROCESS_TLS_INFORMATION(pstruct.type):
         (dyn.array(THREAD_TLS_INFORMATION, 1), 'ThreadData'),   # FIXME
     ]
 
-ProcessInformationClass.define(type='ProcessCookie')(ULONG)
-ProcessInformationClass.define(type='ProcessImageInformation')(mmtypes.SECTION_IMAGE_INFORMATION)
+ProcessInfoClass.define(type='ProcessCookie')(ULONG)
+ProcessInfoClass.define(type='ProcessImageInformation')(mmtypes.SECTION_IMAGE_INFORMATION)
 
-@ProcessInformationClass.define
-class PROCESS_CYCLE_TIME_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_CYCLE_TIME_INFORMATION(pstruct.type, versioned):
     type = 'ProcessCycleTime'
     _fields_ = [
         (ULONGLONG, 'AccumulatedCycles'),
         (ULONGLONG, 'CurrentCycleCount'),
     ]
 
-@ProcessInformationClass.define
-class PAGE_PRIORITY_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PAGE_PRIORITY_INFORMATION(pstruct.type, versioned):
     type = 'ProcessPagePriority'
     _fields_ = [
         (ULONG, 'PagePriority'),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_INSTRUMENTATION_CALLBACK_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_INSTRUMENTATION_CALLBACK_INFORMATION(pstruct.type, versioned):
     type = 'ProcessInstrumentationCallback'
     _fields_ = [
         (ULONG, 'Version'),
@@ -1300,8 +1471,8 @@ class PROCESS_INSTRUMENTATION_CALLBACK_INFORMATION(pstruct.type):
         (PVOID, 'Callback'),
     ]
 
-#@ProcessInformationClass.define
-class PROCESS_STACK_ALLOCATION_INFORMATION(pstruct.type):
+#@ProcessInfoClass.define
+class PROCESS_STACK_ALLOCATION_INFORMATION(pstruct.type, versioned):
     type = 'ProcessThreadStackAllocation'
     _fields_ = [
         (SIZE_T, 'ReserveSize'),
@@ -1309,8 +1480,8 @@ class PROCESS_STACK_ALLOCATION_INFORMATION(pstruct.type):
         (PVOID, 'StackBase'),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_STACK_ALLOCATION_INFORMATION_EX(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_STACK_ALLOCATION_INFORMATION_EX(pstruct.type, versioned):
     type = 'ProcessThreadStackAllocation'
     _fields_ = [
         (ULONG, 'PreferredNode'),
@@ -1320,15 +1491,15 @@ class PROCESS_STACK_ALLOCATION_INFORMATION_EX(pstruct.type):
         (PROCESS_STACK_ALLOCATION_INFORMATION, 'AllocInfo'),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_WS_WATCH_INFORMATION_EX(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_WS_WATCH_INFORMATION_EX(pstruct.type, versioned):
     type = 'ProcessWorkingSetWatchEx'
     length, _object_ = 0, VOID  # FIXME
 
-ProcessInformationClass.define(type='ProcessImageFileNameWin32')(umtypes.UNICODE_STRING)
-ProcessInformationClass.define(type='ProcessImageFileMapping')(ULONG)
+ProcessInfoClass.define(type='ProcessImageFileNameWin32')(umtypes.UNICODE_STRING)
+ProcessInfoClass.define(type='ProcessImageFileMapping')(ULONG)
 
-@ProcessInformationClass.define
+@ProcessInfoClass.define
 class PROCESS_AFFINITY_UPDATE_MODE(dynamic.union):
     type = 'ProcessAffinityUpdateMode'
     @pbinary.littleendian
@@ -1343,8 +1514,8 @@ class PROCESS_AFFINITY_UPDATE_MODE(dynamic.union):
         (_Flags, '_b'),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_MEMORY_ALLOCATION_MODE(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_MEMORY_ALLOCATION_MODE(pstruct.type, versioned):
     type = 'ProcessMemoryAllocationMode'
     @pbinary.littleendian
     class _Flags(pbinary.flags):
@@ -1357,12 +1528,12 @@ class PROCESS_MEMORY_ALLOCATION_MODE(pstruct.type):
         (_Flags, '_b'),
     ]
 
-ProcessInformationClass.define(type='ProcessGroupInformation')(dyn.clone(parray.block, _object_=USHORT))
-ProcessInformationClass.define(type='ProcessTokenVirtualizationEnabled')(ULONG)
-ProcessInformationClass.define(type='ProcessConsoleHostProcess')(ULONG_PTR)
+ProcessInfoClass.define(type='ProcessGroupInformation')(dyn.clone(parray.block, _object_=USHORT))
+ProcessInfoClass.define(type='ProcessTokenVirtualizationEnabled')(ULONG)
+ProcessInfoClass.define(type='ProcessConsoleHostProcess')(ULONG_PTR)
 
-@ProcessInformationClass.define
-class PROCESS_WINDOW_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_WINDOW_INFORMATION(pstruct.type, versioned):
     type = 'ProcessWindowInformation'
     _fields_ = [
         (ULONG, 'WindowFlags'),
@@ -1381,8 +1552,8 @@ class PROCESS_HANDLE_TABLE_ENTRY_INFO(pstruct.type):
         (ULONG, 'Reserved'),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_HANDLE_SNAPSHOT_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_HANDLE_SNAPSHOT_INFORMATION(pstruct.type, versioned):
     type = 'ProcessHandleInformation'
     _fields_ = [
         (ULONG_PTR, 'NumberOfHandles'),
@@ -1413,8 +1584,8 @@ class PROCESS_MITIGATION_POLICY(pint.enum):
         'ProcessSEHOPPolicy',
   ])]
 
-@ProcessInformationClass.define
-class PROCESS_MITIGATION_POLICY_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_MITIGATION_POLICY_INFORMATION(pstruct.type, versioned):
     type = 'ProcessMitigationPolicy'
     class _Policy(PROCESS_MITIGATION_POLICY, ULONG):
         pass
@@ -1423,18 +1594,18 @@ class PROCESS_MITIGATION_POLICY_INFORMATION(pstruct.type):
         (ptype.undefined, 'u'), # FIXME: https://github.com/winsiderss/systeminformer/blob/0cebf35f8464c11726f551980d31c0593d0717a0/phnt/include/ntpsapi.h
     ]
 
-ProcessInformationClass.define(type='ProcessHandleCheckingMode')(ULONG)
+ProcessInfoClass.define(type='ProcessHandleCheckingMode')(ULONG)
 
-@ProcessInformationClass.define
-class PROCESS_KEEPALIVE_COUNT_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_KEEPALIVE_COUNT_INFORMATION(pstruct.type, versioned):
     type = 'ProcessKeepAliveCount'
     _fields_ = [
         (ULONG, 'WakeCount'),
         (ULONG, 'NoWakeCount'),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_REVOKE_FILE_HANDLES_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_REVOKE_FILE_HANDLES_INFORMATION(pstruct.type, versioned):
     type = 'ProcessRevokeFileHandles'
     _fields_ = [
         (umtypes.UNICODE_STRING, 'TargetDevicePath'),
@@ -1446,8 +1617,8 @@ class PROCESS_WORKING_SET_OPERATION(pint.enum):
         ('ProcessWorkingSetEmpty', 1),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_WORKING_SET_CONTROL(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_WORKING_SET_CONTROL(pstruct.type, versioned):
     type = 'ProcessWorkingSetControl'
     class _Operation(PROCESS_WORKING_SET_OPERATION, ULONG):
         pass
@@ -1457,11 +1628,11 @@ class PROCESS_WORKING_SET_CONTROL(pstruct.type):
         (ULONG, 'Flags'),
     ]
 
-ProcessInformationClass.define(type='ProcessHandleTable')(dyn.clone(parray.block, _object_=ULONG))
-ProcessInformationClass.define(type='ProcessCheckStackExtentsMode')(ULONG)
-ProcessInformationClass.define(type='ProcessCommandLineInformation')(umtypes.UNICODE_STRING)
+ProcessInfoClass.define(type='ProcessHandleTable')(dyn.clone(parray.block, _object_=ULONG))
+ProcessInfoClass.define(type='ProcessCheckStackExtentsMode')(ULONG)
+ProcessInfoClass.define(type='ProcessCommandLineInformation')(umtypes.UNICODE_STRING)
 
-@ProcessInformationClass.define
+@ProcessInfoClass.define
 class PS_PROTECTION(dynamic.union):
     type = 'ProcessProtectionInformation'
     class _Level(pbinary.flags):
@@ -1480,8 +1651,8 @@ class PROCESS_MEMORY_EXHAUSTION_TYPE(pint.enum, ULONG):
         (0, 'PMETypeFaultFastOnCommitFailure'),
     ]]
 
-@ProcessInformationClass.define
-class PROCESS_MEMORY_EXHAUSTION_INFO(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_MEMORY_EXHAUSTION_INFO(pstruct.type, versioned):
     type = 'ProcessMemoryExhaustion'
     _fields_ = [
         (USHORT, 'Version'),
@@ -1490,16 +1661,16 @@ class PROCESS_MEMORY_EXHAUSTION_INFO(pstruct.type):
         (ULONGLONG, 'Value'),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_FAULT_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_FAULT_INFORMATION(pstruct.type, versioned):
     type = 'ProcessFaultInformation'
     _fields_ = [
         (ULONG, 'FaultFlags'),
         (ULONG, 'AdditionalInfo'),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_TELEMETRY_ID_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_TELEMETRY_ID_INFORMATION(pstruct.type, versioned):
     type = 'ProcessTelemetryIdInformation'
     _fields_ = [
         (ULONG, 'HeaderSize'),
@@ -1520,8 +1691,8 @@ class PROCESS_TELEMETRY_ID_INFORMATION(pstruct.type):
         (ULONG, 'CommandLineOffset'),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_COMMIT_RELEASE_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_COMMIT_RELEASE_INFORMATION(pstruct.type, versioned):
     type = 'ProcessCommitReleaseInformation'
     @pbinary.littleendian
     class _f(pbinary.flags):
@@ -1539,8 +1710,8 @@ class PROCESS_COMMIT_RELEASE_INFORMATION(pstruct.type):
         (SIZE_T, 'RepurposedMemResetSize'),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_JOB_MEMORY_INFO(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_JOB_MEMORY_INFO(pstruct.type, versioned):
     type = 'ProcessJobMemoryInformation'
     _fields_ = [
         (ULONGLONG, 'SharedCommitUsage'),
@@ -1550,10 +1721,10 @@ class PROCESS_JOB_MEMORY_INFO(pstruct.type):
         (ULONGLONG, 'TotalCommitLimit'),
     ]
 
-ProcessInformationClass.define(type='ProcessRaiseUMExceptionOnInvalidHandleClose')(ULONG)
+ProcessInfoClass.define(type='ProcessRaiseUMExceptionOnInvalidHandleClose')(ULONG)
 
-@ProcessInformationClass.define
-class PROCESS_CHILD_PROCESS_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_CHILD_PROCESS_INFORMATION(pstruct.type, versioned):
     type = 'ProcessChildProcessInformation'
     _fields_ = [
         (BOOLEAN, 'ProhibitChildProcesses'),
@@ -1561,9 +1732,9 @@ class PROCESS_CHILD_PROCESS_INFORMATION(pstruct.type):
         (BOOLEAN, 'AuditProhibitChildProcesses'),
     ]
 
-ProcessInformationClass.define(type='ProcessHighGraphicsPriorityInformation')(BOOLEAN)
+ProcessInfoClass.define(type='ProcessHighGraphicsPriorityInformation')(BOOLEAN)
 
-@ProcessInformationClass.define
+@ProcessInfoClass.define
 class SUBSYSTEM_INFORMATION_TYPE(pint.enum, ULONG):
     type = 'ProcessSubsystemInformation'
     _values_ = [
@@ -1589,8 +1760,8 @@ class ENERGY_STATE_DURATION(dynamic.union):
         (_ChangeTime, 'ChangeTime'),
     ]
 
-#@ProcessInformationClass.define
-class PROCESS_ENERGY_VALUES(pstruct.type):
+#@ProcessInfoClass.define
+class PROCESS_ENERGY_VALUES(pstruct.type, versioned):
     type = 'ProcessEnergyValues'
     class _ULONGLONGPAIR(parray.type):
         _object_, length = ULONGLONG, 2
@@ -1670,32 +1841,23 @@ class PROCESS_ENERGY_VALUES_EXTENSION(pstruct.type):
         (ULONG, 'MouseInput'),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_EXTENDED_ENERGY_VALUES(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_EXTENDED_ENERGY_VALUES(pstruct.type, versioned):
     type = 'ProcessEnergyValues'
     _fields_= [
         (PROCESS_ENERGY_VALUES, 'Base'),
         (PROCESS_ENERGY_VALUES_EXTENSION, 'Extension'),
     ]
 
-@ProcessInformationClass.define
-class POWER_THROTTLING_PROCESS_STATE(pstruct.type):
-    type = 'ProcessPowerThrottlingState'
-    _fields_ = [
-        (ULONG, 'Version'),
-        (ULONG, 'ControlMask'),
-        (ULONG, 'StateMask'),
-    ]
-
-@ProcessInformationClass.define
-class PROCESS_ACTIVITY_THROTTLE_POLICY(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_ACTIVITY_THROTTLE_POLICY(pstruct.type, versioned):
     type = 'ProcessActivityThrottlePolicy'
     'ProcessReserved3Information'
     [
     ]
 
-@ProcessInformationClass.define
-class WIN32K_SYSCALL_FILTER(pstruct.type):
+@ProcessInfoClass.define
+class WIN32K_SYSCALL_FILTER(pstruct.type, versioned):
     type = 'ProcessWin32kSyscallFilterInformation'
     _fields_ = [
         (ULONG, 'FilterState'),
@@ -1707,8 +1869,8 @@ class JOBOBJECT_WAKE_FILTER(pstruct.type):
         (ULONG, 'LowEdgeFilter'),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_WAKE_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_WAKE_INFORMATION(pstruct.type, versioned):
     type = 'ProcessWakeInformation'
     _fields_ = [
         (ULONGLONG, 'NotificationChannel'),
@@ -1716,8 +1878,8 @@ class PROCESS_WAKE_INFORMATION(pstruct.type):
         (P(JOBOBJECT_WAKE_FILTER), 'WakeFilter'),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_ENERGY_TRACKING_STATE(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_ENERGY_TRACKING_STATE(pstruct.type, versioned):
     type = 'ProcessEnergyTrackingState'
     @pbinary.littleendian
     class _UpdateTag(pbinary.flags):
@@ -1733,8 +1895,8 @@ class PROCESS_ENERGY_TRACKING_STATE(pstruct.type):
         (dyn.array(WCHAR, 64), 'Tag'),
     ]
 
-@ProcessInformationClass.define
-class MANAGE_WRITES_TO_EXECUTABLE_MEMORY(pstruct.type):
+@ProcessInfoClass.define
+class MANAGE_WRITES_TO_EXECUTABLE_MEMORY(pstruct.type, versioned):
     type = 'ProcessManageWritesToExecutableMemory'
     @pbinary.littleendian
     class _flags(pbinary.flags):
@@ -1749,8 +1911,8 @@ class MANAGE_WRITES_TO_EXECUTABLE_MEMORY(pstruct.type):
         (PVOID, 'KernelWriteToExecutableSignal'),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_READWRITEVM_LOGGING_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_READWRITEVM_LOGGING_INFORMATION(pstruct.type, versioned):
     type = 'ProcessEnableReadWriteVmLogging'
     @pbinary.littleendian
     class _Flags(pbinary.flags):
@@ -1764,8 +1926,8 @@ class PROCESS_READWRITEVM_LOGGING_INFORMATION(pstruct.type):
         (_Flags, 'f'),  # FIXME: order
     ]
 
-@ProcessInformationClass.define
-class PROCESS_UPTIME_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_UPTIME_INFORMATION(pstruct.type, versioned):
     type = 'ProcessUptimeInformation'
 
     class _f(ULONG):
@@ -1786,10 +1948,10 @@ class PROCESS_UPTIME_INFORMATION(pstruct.type):
         (_f, 'f'),  # FIXME: this is a union of binary fields
     ]
 
-ProcessInformationClass.define(type='ProcessImageSection')(HANDLE)
+ProcessInfoClass.define(type='ProcessImageSection')(HANDLE)
 
-@ProcessInformationClass.define
-class PROCESS_SYSTEM_RESOURCE_MANAGEMENT(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_SYSTEM_RESOURCE_MANAGEMENT(pstruct.type, versioned):
     type = 'ProcessSystemResourceManagement'
     @pbinary.littleendian
     class _Flags(pbinary.flags):
@@ -1802,24 +1964,24 @@ class PROCESS_SYSTEM_RESOURCE_MANAGEMENT(pstruct.type):
         (_Flags, 'f'),  # FIXME: order
     ]
 
-ProcessInformationClass.define(type='ProcessSequenceNumber')(ULONGLONG)
+ProcessInfoClass.define(type='ProcessSequenceNumber')(ULONGLONG)
 
-@ProcessInformationClass.define
-class PROCESS_SECURITY_DOMAIN_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_SECURITY_DOMAIN_INFORMATION(pstruct.type, versioned):
     type = 'ProcessSecurityDomainInformation'
     _fields_ = [
         (ULONGLONG, 'SecurityDomain'),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_COMBINE_SECURITY_DOMAINS_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_COMBINE_SECURITY_DOMAINS_INFORMATION(pstruct.type, versioned):
     type = 'ProcessCombineSecurityDomainsInformation'
     _fields_ = [
         (HANDLE, 'ProcessHandle'),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_LOGGING_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_LOGGING_INFORMATION(pstruct.type, versioned):
     type = 'ProcessEnableLogging'
     @pbinary.littleendian
     class _Flags(pbinary.flags):
@@ -1835,16 +1997,12 @@ class PROCESS_LOGGING_INFORMATION(pstruct.type):
         (_Flags, 'f'),  # FIXME: order
     ]
 
-@ProcessInformationClass.define
-class PROCESS_LEAP_SECOND_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_LEAP_SECOND_INFORMATION(PROCESS_LEAP_SECOND_INFO):
     type = 'ProcessLeapSecondInformation'
-    _fields_ = [
-        (ULONG, 'Flags'),
-        (ULONG, 'Reserved'),
-    ]
 
-@ProcessInformationClass.define
-class PROCESS_FIBER_SHADOW_STACK_ALLOCATION_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_FIBER_SHADOW_STACK_ALLOCATION_INFORMATION(pstruct.type, versioned):
     type = 'ProcessFiberShadowStackAllocation'
     _fields_ = [
         (ULONGLONG, 'ReserveSize'),
@@ -1854,26 +2012,43 @@ class PROCESS_FIBER_SHADOW_STACK_ALLOCATION_INFORMATION(pstruct.type):
         (PVOID, 'Ssp'),
     ]
 
-@ProcessInformationClass.define
-class PROCESS_FREE_FIBER_SHADOW_STACK_ALLOCATION_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_FREE_FIBER_SHADOW_STACK_ALLOCATION_INFORMATION(pstruct.type, versioned):
     type = 'ProcessFreeFiberShadowStackAllocation'
     _fields_ = [
         (PVOID, 'Ssp'),
     ]
 
-ProcessInformationClass.define(type='ProcessAltSystemCallInformation')(BOOLEAN)
+ProcessInfoClass.define(type='ProcessAltSystemCallInformation')(BOOLEAN)
 
-@ProcessInformationClass.define
-class PROCESS_DYNAMIC_EH_CONTINUATION_TARGETS_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_DYNAMIC_EH_CONTINUATION_TARGETS_INFORMATION(pstruct.type, versioned):
     type = 'ProcessDynamicEHContinuationTargets'
     [
     ]
 
-@ProcessInformationClass.define
-class PROCESS_DYNAMIC_ENFORCED_ADDRESS_RANGE_INFORMATION(pstruct.type):
+@ProcessInfoClass.define
+class PROCESS_DYNAMIC_ENFORCED_ADDRESS_RANGE_INFORMATION(pstruct.type, versioned):
     type = 'ProcessDynamicEnforcedCetCompatibleRanges'
     [
     ]
+
+ProcessInfoClass.define(type='ProcessEnableOptionalXStateFeatures')(ULONG64)
+
+@ProcessInfoClass.define
+class PROCESS_PRIORITY_CLASS_EX(pstruct.type, versioned):
+    type = 'ProcessPriorityClassEx'
+    [
+    ]
+
+@ProcessInfoClass.define
+class PROCESS_MEMBERSHIP_INFORMATION(pstruct.type, versioned):
+    type = 'ProcessMembershipInformation'
+    [
+    ]
+
+ProcessInfoClass.define(type='ProcessEffectiveIoPriority')(IO_PRIORITY_HINT)
+ProcessInfoClass.define(type='ProcessEffectivePagePriority')(ULONG)
 
 ### API_SET_SCHEMA
 @pbinary.littleendian
@@ -2263,16 +2438,6 @@ class ETHREAD(pstruct.type, versioned):
         (PVOID, 'AlpcMessage'),  # XXX: union
         (LIST_ENTRY, 'AlpcWaitListEntry'),
         (ULONG, 'CacheManagerCount'),
-    ]
-
-class PROCESS_BASIC_INFORMATION(pstruct.type):
-    _fields_ = [
-        (NTSTATUS, 'ExitStatus'),
-        (P(PEB), 'PebBaseAddress'),
-        (ULONG_PTR, 'AffinityMask'),
-        (umtypes.KPRIORITY, 'BasePriority'),
-        (ULONG_PTR, 'UniqueProcessId'),
-        (ULONG_PTR, 'InheritedFromUniqueProcessId'),
     ]
 
 class PROCESS_EXTENDED_BASIC_INFORMATION(pstruct.type):
