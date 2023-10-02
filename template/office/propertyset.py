@@ -430,13 +430,12 @@ class PropertyIdentifierAndOffset(pstruct.type):
             return PropertyIdentifier.get(self.__format_identifier__)
 
         try:
-            p = self.getparent(FMTOFFSET)
-
+            fmtoffset = self.getparent(FMTOFFSET)
         except ptypes.error.ItemNotFoundError:
             return PropertyIdentifier.default
 
-        fmtid = p['FMTID']
-        return PropertyIdentifier.lookup(fmtid.identifier())
+        fmtid = fmtoffset['FMTID']
+        return PropertyIdentifier.lookup(fmtid.identifier(), default)
 
     def __Offset(self):
         try:
@@ -455,6 +454,22 @@ class PropertyIdentifierAndOffset(pstruct.type):
     ]
 
 class PropertySet(pstruct.type):
+    def __PropertyIdentifierAndOffset(self):
+        offset, count = self.getoffset(), self['NumProperties'].li
+
+        try:
+            p = self.getparent(PropertySetStream)
+            fmtid = next((item['FMTID'] for item in p['FormatOffset'] if item['Offset'].int() == offset), None)
+
+        except ptypes.error.ItemNotFoundError:
+            fmtid = None
+
+        if fmtid is None:
+            return dyn.array(PropertyIdentifierAndOffset, count.int())
+
+        propertyidentifierandoffset = dyn.clone(PropertyIdentifierAndOffset, __format_identifier__=fmtid.identifier())
+        return dyn.array(propertyidentifierandoffset, count.int())
+
     def __Property(self):
         res, fields = self['Size'].li.int(), ['Size', 'NumProperties', 'PropertyIdentifierAndOffset']
         return dyn.block(max(0, res - sum(self[fld].li.size() for fld in fields)))
@@ -462,8 +477,7 @@ class PropertySet(pstruct.type):
     _fields_ = [
         (DWORD, 'Size'),
         (DWORD, 'NumProperties'),
-        (lambda self: dyn.array(PropertyIdentifierAndOffset, self['NumProperties'].li.int()), 'PropertyIdentifierAndOffset'),
-        #(lambda self: dyn.array(Property, self['NumProperties'].li.int()), 'Property'),
+        (__PropertyIdentifierAndOffset, 'PropertyIdentifierAndOffset'),
         (__Property, 'Property'),
     ]
 
