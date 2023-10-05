@@ -59,9 +59,9 @@ class CodePageString(pstruct.type):
         (dyn.padding(4), 'padding(Characters)'),
     ]
     def alloc(self, **fields):
-        string = fields.pop('Characters', None)
-        fields.setdefault('Characters', string) if ptype.isinstance(string) else fields.setdefault('Characters', pstr.szstring().a.set(string)) if string else None
+        fields.setdefault('Characters', pstr.szstring().set(fields.pop('Characters'))) if isinstance(fields.get('Characters'), (''.__class__, u''.__class__)) else fields.get('Characters')
         res = super(CodePageString, self).alloc(**fields)
+        res['padding(Characters)'] if 'padding(Characters)' in fields else res['padding(Characters)'].a
         return res if 'Size' in fields else res.set(Size=res['Characters'].size())
 
 class DATE(pfloat.double): pass
@@ -85,19 +85,21 @@ class UnicodeString(pstruct.type):
         (dyn.padding(4), 'padding(Characters)'),
     ]
     def alloc(self, **fields):
-        string = fields.pop('Characters', None)
-        fields.setdefault('Characters', string) if ptype.isinstance(string) else fields.setdefault('Characters', pstr.wstring().alloc(string)) if string else None
+        fields.setdefault('Characters', pstr.szwstring().set(fields.pop('Characters'))) if isinstance(fields.get('Characters'), (''.__class__, u''.__class__)) else fields.get('Characters')
         res = super(UnicodeString, self).alloc(**fields)
-        return res if 'Size' in fields else res.set(Size=res['Characters'].size())
+        res['padding(Characters)'] if 'padding(Characters)' in fields else res['padding(Characters)'].a
+        return res if 'Length' in fields else res.set(Length=res['Characters'].size())
 
 class FILETIME(intsafe.FILETIME): pass
 class BLOB(pstruct.type):
     _fields_ = [
         (DWORD, 'Size'),
         (lambda self: dyn.block(self['Size'].li.int()), 'Bytes'),
+        (dyn.padding(4), 'padding(Bytes)'),
     ]
     def alloc(self, **fields):
         res = super(BLOB, self).alloc(**fields)
+        res['padding(Bytes)'] if 'padding(Bytes)' in fields else res['padding(Bytes)'].a
         return res if 'Size' in fields else res.set(Size=res['Bytes'].size())
 
 class IndirectPropertyName(CodePageString): pass
@@ -110,6 +112,7 @@ class ClipboardData(pstruct.type):
     ]
     def alloc(self, **fields):
         res = super(ClipboardData, self).alloc(**fields)
+        res['padding(Data)'] if 'padding(Data)' in fields else res['padding(Data)'].a
         return res if 'Size' in fields else res.set(Size=res['Data'].size())
 
 class VersionedStream(pstruct.type):
