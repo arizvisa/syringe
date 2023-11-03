@@ -74,7 +74,7 @@ class help(optparse.OptionParser):
 
         # fields
         self.add_option('-d', '--dump', default=False, action='store_true', help='dump the discovered properties that can be used for FORMAT as JSON')
-        self.add_option('-f', '--format', default='{__name__}/{ProductVersion}/{OriginalFilename}', type='str', help='output the specified format (defaults to {__name__}/{ProductVersion}/{OriginalFilename})')
+        self.add_option('-f', '--format', default='{__name__~upper}/{ProductVersion}/{OriginalFilename}', type='str', help='output the specified format (defaults to {__name__~upper}/{ProductVersion}/{OriginalFilename})')
         self.description = 'Extract the version information from the resource directory of the specified EXECUTABLE and write it to stdout using FORMAT.'
 
 help = help()
@@ -171,9 +171,9 @@ if __name__ == '__main__':
         Fhex, unknown = operator.methodcaller('encode', 'hex') if sys.version_info.major < 3 else bytes.hex, vi['Unknown'].serialize()
         logging.warning("Error parsing {:d} bytes from the version information: {:s}".format(vi['Unknown'].size(), Fhex(unknown)))
     if viresource.size() != vi.size():
-        logging.warning("Found {:d} extra bytes in the resource that could be padding as it was not decoded as part of the version information".format(viresource.size() - vi.size()))
+        logging.warning("Found {:d} extra bytes in the resource directory that could be padding as it was not decoded as part of the version information".format(viresource.size() - vi.size()))
         extra = vi['Unknown'].load(length=viresource.size() - vi.size())
-        logging.warning("{!s}".format(extra))
+        logging.warning("{:X}: {!s}".format(extra.getoffset(), ' '.join(map("{:02X}".format, bytearray(extra.serialize())))))
 
     # extract the language/codepage ids from the version info
     lgcpids = extractLgCpIds(vi)
@@ -193,6 +193,8 @@ if __name__ == '__main__':
         properties['FileType'] = ffi['dwFileType'].str()
         properties['FileSubtype'] = ffi['dwFileSubType'].str()
         properties['OriginalFilename'] = os.path.basename(filename)
+        properties['OriginalFilename~upper'] = os.path.basename(filename).upper()
+        properties['OriginalFilename~lower'] = os.path.basename(filename).lower()
 
     # otherwise we just extract the properties from the string table
     else:
@@ -238,6 +240,11 @@ if __name__ == '__main__':
             sys.exit(1)
         properties = {item['szKey'].str() : item['Value'].str() for item in stringTable}
 
+        # uppercase and lowercase any properties that end with "name".
+        candidates = [ szKey for szKey in properties if szKey.lower().endswith('name') ]
+        [ properties.setdefault("{:s}~upper".format(key), properties[key].upper()) for key in candidates ]
+        [ properties.setdefault("{:s}~lower".format(key), properties[key].lower()) for key in candidates ]
+
         # now we'll add the VS_FIXEDFILEINFO fields to our list of properties.
         fixedproperties = properties.setdefault(u'VS_FIXEDFILEINFO', {})
         fixedproperties[u'dwProductVersion'] = ffi['dwProductVersion'].str()
@@ -250,6 +257,8 @@ if __name__ == '__main__':
 
     properties.setdefault(u'__path__', filename)
     properties.setdefault(u'__name__', os.path.basename(filename))
+    properties.setdefault(u'__name__~upper', os.path.basename(filename).upper())
+    properties.setdefault(u'__name__~lower', os.path.basename(filename).lower())
     properties.setdefault(u'__machine__', pe['FileHeader']['Machine'].str())
 
     # add the timestamps for creation, modification, and access.
