@@ -85,7 +85,7 @@ class AtomList(parray.block):
 
     def summary(self):
         types = ','.join([x['type'].serialize().decode('latin1') for x in self])
-        return ' '.join(["atoms[{:d}] ->".format(len(self)), types])
+        return ' '.join(["box[{:d}] ->".format(len(self)), types])
 
 ## atom templates
 class FullBox(pstruct.type):
@@ -94,10 +94,18 @@ class FullBox(pstruct.type):
         if hasattr(self, 'Flags'):
             return self.Flags
         return dyn.clone(pint.uint_t, length=3)
+    def __Box(self):
+        p = self.parent
+        if p and ptype.istype(self.Box) and issubclass(self.Box, parray.block):
+            adjust_atom = p.HeaderSize()
+            adjust_full = sum(self[fld].li.size() for fld in ['Version', 'Flags'])
+            adjust = adjust_atom + adjust_full
+            return dyn.clone(self.Box, blocksize=lambda s, sz=max(0, p.Size() - adjust): sz)
+        return self.Box
     _fields_ = [
         (pint.uint8_t, 'Version'),
         (__Flags, 'Flags'),
-        (lambda self: self.Box, 'Box'),
+        (__Box, 'Box'),
     ]
     def version(self):
         return self['Version']
@@ -173,8 +181,9 @@ class GenericMediaHeaderBox(AtomList):
     type = b'gmhd'
 
 @AtomType.define
-class MetaBox(AtomList):
+class MetaBox(FullBox):
     type = b'meta'
+    Box = lambda self: dyn.clone(AtomList, blocksize=lambda _, sz=self.getparent(Atom).Size() - sum([FullBox().a.size(), Atom().a.size()]): sz)
 
 @AtomType.define
 class ReferenceMovieAtom(AtomList):
