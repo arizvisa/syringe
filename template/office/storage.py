@@ -884,7 +884,7 @@ class Directory(parray.block):
 
     def minimum(self, index):
         '''Return the index of the first directory entry within the branch at the specified index.'''
-        node = self[index]
+        index, node = (self.value.index(index), index) if isinstance(index, DirectoryEntry) else (index, self[index])
         while not node['iLeftSibling']['NOSTREAM']:
             index = node['iLeftSibling'].int()
             node = self[index]
@@ -892,7 +892,7 @@ class Directory(parray.block):
 
     def maximum(self, index):
         '''Return the index of the last directory entry within the branch at the specified index.'''
-        node = self[index]
+        index, node = (self.value.index(index), index) if isinstance(index, DirectoryEntry) else (index, self[index])
         while not node['iRightSibling']['NOSTREAM']:
             index = node['iRightSibling'].int()
             node = self[index]
@@ -913,7 +913,11 @@ class Directory(parray.block):
             filtered = (sibling for sibling in iterable if not(sibling['NOSTREAM']))
             [check.setdefault(item.int(), []).append(index) for item in filtered]
             roots.setdefault(entry['iChild'].int(), []).append(index) if not(entry['iChild']['NOSTREAM']) else roots
-        return all(len(parents) == 1 and all(iparent in check for iparent in parents if iparent not in roots) for index, parents in check.items())
+        terrible_parents = [(index, check[index]) for index in sorted(check) if len(check[index]) > 1]
+        for index, parents in terrible_parents:
+            iterable = itertools.chain(map("{:d}".format, parents[:-1]), map("and {:d}".format, parents[-1:])) if len(parents) > 2 else [' and '.join(map("{:d}".format, parents))]
+            logger.warning("{:s}: Directory Entry {:s} at index {:d} is referenced more than once by entr{:s}.".format('.'.join([self.__class__.__module__, self.__class__.__name__]), self[index].instance(), index, "y {:s}".format(', '.join(iterable)) if len(parents) == 1 else "ies {:s}".format(', '.join(iterable))))
+        return all(len(parents) <= 1 and all(iparent in check for iparent in parents if iparent not in roots) for index, parents in check.items())
 
     def __parents__(self):
         '''Return a dictionary that can be used to determine the index of the parent for each directory entry.'''
@@ -976,8 +980,11 @@ class Directory(parray.block):
     def disconnect(self, store, index):
         '''Disconnect a directory entry from the specified tree and return it.'''
         istore = self.value.index(store) if isinstance(store, DirectoryEntry) else store
-        ientry, iroot = index, self[istore]['iChild'].int()
+        ientry = self.value.index(index) if isinstance(index, DirectoryEntry) else index
+
+        # use the store parameter to figure out the root node.
         assert(not(self[istore]['iChild']['NOSTREAM']))
+        iroot = self[istore]['iChild'].int()
 
         # grab our lookup table for identifying the parent of a directory entry.
         assert(self.__well_shaped__())
@@ -987,7 +994,7 @@ class Directory(parray.block):
         if all(self[ientry][side]['NOSTREAM'] for side in ['iLeftSibling', 'iRightSibling']):
             iparent = parents.get(ientry, iroot)
             if ientry not in parents:
-                assert(self[istore]['iChild'].int() == ientry), "{:s}: Entry {:s} at specified index ({:d}) is not a child of {:s} at index {:d}.".format('.'.join([cls.__module__, cls.__name__]), self[ientry].instance(), ientry, self[istore].instance(), istore)
+                assert(self[istore]['iChild'].int() == ientry), "{:s}: Entry {:s} at specified index ({:d}) is not a child of {:s} at index {:d}.".format('.'.join([self.__class__.__module__, self.__class__.__name__]), self[ientry].instance(), ientry, self[istore].instance(), istore)
                 self[iparent]['iChild'].set('NOSTREAM')
 
             elif iparent != iroot:
@@ -1050,22 +1057,6 @@ class Directory(parray.block):
             [self[ientry][side].set('NOSTREAM') for side in ['iLeftSibling', 'iRightSibling']]
         return self[ientry]
 
-    def __connect_entry(self, side, anchor, ientry):
-        '''Connect a directory entry to the specified side of an anchoring directory entry.'''
-        assert(side in {'iLeftSibling', 'iRightSibling'})
-        assert(isinstance(anchor, DirectoryEntry))
-        assert(0 <= ientry < len(self))
-
-        # grab the nodes that we're connecting with and update our entry.
-        # then we can write our entry's index back into the anchor.
-        ibranch = anchor[side].int()
-        if not anchor[side]['NOSTREAM']:
-            siblings = ileft, iright = (self[ibranch][side].int() for side in ['iLeftSibling', 'iRightSibling'])
-            [self[ientry][entryside].set(sibling) for entryside, sibling in zip(['iLeftSibling', 'iRightSibling'], siblings)]
-
-        # Attach the entry to the anchor and then we can leave.
-        anchor[side].set(ientry)
-
     def connect_child(self, store, index):
         '''Connect a directory entry at the given index to another directory entry as its child'''
         istore = self.value.index(store) if isinstance(store, DirectoryEntry) else store
@@ -1091,12 +1082,28 @@ class Directory(parray.block):
     def connect_predecessor(self, anchor, index):
         '''Connect a directory entry at the given index to the left branch of a directory entry.'''
         ianchor = self.value.index(anchor) if isinstance(anchor, DirectoryEntry) else anchor
-        return self.__connect_entry('iLeftSibling', self[ianchor], self.value.index(index) if isinstance(index, DirectoryEntry) else index)
+        ientry = self.value.index(index) if isinstance(index, DirectoryEntry) else index
+
+        ibranch = self[ianchor]['iLeftSibling'].int()
+        if not self[ianchor]['iLeftSibling']['NOSTREAM']:
+            [ileft, iright] = [self[ibranch][side].int() for side in ['iLeftSibling', 'iRightSibling']]
+            self[ientry]['iLeftSibling'].set(ibranch), self[ientry]['iRightSibling'].set(iright), self[ibranch]['iRightSibling'].set('NOSTREAM')
+
+        self[ianchor]['iLeftSibling'].set(ientry)
+        return self[ientry]
 
     def connect_successor(self, anchor, index):
         '''Connect a directory entry to the specified tree after the entry at the given index and return it.'''
         ianchor = self.value.index(anchor) if isinstance(anchor, DirectoryEntry) else anchor
-        return self.__connect_entry('iRightSibling', self[ianchor], self.value.index(index) if isinstance(index, DirectoryEntry) else index)
+        ientry = self.value.index(index) if isinstance(index, DirectoryEntry) else index
+
+        ibranch = self[ianchor]['iRightSibling'].int()
+        if not self[ianchor]['iRightSibling']['NOSTREAM']:
+            [ileft, iright] = [self[ibranch][side].int() for side in ['iLeftSibling', 'iRightSibling']]
+            self[ientry]['iRightSibling'].set(ibranch), self[ientry]['iLeftSibling'].set(iright), self[ibranch]['iLeftSibling'].set('NOSTREAM')
+
+        self[ianchor]['iRightSibling'].set(ientry)
+        return self[ientry]
 
 ### Sector types
 class SectorContent(ptype.block):
