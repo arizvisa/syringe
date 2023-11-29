@@ -882,12 +882,221 @@ class Directory(parray.block):
             continue
         return
 
+    def minimum(self, index):
+        '''Return the index of the first directory entry within the branch at the specified index.'''
+        node = self[index]
+        while not node['iLeftSibling']['NOSTREAM']:
+            index = node['iLeftSibling'].int()
+            node = self[index]
+        return index
+
+    def maximum(self, index):
+        '''Return the index of the last directory entry within the branch at the specified index.'''
+        node = self[index]
+        while not node['iRightSibling']['NOSTREAM']:
+            index = node['iRightSibling'].int()
+            node = self[index]
+        return index
+
     def entries(self, bytes):
         '''Return the number of directory entries that can fit inside the specified number of bytes.'''
         res = self.new(self._object_).a
         size = res.size()
         count, extra = divmod(bytes, size) if size else 0
         return 1 + count if extra else count
+
+    def __well_shaped__(self):
+        '''Return whether the tree starting at the given storage node is actually in the shape of a tree.'''
+        check, roots = {}, {}
+        for index, entry in enumerate(self):
+            iterable = (entry[side] for side in ['iLeftSibling', 'iRightSibling'])
+            filtered = (sibling for sibling in iterable if not(sibling['NOSTREAM']))
+            [check.setdefault(item.int(), []).append(index) for item in filtered]
+            roots.setdefault(entry['iChild'].int(), []).append(index) if not(entry['iChild']['NOSTREAM']) else roots
+        return all(len(parents) == 1 and all(iparent in check for iparent in parents if iparent not in roots) for index, parents in check.items())
+
+    def __parents__(self):
+        '''Return a dictionary that can be used to determine the index of the parent for each directory entry.'''
+        result = {}
+        for index, entry in enumerate(self):
+            iterable = (entry[side] for side in ['iLeftSibling', 'iRightSibling'])
+            filtered = [sibling for sibling in iterable if not(sibling['NOSTREAM'])]
+            assert(all(item.int() not in result) for item in filtered)
+            [result.setdefault(item.int(), index) for item in filtered]
+        return result
+
+    def __rotate_left__(self, store, index):
+        '''Rotate the directory tree around the entry at the specified index.'''
+        istore = self.value.index(store) if isinstance(store, DirectoryEntry) else store
+        ientry, entry = (self.value.index(index), index) if isinstance(index, DirectoryEntry) else (index, self[index])
+        parents = self.__parents__()
+
+        right, iright = self[ientry]['iRightSibling'], self[ientry]['iRightSibling'].int()
+        iterable = (side for side in ['iLeftSibling', 'iRightSibling'] if self[parents[ientry]][side].int() == ientry)
+        iparent, [parentside] = (parents[ientry], iterable) if ientry in parents else (parents.get(ientry, -1), [None])
+
+        if not right['NOSTREAM']:
+            self[ientry]['iRightSibling'].set(self[iright]['iLeftSibling'].int())
+            self[iright]['iLeftSibling'].set(ientry)
+        else:
+            return self[ientry]
+
+        if ientry in parents:
+            self[iparent][parentside].set(iright)
+            return self[iright]
+
+        assert(self[istore]['iChild'].int() == ientry)
+        self[istore]['iChild'].set(iright)
+        return self[iright]
+
+    def __rotate_right__(self, store, index):
+        '''Rotate the directory tree around the entry at the specified index.'''
+        istore = self.value.index(store) if isinstance(store, DirectoryEntry) else store
+        ientry, entry = (self.value.index(index), index) if isinstance(index, DirectoryEntry) else (index, self[index])
+        parents = self.__parents__()
+
+        left, ileft = self[ientry]['iLeftSibling'], self[ientry]['iLeftSibling'].int()
+        iterable = (side for side in ['iLeftSibling', 'iRightSibling'] if self[parents[ientry]][side].int() == ientry)
+        iparent, [parentside] = (parents[ientry], iterable) if ientry in parents else (parents.get(ientry, -1), [None])
+
+        if not left['NOSTREAM']:
+            self[ientry]['iLeftSibling'].set(self[ileft]['iRightSibling'].int())
+            self[ileft]['iRightSibling'].set(ientry)
+        else:
+            return self[ientry]
+
+        if ientry in parents:
+            self[iparent][parentside].set(ileft)
+            return self[ileft]
+
+        assert(self[istore]['iChild'].int() == ientry)
+        self[istore]['iChild'].set(ileft)
+        return self[ileft]
+
+    def disconnect(self, store, index):
+        '''Disconnect a directory entry from the specified tree and return it.'''
+        istore = self.value.index(store) if isinstance(store, DirectoryEntry) else store
+        ientry, iroot = index, self[istore]['iChild'].int()
+        assert(not(self[istore]['iChild']['NOSTREAM']))
+
+        # grab our lookup table for identifying the parent of a directory entry.
+        assert(self.__well_shaped__())
+        parents = self.__parents__()
+
+        # this is a leaf node and we only need to remove it from the parent.
+        if all(self[ientry][side]['NOSTREAM'] for side in ['iLeftSibling', 'iRightSibling']):
+            iparent = parents.get(ientry, iroot)
+            if ientry not in parents:
+                assert(self[istore]['iChild'].int() == ientry), "{:s}: Entry {:s} at specified index ({:d}) is not a child of {:s} at index {:d}.".format('.'.join([cls.__module__, cls.__name__]), self[ientry].instance(), ientry, self[istore].instance(), istore)
+                self[iparent]['iChild'].set('NOSTREAM')
+
+            elif iparent != iroot:
+                [self[iparent][side].set('NOSTREAM') for side in ['iLeftSibling', 'iRightSibling'] if self[iparent][side].int() == ientry]
+            assert(any(self[iparent][side]['NOSTREAM'] for side in ['iLeftSibling', 'iRightSibling']))
+
+        # if one of our sides are empty, then the other side gets attached to the parent.
+        elif any(self[ientry][side]['NOSTREAM'] for side in ['iLeftSibling', 'iRightSibling']):
+            [side] = (side for side in ['iLeftSibling', 'iRightSibling'] if not self[ientry][side]['NOSTREAM'])
+            ibranch = self[ientry][side].int()
+
+            # if we're changing the root node, then we update our reference to it.
+            if ientry == iroot:
+                store['iChild'].set(ibranch)
+
+            # otherwise figure out which side is being removed from our parent, and attach to it.
+            else:
+                [parentside] = (side for side in ['iLeftSibling', 'iRightSibling'] if self[parents[ientry]][side].int() == ientry)
+                self[parents[ientry]][parentside].set(ibranch)
+
+            # parent was updated, so verify things and then detach our branches here.
+            assert(self[istore]['iChild'].int() == ibranch if iroot == ientry else self[parents[ientry]]['iLeftSibling'].int() == ibranch if self[ientry]['iRightSibling']['NOSTREAM'] else self[parents[ientry]]['iLeftSibling'].int() == ibranch)
+            [self[ientry][side].set('NOSTREAM') for side in ['iLeftSibling', 'iRightSibling']]
+
+        # if we're not a leaf node, then we'll have to do some reparenting. first
+        # we'll grab both of the branches that are related to our in-order successor.
+        else:
+            isuccessor = self.minimum(self[ientry]['iRightSibling'].int())
+            isuccessorbranch = self[isuccessor]['iRightSibling'].int()
+
+            # attach our removed entry's branch to our successor's branch.
+            if parents[isuccessor] == ientry:
+                [side] = (side for side in ['iLeftSibling', 'iRightSibling'] if self[isuccessorbranch][side]['NOSTREAM'])
+                self[parents[isuccessorbranch]][side].set(isuccessor)
+
+            elif isuccessor in parents:
+                [side] = (side for side in ['iLeftSibling', 'iRightSibling'] if self[parents[isuccessor]][side].int() == isuccessor)
+                self[parents[isuccessor]][side].set(isuccessorbranch)
+                self[isuccessor]['iRightSibling'].set(self[ientry]['iRightSibling'].int())
+
+            # otherwise our successor branch becomes the root node.
+            else:
+                assert(isuccessor == self[istore]['iChild'].int())
+                self[istore]['iChild'].set(isuccessorbranch)
+
+            # plug the successor in place of the removed entry by attaching our removed entry's left branch to it.
+            assert(self[isuccessor]['iLeftSibling']['NOSTREAM'])
+            self[isuccessor]['iLeftSibling'].set(self[ientry]['iLeftSibling'].int())
+
+            # if we just removed the root node, then point its parent directly at our successor.
+            if ientry == self[istore]['iChild'].int():
+                self[istore]['iChild'].set(isuccessor)
+
+            # otherwise, we need to update our removed entry's parent to reference the successor.
+            else:
+                [parentside] = (side for side in ['iLeftSibling', 'iRightSibling'] if self[parents[ientry]][side].int() == ientry)
+                self[parents[ientry]][parentside].set(isuccessor)
+
+            # next we need to recolor everything to maintain our invariants.
+            [self[ientry][side].set('NOSTREAM') for side in ['iLeftSibling', 'iRightSibling']]
+        return self[ientry]
+
+    def __connect_entry(self, side, anchor, ientry):
+        '''Connect a directory entry to the specified side of an anchoring directory entry.'''
+        assert(side in {'iLeftSibling', 'iRightSibling'})
+        assert(isinstance(anchor, DirectoryEntry))
+        assert(0 <= ientry < len(self))
+
+        # grab the nodes that we're connecting with and update our entry.
+        # then we can write our entry's index back into the anchor.
+        ibranch = anchor[side].int()
+        if not anchor[side]['NOSTREAM']:
+            siblings = ileft, iright = (self[ibranch][side].int() for side in ['iLeftSibling', 'iRightSibling'])
+            [self[ientry][entryside].set(sibling) for entryside, sibling in zip(['iLeftSibling', 'iRightSibling'], siblings)]
+
+        # Attach the entry to the anchor and then we can leave.
+        anchor[side].set(ientry)
+
+    def connect_child(self, store, index):
+        '''Connect a directory entry at the given index to another directory entry as its child'''
+        istore = self.value.index(store) if isinstance(store, DirectoryEntry) else store
+        ientry = self.value.index(index) if isinstance(index, DirectoryEntry) else index
+
+        # If the root node isn't actually a root node, then our job
+        # is easy and we only need to assign the index to it.
+        if self[istore]['iChild']['NOSTREAM']:
+            self[istore]['iChild'].set(ientry)
+            return self[ientry]
+
+        # Otherwise, we insert ourselves in front of the already attached entry.
+        iroot = self[istore]['iChild'].int()
+        siblings = ileft, _ = (self[iroot][side].int() for side in ['iLeftSibling', 'iRightSibling'])
+
+        # Update the entry that is being connected so that it can replace the root node.
+        self[ientry]['iLeftSibling'].set(ileft), self[ientry]['iRightSibling'].set(iroot)
+
+        # Remove the branch that was attached to the entry and update the root node.
+        self[iroot]['iLeftSibling'].set('NOSTREAM'), self[istore]['iChild'].set(ientry)
+        return self[ientry]
+
+    def connect_predecessor(self, anchor, index):
+        '''Connect a directory entry at the given index to the left branch of a directory entry.'''
+        ianchor = self.value.index(anchor) if isinstance(anchor, DirectoryEntry) else anchor
+        return self.__connect_entry('iLeftSibling', self[ianchor], self.value.index(index) if isinstance(index, DirectoryEntry) else index)
+
+    def connect_successor(self, anchor, index):
+        '''Connect a directory entry to the specified tree after the entry at the given index and return it.'''
+        ianchor = self.value.index(anchor) if isinstance(anchor, DirectoryEntry) else anchor
+        return self.__connect_entry('iRightSibling', self[ianchor], self.value.index(index) if isinstance(index, DirectoryEntry) else index)
 
 ### Sector types
 class SectorContent(ptype.block):
