@@ -791,17 +791,74 @@ class Directory(parray.block):
             rows.append("{:<{offsetwidth}s} {:s}{:<{:d}s} {!s:>{filenamewidth}} {:<{typewidth}s} SECT:{:<{startwidth}s} SIZE:{:<{sizewidth}x} CLSID:{:s}".format(offset, item.classname(), "[{:d}]".format(i), 2 + maxindexlength, Fescape(item.Name()), "{:s}".format(item['Type']), sectorDescription, item['qwSize'].int(), item['clsid'], offsetwidth=maxoffsetlength, filenamewidth=maxnamelength, typewidth=maxtypelength, startwidth=maxstartlength, sizewidth=maxsizelength))
         return '\n'.join(rows)
 
-    def byname(self, name, index=0):
-        for item in self:
+    def __byname_directory(self, name):
+        '''Return the index and entry of the first DirectoryEntry within the directory that is using the specified name.'''
+        for index, item in enumerate(self):
             available = {item.Name(), item['Name'].str()}
-
-            if name in available and index > 0:
-                index -= 1
-
-            elif name in available:
-                return item
+            if name in available:
+                return index, item
             continue
         raise KeyError("{:s}.byname({!r}): Unable to find directory entry matching the specified name.".format(self.classname(), name))
+
+    def __byname_tree(self, store, name):
+        '''Return the index and entry of the first DirectoryEntry belonging to the tree identified by store that is using the given name.'''
+        store = store or self.RootEntry()
+        istore = self.value.index(store) if isinstance(store, DirectoryEntry) else store
+        iterable = self.children(self[istore]) if 0 <= istore < len(self) else []
+        for index, item in iterable:
+            available = {item.Name(), item['Name'].str()}
+            if name in available:
+                return index, item
+            continue
+        raise KeyError("{:s}.byname({:d}, {!r}): Unable to find directory entry matching the specified name.".format(self.classname(), istore, name))
+
+    def byname(self, *name):
+        '''Return the first DirectoryEntry that is using the specified name.'''
+        Fget_entry_by_name = self.__byname_tree if len(name) == 2 else self.__byname_directory
+        _, entry = Fget_entry_by_name(*name)
+        return entry
+
+    def __bytype_directory(self, directoryentrytype):
+        '''Return the index and entry of the first DirectoryEntry within the directory that is using the specified type.'''
+        for index, item in enumerate(self):
+            if item['Type'][directoryentrytype]:
+                return index, item
+            continue
+        raise KeyError("{:s}.bytype({!r}): Unable to find directory entry matching the specified type.".format(self.classname(), directoryentrytype))
+
+    def __bytype_tree(self, store, directoryentrytype):
+        '''Return the index and entry of the first DirectoryEntry belonging to the tree identified by store that is using the given type.'''
+        store = store or self.RootEntry()
+        istore = self.value.index(store) if isinstance(store, DirectoryEntry) else store
+        iterable = self.children(self[istore]) if 0 <= istore < len(self) else []
+        for index, item in iterable:
+            if item['Type'][directoryentrytype]:
+                return index, item
+            continue
+        raise KeyError("{:s}.bytype({:d}, {!r}): Unable to find directory entry matching the specified type.".format(self.classname(), istore, directoryentrytype))
+
+    def bytype(self, *directoryentrytype):
+        '''Return the first DirectoryEntry that is using the specified type.'''
+        Fget_entry_by_type = self.__bytype_tree if len(directoryentrytype) == 2 else self.__bytype_directory
+        _, entry = Fget_entry_by_type(*directoryentrytype)
+        return entry
+
+    def __hasname_directory(self, name):
+        '''Return whether the given name is used by any entry within the directory.'''
+        iterable = ((index, item) for index, item in enumerate(self))
+        return any(name in {item.Name(), item['Name'].str()} for _, item in iterable)
+
+    def __hasname_tree(self, store, name):
+        '''Return whether the given name is used by any entry within the tree specified by store.'''
+        [store, name] = [store if store else self.RootEntry(), name]
+        istore = self.value.index(store) if isinstance(store, DirectoryEntry) else store
+        iterable = self.children(self[istore]) if 0 <= istore < len(self) else []
+        return any(name in {item.Name(), item['Name'].str()} for _, item in iterable)
+
+    def hasname(self, *store_and_name):
+        '''Return whether a DirectoryEntry with the specified name exists within the directory or underneath the specified store.'''
+        Fhas_entry_with_name = self.__hasname_tree if len(store_and_name) == 2 else self.__hasname_directory
+        return Fhas_entry_with_name(*store_and_name)
 
     def repr(self):
         return self.details()
@@ -828,7 +885,8 @@ class Directory(parray.block):
     def stores(self, store=None):
         '''Return the index and entry of each store in the directory (Storage).'''
         root = self.RootEntry() if store is None else store
-        for index, entry in self.items(root):
+        iterable = [] if root['iChild']['NOSTREAM'] else self.items(root['iChild'].int())
+        for index, entry in iterable:
             if entry['Type']['Storage']:
                 yield index, entry
             continue
