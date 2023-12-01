@@ -1,4 +1,4 @@
-import ptypes, functools, codecs, math, datetime, time, sys
+import ptypes, functools, codecs, math, datetime, time, builtins, sys
 from ptypes import *
 from ptypes import bitmap
 
@@ -172,14 +172,47 @@ class rfc4122(pstruct.type):
             return self.str()
         return '{????????-????-????-????-????????????}'
 
+    def set(self, *args, **fields):
+        if not args:
+            return super(rfc4122, self).set(**fields)
+
+        [arg] = args
+        if isinstance(arg, (''.__class__, u''.__class__)):
+            string = arg[+1 : -1] if arg[:1] + arg[-1:] == '{}' else arg
+            arg = time_low, time_mid, time_high_and_version, clock_seq, node = [builtins.int(component, 0x10) for component in string.split('-', 4)]
+
+        # chop up the components and fit them into the right place.
+        components = time_low, time_mid, time_high_and_version, clock_seq, node = arg
+        time_low_ = bitmap.new(time_low, 8 * 4)
+        time_mid_ = bitmap.new(time_mid, 4 * 4)
+        time_high_and_version_ = bitmap.new(time_high_and_version, 4 * 4)
+        clock_seq_ = bitmap.new(clock_seq, 4 * 4)
+        node_ = bitmap.new(node, 4 * 12)
+
+        # shove those values into the correct components
+        Data1 = bitmap.value(time_low_)
+        Data2 = bitmap.value(time_mid_)
+        Data3 = bitmap.value(time_high_and_version_)
+        Data4_ = bitmap.new(0, 0)
+        Data4_ = bitmap.push(Data4_, clock_seq_)
+        Data4_ = bitmap.push(Data4_, node_)
+        Data4 = bytearray(map(bitmap.value, bitmap.split(Data4_, 8)))
+
+        # assign our fields and ask the parent class to set them.
+        fields['Data1'] = Data1
+        fields['Data2'] = Data2
+        fields['Data3'] = Data3
+        fields['Data4'] = Data4
+        return super(rfc4122, self).set(**fields)
+
     def str(self):
-        time_low = '{:08x}'.format(self['Data1'].int())
-        time_mid = '{:04x}'.format(self['Data2'].int())
-        time_hi_and_version = '{:04x}'.format(self['Data3'].int())
+        time_low = '{:08X}'.format(self['Data1'].int())
+        time_mid = '{:04X}'.format(self['Data2'].int())
+        time_high_and_version = '{:04X}'.format(self['Data3'].int())
         _ = self['Data4'].serialize()
-        clock_seq = ''.join( map('{:02x}'.format, bytearray(_[:2])) )   # clock_seq_hi_and_reserved, clock_seq_low
-        node = ''.join( map('{:02x}'.format, bytearray(_[2:])) )
-        return '{{{:s}}}'.format('-'.join([time_low, time_mid, time_hi_and_version, clock_seq, node]))
+        clock_seq = ''.join( map('{:02X}'.format, bytearray(_[:2])) )   # clock_seq_hi_and_reserved, clock_seq_low
+        node = ''.join( map('{:02X}'.format, bytearray(_[2:])) )
+        return '{{{:s}}}'.format('-'.join([time_low, time_mid, time_high_and_version, clock_seq, node]))
 
     def __format__(self, spec):
         if self.value is None or not spec:
