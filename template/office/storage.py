@@ -877,34 +877,27 @@ class Directory(parray.block):
         return result
     root = property(fget=RootEntry)
 
-    def filter(self, type):
-        critique = type if callable(type) else operator.itemgetter(type)
-        iterable = ((index, entry) for index, entry in enumerate(self) if critique(entry['Type']))
-        return iterable
-
-    def stores(self, store=None):
+    def stores(self, storage=None):
         '''Return the index and entry of each store in the directory (Storage).'''
-        root = self.RootEntry() if store is None else store
-        iterable = [] if root['iChild']['NOSTREAM'] else self.items(root['iChild'].int())
+        storage = self.RootEntry() if storage is None else storage
+        iterable = [] if storage['iChild']['NOSTREAM'] else self.items(storage['iChild'].int())
         for index, entry in iterable:
             if entry['Type']['Storage']:
                 yield index, entry
             continue
         return
 
-    def enumerate(self, store=None):
+    def enumerate(self, storage=None):
         '''Return the index and entry of each item from the directory in their sorted order.'''
-        root = self.RootEntry() if store is None else store
-        assert(root)
-        for index, entry in self.children(root):
+        storage = self.RootEntry() if storage is None else storage
+        for index, entry in self.children(storage):
             yield index, entry
         return
 
-    def iterate(self, store=None):
+    def iterate(self, storage=None):
         '''Return the each entry from the directory in their sorted order.'''
-        root = self.RootEntry() if store is None else store
-        assert(root)
-        for _, entry in self.children(root):
+        storage = self.RootEntry() if store is None else storage
+        for _, entry in self.children(storage):
             yield entry
         return
 
