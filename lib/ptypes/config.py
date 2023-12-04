@@ -414,10 +414,12 @@ if __name__ == '__main__':
         #logger = field.type('default-logger', logging.Filterer, 'Default place to log progress')
 
         def __getsource():
+            from . import ptype
             return ptype.source
         def __setsource(value):
             if not isinstance(value, provider.base):
                 raise ValueError("Invalid source object")
+            from . import ptype
             ptype.source = value
         source = field.set('default-source', __getsource, __setsource, 'Default source to load/commit data from/to')
 
