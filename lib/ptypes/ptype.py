@@ -775,12 +775,14 @@ class generic(__interface__):
         raise error.ImplementationError(self, 'generic.load')
     def commit(self, **attrs):
         raise error.ImplementationError(self, 'generic.commit')
-    def alloc(self, **attrs):
+    def alloc(self, *values, **attrs):
         """Will zero the ptype instance with the provided ``attrs``.
 
         This can be overloaded in order to allocate physical space for the new ptype.
         """
         attrs.setdefault('source', provider.empty())
+        if values:
+            return self.load(**attrs).set(*values)
         return self.load(**attrs)
 
     # abbreviations

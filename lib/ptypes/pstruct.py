@@ -265,7 +265,7 @@ class type(__structure_interface__):
                 elif isinstance(item, dict):
                     result.value[idx].alloc(**item)
                 else:
-                    result.value[idx].set(item)
+                    result.value[idx].alloc(item)   # generic.alloc falls back to calling object.set
                 offset += result.value[idx].blocksize()
             self.setoffset(self.getoffset(), recurse=True)
         return result

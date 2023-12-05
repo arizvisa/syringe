@@ -393,7 +393,7 @@ class type(base):
             Log.warning("type.cast : {:s} : Incomplete cast to `{:s}` due to missing data returned from provider at {!s}. Target has been left partially initialized.".format(self.classname(), target.typename(), position))
         return target
 
-    def alloc(self, **attrs):
+    def alloc(self, *values, **attrs):
         '''Initialize the binary type with provider.empty()'''
         attrs.setdefault('source', provider.empty())
 
@@ -413,7 +413,7 @@ class type(base):
                 result = self.__deserialize_consumer__(consumer)
             except (StopIteration, error.ProviderError):
                 raise error.LoadError(self, consumed=0, offset=offset)  # FIXME: we should track the current bit we're at along with the number of bits
-        return result
+        return result.set(*values) if values else result
 
     def load(self, **attrs):
         raise error.UserError(self, 'type.load', "Unable to load from a binary-type when reading from a byte-stream. User must promote to a `{!s}` and then `{:s}`".format(partial, '.'.join([self.typename(), 'load'])))
@@ -1122,7 +1122,7 @@ class __array_interface__(container):
                 elif bitmap.isinstance(value):
                     result.value[index] = item = result.new(integer, __name__=name, position=position).__setvalue__(value)
                 else:
-                    item, _ = result.value[index], result.value[index].set(value)
+                    item, _ = result.value[index], result.value[index].alloc(value) # type.alloc uses object.set as a fallback
 
             # update our calculator with whatever was just processed.
             position = calculator.send(item.bits())
@@ -1339,7 +1339,7 @@ class __structure_interface__(container):
                 elif isinstance(item, dict):
                     item, _ = result.value[idx], result.value[idx].alloc(**item)
                 else:
-                    item, _ = result.value[idx], result.value[idx].set(item)
+                    item, _ = result.value[idx], result.value[idx].alloc(item)  # type.alloc falls back to object.set
 
                 # update our calculator with the item was just processed.
                 position = calculator.send(item.bits())

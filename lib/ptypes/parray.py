@@ -293,7 +293,7 @@ class type(__array_interface__):
                 elif isinstance(val, ptype.generic):
                     result.value[idx] = result.new(val, position=position)
                 else:
-                    result.value[idx].set(val)
+                    result.value[idx].alloc(val)    # generic.alloc will fallback to generic.set
                 continue
         else:
             offset = result.getoffset()
@@ -304,7 +304,7 @@ class type(__array_interface__):
                 elif isinstance(val, ptype.generic):
                     result.value[idx] = result.new(val, __name__=name, offset=offset)
                 else:
-                    result.value[idx].set(val)
+                    result.value[idx].alloc(val)    # this works since generic.alloc will fallback to object.set
                 offset += result.value[idx].blocksize()
 
             # re-alloc elements that exist in the rest of the array
