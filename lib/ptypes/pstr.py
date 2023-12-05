@@ -368,19 +368,19 @@ class string(ptype.type):
             return super(string, self).alloc(*values, **attrs)
 
         object = ptype.clone(self._object_, encoding=self.encoding)
-        value, = values
+        [value] = values
 
-        size, esize = self.size() if self.initializedQ() else self.blocksize(), self.new(object).a.size()
-        glyphs = [ item for item in value ]
+        if isinstance(value, string_types):
+            encoded, length = self.encoding.encode(value)
+            size, esize = self.size() if self.initializedQ() else self.blocksize(), self.new(object).a.size()
 
-        t = ptype.clone(parray.type, _object_=object)
-        result = t(length=len(glyphs))
-
-        # Now we can finally izip_longest here...
-        for element, glyph in __izip_longest__(result.alloc(), value):
-            if element is None:
-                break
-            element.set(glyph or '\0')
+            glyphs = [ item for item in value ]
+            result = parray.type(_object_=object, length=len(glyphs)).load(offset=0, source=provider.bytes(encoded))
+        else:
+            encoded, size, esize = bytearray(value), len(value), self.new(object).a.size()
+            res, extra = divmod(size, esize)
+            length, padded = res + 1 if extra else res, encoded + bytearray([0] * esize)
+            result = parray.type(_object_=object, length=length).load(offset=0, source=provider.bytes(padded))
 
         self.length = len(result)
         return self.load(offset=0, source=provider.proxy(result))
