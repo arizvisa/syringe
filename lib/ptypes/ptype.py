@@ -1703,6 +1703,15 @@ class block(type):
         [value] = values
         return super(block, self).__setvalue__(value, **attrs)
 
+    def alloc(self, *values, **attrs):
+        '''Allocate the instance using the given bytes and attributes.'''
+        if not values:
+            return super(block, self).alloc(*values, **attrs)
+        [value] = values
+        if self.length is not None:
+            self.length = len(value)
+        return self.__setvalue__(value, **attrs)
+
     def __setitem__(self, index, value):
         if not builtins.isinstance(index, slice):
             if index < 0:
