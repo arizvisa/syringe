@@ -362,29 +362,6 @@ class string(ptype.type):
             element.set(bytes(bytearray(glyph or null)))
         return self.load(offset=0, source=provider.proxy(result), blocksize=(lambda cb=result.blocksize(): cb))
 
-    def alloc(self, *values, **attrs):
-        '''Allocate the instance using the provided string and attributes.'''
-        if not values:
-            return super(string, self).alloc(*values, **attrs)
-
-        object = ptype.clone(self._object_, encoding=self.encoding)
-        [value] = values
-
-        if isinstance(value, string_types):
-            encoded, length = self.encoding.encode(value)
-            size, esize = self.size() if self.initializedQ() else self.blocksize(), self.new(object).a.size()
-
-            glyphs = [ item for item in value ]
-            result = parray.type(_object_=object, length=len(glyphs)).load(offset=0, source=provider.bytes(encoded))
-        else:
-            encoded, size, esize = bytearray(value), len(value), self.new(object).a.size()
-            res, extra = divmod(size, esize)
-            length, padded = res + 1 if extra else res, encoded + bytearray([0] * esize)
-            result = parray.type(_object_=object, length=length).load(offset=0, source=provider.bytes(padded))
-
-        self.length = len(result)
-        return self.load(offset=0, source=provider.proxy(result))
-
     def str(self, **parameters):
         '''Decode the string into the specified encoding type while stripping any trailing '\0' characters.'''
         res = self.__getvalue__(**parameters)
@@ -798,7 +775,7 @@ if __name__ == '__main__':
     @TestCase
     def test_str_set_resized():
         data = 'hola'
-        x = pstr.string(length=10).a
+        x = pstr.string(length=None).alloc(length=10)
         if x.serialize() != b'\0\0\0\0\0\0\0\0\0\0':
             raise Failure
         x.alloc(data)
