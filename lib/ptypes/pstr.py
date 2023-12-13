@@ -669,7 +669,7 @@ if __name__ == '__main__':
     def test_str_szwstring():
         s = b'C\x00:\x00\\\x00P\x00y\x00t\x00h\x00o\x00n\x002\x006\x00\\\x00D\x00L\x00L\x00s\x00\\\x00_\x00c\x00t\x00y\x00p\x00e\x00s\x00.\x00p\x00y\x00d\x00\x00\x00'
         v = pstr.szwstring(source=provider.bytes(s)).l
-        if v.str() == 'C:\Python26\DLLs\_ctypes.pyd':
+        if v.str() == r'C:\Python26\DLLs\_ctypes.pyd':
             raise Success
 
     @TestCase
