@@ -586,58 +586,61 @@ class __interface__(object):
         terse -- display the hexdump tersely if larger than a specific threshold
         threshold -- maximum number of rows to display
         """
-        options.setdefault('width', Config.display.hexdump.width)
-        options.setdefault('offset', self.getoffset())
-        return utils.hexdump(self.serialize(), **options)
+        offset, width = options.pop('offset', self.getoffset()), options.pop('width', Config.display.hexdump.width)
+        return utils.hexdump(self.serialize(), offset=offset, width=width, **options)
 
-    def __details_size__(self, size, **options):
+    def __details_size__(self, size):
         """Return details of the object clamped to the specified size. This can be displayed in multiple-lines."""
         if not self.initializedQ():
             return u"???"
 
         buf = self.serialize()
-        length = options.setdefault('width', Config.display.hexdump.width)
-        options.setdefault('offset', self.getoffset())
+        offset, width = self.getoffset(), Config.display.hexdump.width
 
         # if larger than threshold...
-        threshold = options.pop('threshold', Config.display.threshold.details)
-        message = options.pop('threshold_message', Config.display.threshold.details_message)
-        if threshold > 0 and size / length > threshold:
-            threshold = options.pop('height', threshold) # 'threshold' maps to 'height' for emit_repr
-            return '\n'.join(utils.emit_hexrows(buf, threshold, message, **options))
-        return utils.hexdump(buf, **options)
+        threshold, message = Config.display.threshold.details, Config.display.threshold.details_message
+        if threshold > 0 and size / width > threshold:
+            return '\n'.join(utils.emit_hexrows(buf, threshold, message, offset=offset, width=width))
+        return utils.hexdump(buf, offset=offset, width=width)
 
-    def __summary_size__(self, size, **options):
+    def __summary_size__(self, size):
         """Return a summary of the object clamped to the specified size. This can be displayed on a single-line."""
         if self.value is None:
             return u"???"
 
-        threshold = options.pop('threshold', Config.display.threshold.summary)
-        message = options.pop('threshold_message', Config.display.threshold.summary_message)
+        #threshold = options.pop('threshold', Config.display.threshold.summary)
+        #message = options.pop('threshold_message', Config.display.threshold.summary_message)
+        threshold, message = Config.display.threshold.summary, Config.display.threshold.summary_message
         #threshold = options.pop('width', threshold) # 'threshold' maps to 'width' for emit_repr
+        offset = self.getoffset()
 
         if threshold < 0 or size < threshold:
             data = self.serialize()
-            return u'"{:s}"'.format(utils.emit_repr(data[:size], **options))
+            return u'"{:s}"'.format(utils.emit_repr(data[:size]))
 
-        if builtins.isinstance(self.value, bytes) or size < threshold:
+        # If the size is much smaller than the threshold, then we can use it.
+        if size < threshold:
             data = self.serialize() if self.initializedQ() else self.value
+            res = utils.emit_repr(data, threshold, message, offset=offset)
+            return u'"{:s}"'.format(res)
 
-        # if there's too much data, the slice it together from both sides
-        else:
-            lefti, righti = utils.valueaccumulate(self.value, +1), utils.valueaccumulate(self.value, -1)
-            _, leftbytes = next(lefti, (0, b''))
-            leftitems = [leftbytes] + [item for _, item in itertools.takewhile(lambda offset_data: offset_data[0] < threshold, lefti)]
-            _, rightbytes = next(righti, (0, b''))
-            rightitems = [rightbytes] + [item for _, item in itertools.takewhile(lambda offset_data: offset_data[0] < threshold, righti)]
-            data = bytes().join([bytes().join(leftitems), bytes().join([item for item in rightitems][::-1])])
-            options['size'] = size
+        # Otherwise, we're a single element and we can trust emit_repr to handle it.
+        elif builtins.isinstance(self.value, bytes):
+            data = self.serialize() if self.initializedQ() else self.value
+            res = utils.emit_repr(data, threshold, message, offset=offset, size=size)
+            return u'"{:s}"'.format(res)
 
-        options.setdefault('offset', self.getoffset())
+        # if there's too much data, the slice it together from both sides.
+        lefti, righti = utils.valueaccumulate(self.value, +1), utils.valueaccumulate(self.value, -1)
+        _, leftbytes = next(lefti, (0, b''))
+        leftitems = [leftbytes] + [item for _, item in itertools.takewhile(lambda offset_data: offset_data[0] < threshold, lefti)]
+        _, rightbytes = next(righti, (0, b''))
+        rightitems = [rightbytes] + [item for _, item in itertools.takewhile(lambda offset_data: offset_data[0] < threshold, righti)]
+        data = bytes().join([bytes().join(leftitems), bytes().join([item for item in rightitems][::-1])])
 
         # if larger than threshold...
         assert(threshold > 0 and size >= threshold), (size, threshold)
-        res = utils.emit_repr(data, threshold, message, **options)
+        res = utils.emit_repr(data, threshold, message, offset=offset, size=size)
         return u'"{:s}"'.format(res)
 
     def details(self):
@@ -651,7 +654,7 @@ class __interface__(object):
         return self.__summary_size__(size)
 
     #@utils.memoize('self', self='parent', args=lambda item: (item[0],) if len(item) > 0 else (), kwds=lambda item: item.get('type', ()))
-    @utils.memoize_method(self='parent', args=lambda item: frozenset(item[:1] if len(item) else ()), kwds=lambda item: (item.get('type', ()), item.get('default', ())))
+    @utils.memoize_method(self='parent', args=frozenset, kwds=lambda item: (item.get('type', ()), item.get('default', ())))
     def getparent(self, *args, **kwds):
         """Returns the creator of the current type.
 
@@ -753,7 +756,7 @@ class generic(__interface__):
     def __setstate__(self, state):
         return
 
-    def repr(self, **options):
+    def repr(self):
         """The output that __repr__ displays"""
         raise error.ImplementationError(self, 'generic.repr')
 
@@ -1195,9 +1198,9 @@ class type(base):
         return blocksize
 
     ## operator overloads
-    def repr(self, **options):
+    def repr(self):
         """Display all ptype.type instances as a single-line hexstring"""
-        return self.summary(**options) if self.value is not None else '???'
+        return self.summary() if self.value is not None else '???'
 
     def __getstate__(self):
         return (super(type, self).__getstate__(), self.blocksize(), self.value,)
@@ -1580,12 +1583,11 @@ class container(base):
             result['uninitialized'] = True
         return result
 
-    def repr(self, **options):
+    def repr(self):
         """Display all ptype.container types as a hexstring"""
         if self.initializedQ():
             return self.summary()
-        threshold = options.pop('threshold', Config.display.threshold.summary)
-        message = options.pop('threshold_message', Config.display.threshold.summary_message)
+        threshold, message = Config.display.threshold.summary, Config.display.threshold.summary_message
         if self.value is not None:
             lefti, righti = utils.valueaccumulate(self.value, +1), utils.valueaccumulate(self.value, -1)
             _, leftbytes = next(lefti, (0, b''))
@@ -1593,8 +1595,7 @@ class container(base):
             _, rightbytes = next(righti, (0, b''))
             rightitems = [rightbytes] + [item for _, item in itertools.takewhile(lambda offset_data: offset_data[0] < threshold, righti)]
             data = bytes().join([bytes().join(leftitems), bytes().join([item for item in rightitems][::-1])])
-            options['size'] = self.size()
-            return u"\"{:s}\"".format(utils.emit_repr(data, threshold, message, **options)) if len(data) > 0 else u"???"
+            return u"\"{:s}\"".format(utils.emit_repr(data, threshold, message, size=self.size())) if len(data) > 0 else u"???"
         return u"???"
 
     def __append__(self, object):
@@ -1689,13 +1690,13 @@ class block(type):
                 return self.__getitem__(res)
             raise IndexError(index)
         return self.value[index]
-    def repr(self, **options):
+    def repr(self):
         """Display all ptype.block instances as a hexdump"""
         if not self.initializedQ():
             return u"???"
         if self.blocksize() > 0:
-            return self.details(**options) + '\n'
-        return self.summary(**options)
+            return self.details() + '\n'
+        return self.summary()
     def __setvalue__(self, *values, **attrs):
         """Set entire type equal to ``value``"""
         if not values:
@@ -1749,7 +1750,7 @@ class undefined(block):
         return True if self.blocksize() <= len(self.value or b'') else False
     def serialize(self):
         return self.value or b''
-    def summary(self, **options):
+    def summary(self):
         return '...' if self.value is not None and not len(self.value) else super(undefined, self).summary()
     repr = details = summary
     def size(self):
@@ -2351,14 +2352,6 @@ class wrapper_t(type):
         state, self._value_, self.__object__ = state
         super(wrapper_t, self).__setstate__(state)
 
-    def summary(self, **options):
-        options.setdefault('offset', self.getoffset())
-        return super(wrapper_t, self).summary(**options)
-
-    def details(self, **options):
-        options.setdefault('offset', self.getoffset())
-        return super(wrapper_t, self).details(**options)
-
     def __format__(self, spec):
         return self.object.__format__(spec)
 
@@ -2621,14 +2614,14 @@ class pointer_t(encoded_t):
         objectname = force(object, self).typename() if istype(object) else object.__qualname__ if hasattr(object, '__qualname__') else getattr(object, '__name__', 'None')
         return "{:s}<{:s}>".format(self.typename(), objectname)
 
-    def summary(self, **options):
+    def summary(self):
         if self.value is None:
             return u"???"
         return u"*{:#x}".format(self.int())
 
-    def repr(self, **options):
+    def repr(self):
         """Display all pointer_t instances as an integer"""
-        return self.summary(**options) if self.initializedQ() else u"*???"
+        return self.summary() if self.initializedQ() else u"*???"
 
     def __getstate__(self):
         return super(pointer_t, self).__getstate__(), self._object_

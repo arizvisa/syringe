@@ -173,8 +173,8 @@ def padding(size, **kwds):
         raise error.UserError(res, 'padding', message="Argument size must be an integral : {!s} -> {!r}".format(size.__class__, size))
 
     # methods to get assigned
-    def repr(self, **options):
-        return self.summary(**options)
+    def repr(self):
+        return self.summary()
 
     def blocksize(self, denomination=size if size > 0 else 0):
         parent = self.parent
@@ -227,8 +227,8 @@ def align(size, **kwds):
         raise error.UserError(res, 'align', message="Argument size must be an integral : {!s} -> {!r}".format(size.__class__, size))
 
     # methods to get assigned
-    def repr(self, **options):
-        return self.summary(**options)
+    def repr(self):
+        return self.summary()
 
     def blocksize(self, denomination=size if size > 0 else 0):
         offset = self.getoffset()

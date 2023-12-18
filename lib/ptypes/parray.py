@@ -207,8 +207,8 @@ class __array_interface__(ptype.container):
 
         return u"{:s}[{:d}]".format(res, length)
 
-    def summary(self, **options):
-        res = super(__array_interface__, self).summary(**options)
+    def summary(self):
+        res = super(__array_interface__, self).summary()
         if self.initializedQ():
             return ' '.join([self.__element__(), res])
         return ' '.join([self.__element__(), res])
@@ -882,7 +882,7 @@ if __name__ == '__main__':
             _object_ = pint.uint8_t
             def int(self):
                 return functools.reduce(lambda agg, item: 256 * agg + item.int(), self.value, 0)
-            def repr(self, **options):
+            def repr(self):
                 if self.initializedQ():
                     return self.classname() + " {:x}".format(self.int())
                 return self.classname() + ' ???'

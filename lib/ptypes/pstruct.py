@@ -337,10 +337,10 @@ class type(__structure_interface__):
             result = super(type, self).load()
         return result
 
-    def repr(self, **options):
-        return self.details(**options)
+    def repr(self):
+        return self.details()
 
-    def details(self, **options):
+    def details(self):
         gettypename = lambda t: t.typename() if ptype.istype(t) else t.__name__
         if self.value is None:
             formatter = functools.partial(u"[{:x}] {:s} {:s} ???".format, self.getoffset())
@@ -354,17 +354,18 @@ class type(__structure_interface__):
             if item is None:
                 i = utils.repr_class(gettypename(t))
                 item = ptype.undefined().a
-                result.append(fmt(i, name, item.summary(**options)))
+                result.append(fmt(i, name, item.summary()))
                 continue
             offset = self.getoffset(getattr(item, '__name__', None) or name)
             instance = utils.repr_instance(item.classname(), item.name() or name)
             initialized = item.initializedQ() if isinstance(item, ptype.container) else item.value is not None
-            value = item.summary(**options) if initialized else u'???'
+            value = item.summary() if initialized else u'???'
             properties = ','.join(u"{:s}={!r}".format(k, v) for k, v in item.properties().items())
             result.append(u"[{:x}] {:s}{:s} {:s}".format(offset, instance, u" {{{:s}}}".format(properties) if properties else u"", value))
             offset += item.size()
 
         return '\n'.join(itertools.chain(result, [] if len(result) > 1 else ['']))
+
     def __setvalue__(self, *values, **fields):
         result = self
 

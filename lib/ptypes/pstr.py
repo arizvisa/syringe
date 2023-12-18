@@ -166,7 +166,7 @@ class _char_t(pint.type):
             return 0
         return super(_char_t, self).__getvalue__()
 
-    def summary(self, **options):
+    def summary(self):
         res, integer = self.__getvalue__(), self.int()
         if isinstance(res, string_types):
             escaped = string_escape(res)
@@ -409,23 +409,23 @@ class string(ptype.type):
             return super(string, self).serialize()
         raise error.InitializationError(self, 'string.serialize')
 
-    def summary(self, **options):
+    def summary(self):
         try:
             res = self.__getvalue__()
 
         except error.InitializationError:
-            return super(string, self).summary(**options)
+            return super(string, self).summary()
 
         except UnicodeDecodeError:
             Log.debug('{:s}.summary : {:s} : Unable to decode unicode string. Rendering as hexdump instead.'.format(self.classname(), self.instance()))
-            return super(string, self).summary(**options)
+            return super(string, self).summary()
 
         escaped = string_escape(res)
         q, escaped = ('"', escaped) if '\'' in escaped and '"' not in escaped else ('\'', escaped.replace('\'', '\\\''))
         return u"({:d}) {:s}".format(len(res), q + escaped + q)
 
-    def repr(self, **options):
-        return self.summary(**options) if self.initializedQ() else '???'
+    def repr(self):
+        return self.summary() if self.initializedQ() else '???'
 
     def classname(self):
         return '{:s}<{:s}>'.format(super(string, self).classname(), self._object_.typename())
@@ -539,16 +539,16 @@ class szstring(string):
     def blocksize(self):
         return self.size() if self.initializedQ() else self.load().size()
 
-    def summary(self, **options):
+    def summary(self):
         try:
             res = self.__getvalue__()
 
         except error.InitializationError:
-            return super(szstring, self).summary(**options)
+            return super(szstring, self).summary()
 
         except UnicodeDecodeError:
             Log.debug('{:s}.summary : {:s} : Unable to decode unicode string. Rendering as hexdump instead.'.format(self.classname(), self.instance()))
-            return super(szstring, self).summary(**options)
+            return super(szstring, self).summary()
 
         escaped = string_escape(utils.strdup(res, '\0'))
         q, escaped = ('"', escaped) if '\'' in escaped and '"' not in escaped else ('\'', escaped.replace('\'', '\\\''))

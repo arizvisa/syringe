@@ -137,7 +137,7 @@ def littleendian(ptype):
     return builtins.type(ptype.__name__, ptype.__bases__, res)
 
 class type(pint.type):
-    def summary(self, **options):
+    def summary(self):
         res = super(type, self).__getvalue__()
         return '{:g} ({:#x})'.format(self.float(), res)
 

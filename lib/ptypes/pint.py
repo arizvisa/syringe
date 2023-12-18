@@ -339,13 +339,13 @@ class type(ptype.type):
 
 class uinteger_t(type):
     '''Provides unsigned integer support'''
-    def summary(self, **options):
+    def summary(self):
         res = self.int()
         return '{:-#0{:d}x} ({:d})'.format(res, 2 + self.blocksize() * 2, res)
 
 class sinteger_t(type):
     '''Provides signed integer support'''
-    def summary(self, **options):
+    def summary(self):
         res = self.int()
         return u"{:+#0{:d}x} ({:d})".format(res, 3 + self.blocksize() * 2, res)
 
@@ -496,7 +496,7 @@ class enum(type):
         res = self.get()
         return self.__byvalue__(res, u"{:x}".format(res))
 
-    def summary(self, **options):
+    def summary(self):
         res = self.get()
         try: return u"{:s}({:#x})".format(self.__byvalue__(res), res)
         except (ValueError, KeyError): pass

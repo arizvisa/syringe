@@ -308,7 +308,7 @@ class base(ptype.generic):
     def commit(self, **attrs):
         raise error.ImplementationError(self, 'base.commit')
 
-    def repr(self, **options):
+    def repr(self):
         raise error.ImplementationError(self, 'base.repr')
 
     def __deserialize_consumer__(self, consumer):
@@ -374,8 +374,8 @@ class type(base):
         self.value = bitmap.new(*value)
         return self
 
-    def repr(self, **options):
-        return self.details(**options) if self.initializedQ() else '???'
+    def repr(self):
+        return self.details() if self.initializedQ() else '???'
 
     def cast(self, type, **attrs):
         if not istype(type):
@@ -470,11 +470,11 @@ class integer(type):
         _, res = item
         return res
 
-    def summary(self, **options):
+    def summary(self):
         res = self.__getvalue__()
         return u"({:s},{:d})".format(bitmap.hex(res), bitmap.size(res))
 
-    def details(self, **options):
+    def details(self):
         res = self.__getvalue__()
         return bitmap.string(res)
 
@@ -692,13 +692,13 @@ class enum(integer):
         res = bitmap.value(self.get())
         return self.__byvalue__(res, u"{:x}".format(res))
 
-    def summary(self, **options):
+    def summary(self):
         res = self.bitmap()
         try: return u"{:s}({:s},{:d})".format(self.__byvalue__(bitmap.value(res)), bitmap.hex(res), bitmap.size(res))
         except (ValueError, KeyError): pass
         return super(enum, self).summary()
 
-    def details(self, **options):
+    def details(self):
         res = self.get()
         try: return u"{:s} : {:s}".format(self.__byvalue__(bitmap.value(res)), bitmap.string(res))
         except (ValueError, KeyError): pass
@@ -1128,15 +1128,15 @@ class __array_interface__(container):
             position = calculator.send(item.bits())
         return result
 
-    def summary(self, **options):
+    def summary(self):
         element, value = self.__element__(), self.bitmap()
         result = bitmap.hex(value) if bitmap.size(value) else '...'
         return ' '.join([element, result])
 
-    def repr(self, **options):
-        return self.summary(**options) if self.initializedQ() else ' '.join([self.__element__(), '???'])
+    def repr(self):
+        return self.summary() if self.initializedQ() else ' '.join([self.__element__(), '???'])
 
-    def details(self, **options):
+    def details(self):
         return self.__details_initialized() if self.initializedQ() else self.__details_uninitialized()
 
     def __details_initialized(self):
@@ -1380,13 +1380,13 @@ class __structure_interface__(container):
                 continue
         raise KeyError(name)
 
-    def details(self, **options):
-        return self.__details_initialized(**options) if self.initializedQ() else self.__details_uninitialized(**options)
+    def details(self):
+        return self.__details_initialized() if self.initializedQ() else self.__details_uninitialized()
 
-    def repr(self, **options):
+    def repr(self):
         return self.details() + '\n'
 
-    def summary(self, **options):
+    def summary(self):
         if self.value is None:
             return u"???"
         res = self.bitmap()
@@ -2074,12 +2074,12 @@ class partial(ptype.container):
         return result
 
     ## methods to passthrough if the object is initialized
-    def summary(self, **options):
-        return u"???" if not self.initializedQ() else self.object.summary(**options)
-    def details(self, **options):
-        return u"???" if not self.initializedQ() else self.object.details(**options)
-    def repr(self, **options):
-        return u"???" if not self.initializedQ() else self.object.repr(**options)
+    def summary(self):
+        return u"???" if not self.initializedQ() else self.object.summary()
+    def details(self):
+        return u"???" if not self.initializedQ() else self.object.details()
+    def repr(self):
+        return u"???" if not self.initializedQ() else self.object.repr()
 
     def __len__(self):
         '''x.__len__() <==> len(x)'''
@@ -2259,7 +2259,7 @@ class partial(ptype.container):
 
 class flags(struct):
     '''represents bit flags that can be toggled'''
-    def summary(self, **options):
+    def summary(self):
         return self.__summary_initialized() if self.initializedQ() else self.__summary_uninitialized()
 
     def __summary_initialized(self):
