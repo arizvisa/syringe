@@ -150,7 +150,7 @@ class _char_t(pint.type):
         '''Try to decode the _char_t to a character.'''
         data = self.serialize()
         try:
-            res, _ = self.encoding.decode(data, errors='replace')
+            res, _ = self.encoding.decode(data, 'replace')
         except UnicodeDecodeError as E:
             raise UnicodeDecodeError(E.encoding, E.object, E.start, E.end, 'Unable to decode string {!r} with requested encoding : {!s}'.format(data, getattr(self.encoding, 'name', self.encoding)))
         return res
