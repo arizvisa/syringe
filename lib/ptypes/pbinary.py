@@ -3443,7 +3443,7 @@ if __name__ == '__main__':
                 (e, 'third'),
             ]
         x = pbinary.new(pbinary.bigendian(s), source=ptypes.prov.bytes(b'\xde\xad')).l
-        if x.item('third').str() == 'd':
+        if x.field('third').str() == 'd':
             raise Success
 
     @TestCase

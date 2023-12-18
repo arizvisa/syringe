@@ -683,11 +683,11 @@ class ELFCLASSXX(object):
             F_check_other = F_check(next(iterable, None))
 
             iterable = (match.pop(key) for key in ['st_bind', 'bind'] if key in match)
-            F_check = lambda st_bind: (lambda item: True )if st_bind is None else (lambda item: item['st_info'].item('ST_BIND')[st_bind])
+            F_check = lambda st_bind: (lambda item: True) if st_bind is None else (lambda item: item['st_info'].field('ST_BIND')[st_bind])
             F_check_bind = F_check(next(iterable, None))
 
             iterable = (match.pop(key) for key in ['st_type', 'type'] if key in match)
-            F_check = lambda st_type: (lambda item: True) if st_type is None else (lambda item: item['st_info'].item('ST_TYPE')[st_type])
+            F_check = lambda st_type: (lambda item: True) if st_type is None else (lambda item: item['st_info'].field('ST_TYPE')[st_type])
             F_check_type = F_check(next(iterable, None))
 
             iterable = (match.pop(key) for key in ['st_shndx', 'shndx', 'index', 'section'] if key in match)

@@ -293,7 +293,7 @@ class UNWIND_CODE(pstruct.type):
     # FIXME: define operation_info which depends on the unwind_operation_code.
     def __parameter(self):
         res = self['operation']
-        op, info = res.item('code'), res['info']
+        op, info = res.field('code'), res['info']
         if op['ALLOC_LARGE']:
             if info not in {0, 1}:
                 raise NotImplementedError
@@ -347,12 +347,12 @@ class UNWIND_INFO(pstruct.type):
         ]
     def __HandlerInfo(self):
         res = self['Header'].li
-        flags = res.item('Flags')
+        flags = res.field('Flags')
         return self._HandlerInfo if any(flags[item] for item in ['EHANDLER', 'UHANDLER', 'FHANDLER']) else VOID
 
     def __FunctionEntry(self):
         res = self['Header'].li
-        flags = res.item('Flags')
+        flags = res.field('Flags')
         return IMAGE_RUNTIME_FUNCTION_ENTRY if flags['CHAININFO'] else VOID
 
     _fields_ = [

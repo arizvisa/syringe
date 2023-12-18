@@ -354,7 +354,7 @@ if 'HeapEntry':
                 return self['Count']
 
             def Type(self, query):
-                field = self.item('Count')
+                field = self.field('Count')
                 return self.BackEndQ() and not self['Extra'] and field[query]
 
             def summary(self):
@@ -363,7 +363,7 @@ if 'HeapEntry':
 
                 # If we're using one of the defined constants, then eturn the type.
                 if self['Count'] < 6:
-                    type = self.item('Count')
+                    type = self.field('Count')
                     return type.str()
 
                 # Otherwise this is just a backend chunk with some unused bytes.
@@ -423,7 +423,7 @@ if 'HeapEntry':
             unused = self['UnusedBytes']
             if self.FrontEndQ():
                 return '(FE) {:s} : UnusedBytes={:+#x}'.format('BUSY' if unused.BusyQ() else 'FREE', unused.UnusedBytes())
-            type = unused.item('Count')
+            type = unused.field('Count')
 
             # If it's a backend header, then check if it's a type
             # that doesn't depend on HEAP_ENTRY.Flags.

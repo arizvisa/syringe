@@ -488,7 +488,7 @@ class POOL_HEADER(pstruct.type, versioned):
     class _Ulong(pbinary.struct):
         def summary(self):
             res = []
-            res.append("Type={:s}({:d})".format(self.item('PoolType').str(), self.item('PoolType').int()))
+            res.append("Type={:s}({:d})".format(self.field('PoolType').str(), self.field('PoolType').int()))
             res.append("Index={:d}".format(self['PoolIndex']))
             res.append("PreviousSize={:#x}".format(self['PreviousSize']))
             res.append("BlockSize={:#x}".format(self['BlockSize']))

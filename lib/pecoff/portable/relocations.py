@@ -259,7 +259,7 @@ class BaseRelocationEntry(pbinary.partial):
         If any section names are provided as extra arguments, then use that as
         the segment base address instead.
         '''
-        relocation, page = self.item('Offset'), entry['Page RVA'].int()
+        relocation, page = self.field('Offset'), entry['Page RVA'].int()
         section = sectiontable.getsectionbyaddress(page)
 
         # FIXME: I haven't actually verified this is working correctly since

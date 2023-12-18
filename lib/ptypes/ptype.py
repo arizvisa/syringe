@@ -1353,7 +1353,9 @@ class container(base):
 
     def field(self, offset, recurse=False):
         """Returns the field at the specified offset relative to the structure"""
-        return self.at(self.getoffset()+offset, recurse=recurse)
+        if builtins.isinstance(offset, (''.__class__, u''.__class__)):
+            return self.__field__(offset)
+        return self.at(self.getoffset() + offset, recurse=recurse)
 
     def setoffset(self, offset, recurse=False):
         """Changes the current offset to ``offset``
