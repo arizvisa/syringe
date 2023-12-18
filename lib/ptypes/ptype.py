@@ -1413,13 +1413,13 @@ class container(base):
         data = b''.join(map(utils.operator.methodcaller('serialize'), iter(self.value)))
 
         try:
-            parent = self.getparent(encoded_t)
+            parent = None if self.parent is None else self.getparent(encoded_t)
         except error.ItemNotFoundError:
             parent = self.getparent(None)
 
-            # check to see if we should validate ourselves according to parent's boundaries
-            if parent is None or not builtins.isinstance(parent.value, list) or self not in parent.value:
-                return data
+        # check to see if we should validate ourselves according to parent's boundaries
+        if parent is None or not builtins.isinstance(parent.value, list) or self not in parent.value:
+            return data
 
         # check if child element is child of encoded_t which doesn't get checked since encoded types can have their sizes changed.
         if builtins.isinstance(parent, encoded_t):
