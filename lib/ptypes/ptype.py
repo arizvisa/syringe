@@ -2661,14 +2661,15 @@ class opointer_t(pointer_t):
     def classname(self):
         calculate, object = getattr(self, '_calculate_', None), getattr(self, '_object_', None)
         calcname = '' if calculate is None else getattr(calculate, '__qualname__', calculate.__name__)
-        if self.initializedQ():
-            return "{:s}<{:s}>".format(self.typename(), self.dereference().classname())
+        #if self.initializedQ():
+        #    return "{:s}<{:s}>".format(self.typename(), self.dereference().classname())
         objectname = force(object, self).typename() if istype(object) else object.__qualname__ if hasattr(object, '__qualname__') else getattr(object, '__name__', 'None')
         return "{:s}({:s}, {:s})".format(self.typename(), objectname, calcname or '...')
 
     def dereference(self, **attrs):
         res, calculate = self.decode(self.object), getattr(self, '_calculate_', lambda value: value)
-        attrs.setdefault('offset', calculate(res.get()))
+        if 'offset' not in attrs:
+            attrs['offset'] = calculate(res.get())
         return super(opointer_t, self).dereference(**attrs)
 
 class boundary(base):
