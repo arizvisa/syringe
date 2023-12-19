@@ -430,14 +430,23 @@ class type(base):
         if self.value is None or not spec:
             return super(type, self).__format__(spec)
 
+        integer, count = self.__getvalue__()
+        res, extra = divmod(count, 4)
+        nibbles = res + 1 if extra else res
+
         prefix, spec = spec[:-1], spec[-1:]
-        if spec in 'bxXdon' and prefix:
-            integer, count = self.__getvalue__()
+        if spec in 'don' and prefix:
             return "{:{:s}{:s}}".format(integer, prefix, spec)
+        elif spec in 'don':
+            return "{:{:s}}".format(integer, spec)
+        elif prefix == '#' and spec in 'xX':
+            return "{:#0{:d}{:s}}".format(integer, 2 + nibbles, spec)
+        elif not prefix and spec in 'xX':
+            return "{:0{:d}{:s}}".format(integer, nibbles, spec)
         elif spec == 'b':
             integer, count = self.__getvalue__()
             return "{:0{:d}b}".format(integer, count)
-        elif spec in 'xXdon':
+        elif spec in 'bxXdon':
             integer, count = self.__getvalue__()
             return "{:{:s}{:s}}".format(integer, prefix, spec)
         return super(type, self).__format__(prefix + spec)
@@ -768,12 +777,20 @@ class enum(integer):
             return super(enum, self).__format__(spec)
 
         prefix, spec = spec[:-1], spec[-1:]
-        if spec in 's':
+        if not prefix and spec in 's':
             res = self.get()
             integer = bitmap.hex(res)
             string = self.__byvalue__(bitmap.value(res), None)
             summary = "{:s}({:s})".format(string, integer) if string else integer
             return "{:{:s}{:s}}".format(summary, prefix, spec)
+
+        elif spec in 's':
+            res, extra, newprefix = self.get(), 2 if prefix.startswith('#') else 0, prefix[1:] if prefix.startswith('#') else prefix
+            integer = bitmap.hex(res)
+            string = self.__byvalue__(bitmap.value(res), None)
+            res = integer if string is None else string
+            return "{:{:s}{:s}}".format(res, newprefix, spec)
+
         return super(enum, self).__format__(prefix + spec)
 
 class container(type):
