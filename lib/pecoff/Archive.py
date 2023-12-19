@@ -5,7 +5,9 @@ from ptypes import *
 
 from . import headers, Object
 
-class ulong(pint.bigendian(pint.uint32_t)): pass
+@pint.bigendian
+class ulong(pint.uint32_t):
+    pass
 
 class stringinteger(pstr.string):
     def set(self, integer):
@@ -33,6 +35,12 @@ class stringdate(stringinteger):
         delta = datetime.timedelta(seconds=seconds)
         return epoch + delta
 
+    def summary(self):
+        res = super(stringdate, self).summary()
+        if self.str() and self.int() >= 0:
+            return "{:s} -> {!s}".format(res, self.datetime())
+        return res
+
 class Index(pint.uint16_t):
     def GetIndex(self):
         return self.int() - 1      # 1 off
@@ -50,6 +58,10 @@ class Import(pstruct.type):
             (headers.IMAGE_IMPORT_TYPE_INFORMATION, 'Type')
         ]
 
+        def summary(self):
+            type = self['Type']
+            return "Sig1={:#x} Sig2={:#x} : Machine={:#s} Ordinal/Hint={:#x} ... : (Type) {:s} Name={:s}".format(self['Sig1'], self['Sig2'], self['Machine'], self['Ordinal/Hint'], type.field('Type'), type.field('Name'))
+
         def valid(self):
             sig1,sig2 = self['Sig1'].int(), self['Sig2'].int()
             return sig1 == 0 and sig2 == 0xffff
@@ -64,6 +76,9 @@ class Import(pstruct.type):
             fields = ['Module', 'Name']
             return '!'.join(self[fld].str() for fld in fields)
 
+        def summary(self):
+            return "Module={!r} Name={!r}".format(self['Module'].str(), self['Name'].str())
+
         def repr(self):
             if self.initializedQ():
                 return self.str()
@@ -74,6 +89,10 @@ class Import(pstruct.type):
         (Member, 'Member')
     ]
 
+    def summary(self):
+        type = self['Header']['Type']
+        return "(Header) Machine={:#s} Ordinal/Hint={:#x} Type={:#s} Name={:#s} : (Member) Module={!r} Name={!r}".format(self['Header']['Machine'], self['Header']['Ordinal/Hint'], type.field('Type'), type.field('Name'), self['Member']['Module'].str(), self['Member']['Name'].str())
+
     def GetImport(self):
         return self['Member']['Module'].str(), self['Member']['Name'].str(), self['Header']['Ordinal/Hint'].int(), self['Header']['Type']
 
@@ -83,11 +102,10 @@ class Linker1(pstruct.type):
         (lambda self: dyn.array(ulong, self['Number of Symbols'].li.int()), 'Offsets'),
         (lambda self: dyn.array(pstr.szstring, self['Number of Symbols'].li.int()), 'Strings')
     ]
-
     def GetTable(self):
         table = []
         for string, offset in zip(self['Strings'], self['Offsets']):
-            item = string.str(), offset.int()
+            item = offset.int(), string.str()
             table.append(item)
         return table
 
@@ -105,7 +123,7 @@ class Linker2(pstruct.type):
         for string, index in zip(self['Strings'], self['Indices']):
             realindex = index.GetIndex()
             offset = offsets[realindex]
-            item = string.str(), offset.int()
+            item = offset.int(), string.str()
             table.append(item)
         return table
 
@@ -121,6 +139,10 @@ class Data(ptype.encoded_t):
         header = self.new(header_t, source=ptypes.provider.proxy(self)).l
         return Import if header.valid() else Object.File
 
+    def summary(self):
+        res = self.d
+        return res.li.summary() if self.initializedQ() and self.value[:6] == b'\x00\x00\xff\xff\x00\x00' else super(Data, self).summary()
+
 class Member(pstruct.type):
     class Header(pstruct.type):
         class _Name(pstr.string):
@@ -133,11 +155,44 @@ class Member(pstruct.type):
             def OffsetQ(self):
                 '''check if the string is of the format "/%d".'''
                 res = self.str().rstrip()
-                return res.startswith('/')
+                return res not in {'/', '//'} and res.startswith('/')
+
             def Offset(self):
                 '''if the string is a valid offset, then the integer represents the offset into the Longnames member.'''
                 res = self.str().rstrip()
                 return int(res[1:]) if res.startswith('/') else None
+
+            def Extract(self):
+                if not self.OffsetQ():
+                    return self.str()
+
+                p = self.getparent(File)
+                if 'Longnames' in p and p['Longnames'].size():
+                    longnames = p['LongNames']['Member']
+                elif 'members' in p and getattr(p['members'], 'Names', None):
+                    longnames = p['members'].Names
+                else:
+                    return self.str()
+
+                offset = self.Offset()
+                return longnames.extract(offset)
+
+            def summary(self):
+                if not self.OffsetQ():
+                    return super(Member.Header._Name, self).summary()
+
+                p = self.getparent(File)
+                if 'Longnames' in p and p['Longnames'].size():
+                    longnames = p['LongNames']['Member']
+                elif 'members' in p and getattr(p['members'], 'Names', None):
+                    longnames = p['members'].Names
+                else:
+                    return super(Member.Header._Name, self).summary()
+
+                offset = self.Offset()
+                extracted = longnames.extract(offset)
+                summary = super(Member.Header._Name, self).summary()
+                return "{:s} -> {!r}".format(summary, extracted)
 
         _fields_ = [
             (_Name, 'Name'),
@@ -162,10 +217,14 @@ class Member(pstruct.type):
                 result.append("gid={:d}".format(self['Group ID'].int()))
             if self['Mode'].str().rstrip():
                 result.append("mode={:o}".format(self['Mode'].int()))
+
+            extracted = "({!s}) {!r}".format(self.Name(), self['Name'].Extract()) if self['Name'].OffsetQ() else self.Name()
             if self['Date'].str().rstrip() and self['Date'].int() > 0:
                 dt = self['Date'].datetime()
-                return "name={!r} date={!s}{:s}".format(self.Name(), dt.isoformat(), " {:s}".format(' '.join(result)) if result else '')
-            return "name={!r}{:s}".format(self.Name(), " {:s}".format(' '.join(result)) if result else '')
+                return "name={:s} date={!s}{:s}".format(extracted, dt.isoformat(), " {:s}".format(' '.join(result)) if result else '')
+            if self['Name'].OffsetQ():
+                return "name={:s} {:s}".format(extracted, " {:s}".format(' '.join(result)) if result else '')
+            return "name={:s}{:s}".format(extracted, " {:s}".format(' '.join(result)) if result else '')
 
         def data(self):
             size = self['Size'].int()
@@ -216,9 +275,9 @@ class Members(parray.terminated):
     # FIXME: it'd be supremely useful to cache all the import and object records
     #        somewhere instead of assigning them directly to Linker and Names
 
-    def __init__(self, **attrs):
+    def load(self, *args, **kwargs):
         self.Linker = self.Names = None
-        return super(Members, self).__init__(**attrs)
+        return super(Members, self).load(*args, **kwargs)
 
     def _object_(self):
         def closure(name, size, index=len(self.value)):
@@ -262,8 +321,9 @@ class Members(parray.terminated):
 
             # If our Linker2 member was assigned, then check whether we've
             # read a number of members matching the 'Number of Members' field.
-            if self.Linker:
-                return count >= 2 + self.Linker['Number of Members'].int()
+            if self.Linker or self.Names:
+                extra = [(1 if found else 0) for found in [True, self.Linker, self.Names]]
+                return count >= sum(extra) + self.Linker['Number of Members'].int()
 
             # Otherwise, continue to read members while there's still data
             # that we can read from the source. This should guarantee reading
@@ -274,8 +334,9 @@ class Members(parray.terminated):
         # If our source is unbounded, then we need to figure out whether
         # we've read the Linker2 member yet so that we can check the number
         # of members that we've read against it 'Number of Members' field.
-        if self.Linker:
-            return count >= 2 + self.Linker['Number of Members'].int()
+        if self.Linker or self.Names:
+            extra = [(1 if found else 0) for found in [True, self.Linker, self.Names]]
+            return count >= sum(extra) + self.Linker['Number of Members'].int()
 
         # Otherwise we always read at least 2 members because the first two
         # should always be Linker1 followed by Linker2.
@@ -367,38 +428,89 @@ class File(pstruct.type):
             yield self.new(Object.File, offset=offset)
         return
 
-class Indexed(pstruct.type):
+class Indexed(File):
     class Linker1(pstruct.type):
         def __Strings(self):
-            bs, fields = self.blocksize(), ['Number of symbols', 'Offsets']
-            return dyn.block(self.blocksize() - sum(self[fld].li.size() for fld in fields))
+            bs, fields = self.blocksize(), ['Number of Symbols', 'Offsets']
+            return dyn.block(max(0, self.blocksize() - sum(self[fld].li.size() for fld in fields)))
         _fields_ = [
-            (ulong, 'Number of symbols'),
-            (lambda self: dyn.clone(parray.type, _object_=ulong, length=self['Number of symbols'].li.int()), 'Offsets'),
+            (ulong, 'Number of Symbols'),
+            (lambda self: dyn.clone(parray.type, _object_=ulong, length=self['Number of Symbols'].li.int()), 'Offsets'),
             (__Strings, 'Strings'),
         ]
+        def GetTable(self):
+            table, data = [], bytearray(self['Strings'].serialize())
+            for offset in self['Offsets']:
+                end = data.find(0)
+                item = offset.int(), bytes(data[: end + 1])
+                table.append(item)
+                data = data[end + 1:]
+            return table
+
     class Linker2(pstruct.type):
         def __Strings(self):
-            bs, fields = self.blocksize(), ['Number of members', 'Offsets', 'Number of symbols', 'Indices']
+            bs, fields = self.blocksize(), ['Number of Members', 'Offsets', 'Number of Symbols', 'Indices']
             return dyn.block(self.blocksize() - sum(self[fld].li.size() for fld in fields))
         _fields_ = [
-            (ulong, 'Number of members'),
-            (lambda self: dyn.clone(parray.type, _object_=ulong, length=self['Number of members'].li.int()), 'Offsets'),
-            (ulong, 'Number of symbols'),
-            (lambda self: dyn.clone(parray.type, _object_=Index, length=self['Number of symbols'].li.int()), 'Indices'),
+            (pint.uint32_t, 'Number of Members'),
+            (lambda self: dyn.clone(parray.type, _object_=pint.uint32_t, length=self['Number of Members'].li.int()), 'Offsets'),
+            (pint.uint32_t, 'Number of Symbols'),
+            (lambda self: dyn.clone(parray.type, _object_=Index, length=self['Number of Symbols'].li.int()), 'Indices'),
             (__Strings, 'Strings'),
         ]
+
+        def GetTable(self):
+            table, offsets, data = [], self['Offsets'], bytearray(self['Strings'].serialize())
+            for string, index in zip(self['Strings'], self['Indices']):
+                end = data.find(0)
+                realindex = index.GetIndex()
+                offset = offsets[realindex]
+                item = offset.int(), bytes(data[: end + 1])
+                table.append(item)
+                data = data[end + 1:]
+            return table
+
     def __indexed_member(self, name, size):
-        if name == '/':
+        if name == '/' and len(self.value) == 2:
             return dyn.clone(Indexed.Linker1, blocksize=lambda _, cb=size: cb)
-        elif name == '//':
+        elif name == '/':
             return dyn.clone(Indexed.Linker2, blocksize=lambda _, cb=size: cb)
+        elif name == '//':
+            return dyn.clone(Longnames, length=size)
         return dyn.clone(ptype.block, length=size)
+
+    def __Longnames(self):
+        offset = sum(self[fld].li.size() for fld in ['signature', 'Linker1', 'Linker2'])
+        peek = self.new(Member.Header._Name, source=self.source, offset=self.getoffset() + offset)
+        if peek.li.str() == '//':
+            return dyn.clone(Member, _Member_=self.__indexed_member)
+        return ptype.block
+
+    def __members(self):
+        linker2, member_t = self['Linker2'].li, dyn.clone(Member, _Member_=staticmethod(lambda name, size: dyn.clone(Data, _value_=dyn.block(size))))
+
+        # If the Linker2 member is not using the expected type, then we can't trust it to contain
+        # the number of members. So, we need to guess things based on the file size.
+        if not isinstance(self['Linker2']['Member'], Indexed.Linker2):
+            offset = sum(self[fld].li.size() for fld in ['signature', 'Linker1', 'Linker2'])
+            if not isinstance(self.source, ptypes.provider.bounded):
+                return dyn.array(member_t, 0)
+
+            # If we're decoding from a bounded provider, then we can use
+            # the file size to determine the number of members to decode.
+            blocksize = max(0, self.source.size() - offset)
+            return dyn.blockarray(member_t, blocksize)
+
+        # If the number of members is larger than 2, then use it to determine the array length.
+        count = linker2['Member']['Number of Members']
+        return dyn.array(member_t, count.int())
 
     _fields_ = [
         (dyn.clone(pstr.string, length=8), 'signature'),
-        (dyn.clone(Member, _Member_=__indexed_member), 'Linker1'),
-        (dyn.clone(Member, _Member_=__indexed_member), 'Linker2'),
+        (lambda self: dyn.clone(Member, _Member_=self.__indexed_member), 'Linker1'),
+        (lambda self: dyn.clone(Member, _Member_=self.__indexed_member), 'Linker2'),
+        (__Longnames, 'Longnames'),
+        (__members, 'members'),
     ]
 
 if __name__ == '__main__':
