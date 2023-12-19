@@ -93,7 +93,7 @@ class __structure_interface__(ptype.container):
     def __getindex__(self, name):
         '''x.__getitem__(y) <==> x[y]'''
         if not isinstance(name, string_types):
-            raise error.UserError(self, '__structure_interface__.__getindex__', message='Element names must be of a str type.')
+            raise error.UserError(self, '__structure_interface__.__getindex__', message="Expected a string type instead of {!s} for the field name of a structure ({:s})".format(name.__class__, self.typename()))
 
         try:
             index = self.__fastindex__[name.lower()]
@@ -804,7 +804,7 @@ if __name__ == '__main__':
         items.append(pint.uint8_t(offset=0))
         t = pstruct.make(items)
         instance = t().a
-        union, expected = instance.field(4), [4, 2]
+        union, expected = instance.at(instance.getoffset() + 4, recurse=False), [4, 2]
         if len(instance.value) == 5 and union.getoffset() == 4 and union.blocksize() == union.size() == 4 and all(union[fld].size() == size for fld, size in zip(union.keys(), expected)):
             raise Success
 

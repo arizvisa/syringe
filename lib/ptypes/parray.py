@@ -83,13 +83,14 @@ Example usage:
     print(len(instance))
 """
 import functools, operator, itertools
-from . import ptype, utils, error, provider
+from . import ptype, bitmap, utils, error, provider
 
 __all__ = 'type,terminated,infinite,block'.split(',')
 
 from . import config
 Config = config.defaults
 Log = config.logging.getLogger('.'.join([Config.log.name, 'parray']))
+integer_types = bitmap.integer_types
 
 class __array_interface__(ptype.container):
     '''provides the generic features expected out of an array'''
@@ -157,6 +158,8 @@ class __array_interface__(ptype.container):
         return res
 
     def __getindex__(self, index):
+        if not isinstance(index, integer_types):
+            raise TypeError(self, '__array_interface__.__getindex__', "Expected an integer instead of {!s} for the index of an array ({:s}).".format(index.__class__, self.typename()))
         return index
 
     def __delitem__(self, index):

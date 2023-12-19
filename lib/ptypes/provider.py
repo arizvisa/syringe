@@ -374,8 +374,8 @@ class proxy(proxied):
     def collect(cls, object, left, right):
         '''an iterator that returns all the leaf nodes of ``object`` from field offset ``left`` to ``right``.'''
         # figure out which objects to start and stop at
-        lobj = object.field(left, recurse=True) if left >= 0 else None
-        robj = object.field(right, recurse=True) if right < object.blocksize() else None
+        lobj = object.at(object.getoffset() + left, recurse=True) if left >= 0 else None
+        robj = object.at(object.getoffset() + right, recurse=True) if right < object.blocksize() else None
 
         # return all leaf objects with a .value that's not a pbinary
         from . import ptype, pbinary

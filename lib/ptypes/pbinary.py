@@ -891,13 +891,17 @@ class container(type):
             raise error.InitializationError(self, 'container.__field__')
         return self.value[index]
 
+    def field(self, key):
+        '''Returns the field that is indexed with the specified key.'''
+        return self.__field__(key)
+
     def __getitem__(self, key):
         '''x.__getitem__(y) <==> x[y]'''
         res = self.__field__(key)
         return res if isinstance(res, container) else res.int()
 
     def item(self, key):
-        return self.__field__(key)
+        raise error.ImplementationError(self, 'container.item', message="This method has been deprecated in favor of the {:s}.field method.".format('.'.join([__name__, self.__class__.__name__])))
 
     def bitmap(self):
         if self.value is None:
@@ -1198,7 +1202,7 @@ class __array_interface__(container):
     def __getindex__(self, index):
         # check to see if the user gave us a bad type
         if not isinstance(index, integer_types):
-            raise TypeError(self, '__array_interface__.__getindex__', "Invalid type {!s} specified for index of {:s}.".format(index.__class__, self.typename()))
+            raise TypeError(self, '__array_interface__.__getindex__', "Expected an integer instead of {!s} for the index of an array ({:s}).".format(index.__class__, self.typename()))
 
         ## validate the index
         #if not(0 <= index < len(self.value)):
@@ -1370,7 +1374,7 @@ class __structure_interface__(container):
 
     def __getindex__(self, name):
         if not isinstance(name, string_types):
-            raise error.UserError(self, '__structure_interface__.__getindex__', message="The type of the requested element name ({!s}) must be of a string type".format(name.__class__))
+            raise error.UserError(self, '__structure_interface__.__getindex__', message="Expected a string type instead of {!s} for the field name of a structure ({:s})".format(name.__class__, self.typename()))
         try:
             return self.__fastindex__[name.lower()]
         except KeyError:
@@ -2089,6 +2093,9 @@ class partial(ptype.container):
 
     def __field__(self, key):
         return self.object.__field__(key)
+
+    def item(self, key):
+        raise error.ImplementationError(self, 'partial.item', message="This method has been deprecated in favor of the {:s}.field method.".format('.'.join([__name__, self.__class__.__name__])))
 
     def __getitem__(self, name):
         '''x.__getitem__(y) <==> x[y]'''
@@ -3462,7 +3469,7 @@ if __name__ == '__main__':
             length, _object_ = 4, e
 
         x = pbinary.new(pbinary.bigendian(s), source=ptypes.prov.bytes(b'\xde\xad')).l
-        if ''.join(map(operator.methodcaller('str'), map(x.item, range(len(x))))) == 'dead':
+        if ''.join(map(operator.methodcaller('str'), map(x.field, range(len(x))))) == 'dead':
             raise Success
 
     @TestCase

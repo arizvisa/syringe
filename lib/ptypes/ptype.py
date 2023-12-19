@@ -1351,11 +1351,9 @@ class container(base):
             pass
         return res
 
-    def field(self, offset, recurse=False):
-        """Returns the field at the specified offset relative to the structure"""
-        if builtins.isinstance(offset, (''.__class__, u''.__class__)):
-            return self.__field__(offset)
-        return self.at(self.getoffset() + offset, recurse=recurse)
+    def field(self, key):
+        '''Returns the field that is indexed with the specified key.'''
+        return self.__field__(key)
 
     def setoffset(self, offset, recurse=False):
         """Changes the current offset to ``offset``
@@ -1562,10 +1560,10 @@ class container(base):
 
         for ofs, (s, o) in super(container, self).compare(other):
             if len(s) == 0:
-                i = other.value.index(other.field(ofs, recurse=False))
+                i = other.value.index(other.at(other.getoffset() + ofs, recurse=False))
                 yield ofs, (None, tuple(between(other, (ofs, other.blocksize()))))
             elif len(o) == 0:
-                i = self.value.index(self.field(ofs, recurse=False))
+                i = self.value.index(self.at(self.getoffset() + ofs, recurse=False))
                 yield ofs, (tuple(between(self, (ofs, self.blocksize()))), None)
             else:
                 if len(s) != len(o):
