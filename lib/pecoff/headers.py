@@ -32,6 +32,7 @@ def LocateBaseAddress(self):
     """Return the base object of the executable. This is used to find the base address."""
     try:
         nth = self.getparent(ptype.boundary)
+
     except ValueError as msg:
         api = getattr(self.source, '__api__', None)
 

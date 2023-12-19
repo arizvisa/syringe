@@ -108,7 +108,7 @@ class File(pstruct.type, headers.Header, ptype.boundary):
     def __DataDirectory(self):
         cls = self.__class__
         hdr, optional = (self[fld].li for fld in ['Header', 'OptionalHeader'])
-        if not isinstance(optional, portable.IMAGE_OPTIONAL_HEADER):
+        if 'SizeOfOptionalHeader' not in hdr or not isinstance(optional, portable.IMAGE_OPTIONAL_HEADER):
             return dyn.clone(portable.DataDirectory, length=0)
 
         length, directory = optional['NumberOfRvaAndSizes'].int(), 8
@@ -152,8 +152,10 @@ class File(pstruct.type, headers.Header, ptype.boundary):
 
     def __align_SymbolTable(self):
         header, fields = self['Header'].li, ['Machine', 'NumberOfSections', 'Header', 'OptionalHeader', 'DataDirectory', 'Padding(OptionalHeader,DataDirectory)', 'Sections', 'Segments']
-        res, size = header['PointerToSymbolTable'].li, sum(self[fld].li.size() for fld in fields)
-        return dyn.block(max(0, res.int() - size))
+        if 'PointerToSymbolTable' in header:
+            res, size = header['PointerToSymbolTable'].li, sum(self[fld].li.size() for fld in fields)
+            return dyn.block(max(0, res.int() - size))
+        return ptype.block
 
     def __SymbolTable(self):
         header = self['Header'].li

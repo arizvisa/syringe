@@ -63,8 +63,8 @@ class Import(pstruct.type):
             return "Sig1={:#x} Sig2={:#x} : Machine={:#s} Ordinal/Hint={:#x} ... : (Type) {:s} Name={:s}".format(self['Sig1'], self['Sig2'], self['Machine'], self['Ordinal/Hint'], type.field('Type'), type.field('Name'))
 
         def valid(self):
-            sig1,sig2 = self['Sig1'].int(), self['Sig2'].int()
-            return sig1 == 0 and sig2 == 0xffff
+            sig1, sig2, version = self['Sig1'].int(), self['Sig2'].int(), self['Version'].int()
+            return sig1 == 0x0000 and sig2 == 0xffff and version == 0x0000
 
     class Member(pstruct.type):
         _fields_ = [
