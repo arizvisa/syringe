@@ -595,7 +595,7 @@ class HStrings(parray.block):
     _object_ = pstr.szstring
 
     def Get(self, offset):
-        return self.field(offset)
+        return self.at(self.getoffset() + offset, recurse=False)
 
 @Stream.define
 class HUserStrings(parray.block):
@@ -616,7 +616,7 @@ class HUserStrings(parray.block):
             return self['data']
 
     def Get(self, offset):
-        return self.field(offset)
+        return self.at(self.getoffset() + offset, recurse=False)
 
 @Stream.define
 class HGUID(parray.block):
@@ -647,7 +647,7 @@ class HBlob(parray.block):
             return "({:d}) {:s}".format(self['length'].int(), self['data'].summary())
 
     def Get(self, offset):
-        return self.field(offset)
+        return self.at(self.getoffset() + offset, recurse=False)
 
 ### Mapping types
 class ElementType(ptype.definition): cache = {}

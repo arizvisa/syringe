@@ -1799,7 +1799,7 @@ if 'LFH':
                 result = blocksize * entryoffset
 
             # ...and then we can return the correct element.
-            return self.field(result, recurse=True)
+            return self.at(self.getoffset() + result, recurse=True)
 
         def HeaderByOffset(self, offset):
             '''Return the header for the given entry offset.'''
