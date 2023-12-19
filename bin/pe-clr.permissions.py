@@ -84,7 +84,7 @@ if __name__ == '__main__':
     L.send("Enumerating {:d} modules.".format(len(tables['Module'])))
     modules = []
     for i, m in enumerate(tables['Module']):
-        res = strings.field(m['Name'].int())
+        res = strings.at(strings.getoffset() + m['Name'].int(), recurse=False)
         if m['Mvid'].int():
             g = guids.Get(m['Mvid'].int())
             six.print_('{:s} {:s}'.format(res.str(), g.str()), file=sys.stdout)
@@ -96,7 +96,7 @@ if __name__ == '__main__':
     L.send("Enumerating {:d} assemblies.".format(len(tables['Assembly'])))
     assembly = {}
     for i, a in enumerate(tables['Assembly']):
-        res = strings.field(a['Name'].int())
+        res = strings.at(strings.getoffset() + a['Name'].int(), recurse=False)
         assembly[i+1] = res.str()
 
     # for each permission that points to an Assembly
@@ -104,7 +104,7 @@ if __name__ == '__main__':
 
     L.send("Listing properties from each permission.")
     for mi, ma, bi in perms:
-        permset = blobs.field(bi)['data'].cast(clr.PermissionSet)
+        permset = blobs.at(blobs.getoffset() + bi, recurse=False)['data'].cast(clr.PermissionSet)
         attributes = []
         for attr in permset['attributes']:
             props = attr['Properties']['data'].cast(Fields)
