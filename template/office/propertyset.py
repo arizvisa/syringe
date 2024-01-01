@@ -294,7 +294,7 @@ class TypedPropertyValue(pstruct.type):
     def __Value(self):
         property = self['Type'].li
         type = TypedProperty.lookup(property['VariantType'])
-        header = property.item('HeaderType')
+        header = property.field('HeaderType')
         if header['VT_ARRAY']:
             return dyn.clone(TypedPropertyArray, _object_=type)
         elif header['VT_VECTOR']:
