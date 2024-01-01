@@ -1104,7 +1104,7 @@ class A29(pbinary.struct):
         return math.ldexp(1.0, -self['Exponent'])
 
     def summary(self):
-        res = self.item('Exponent')
+        res = self.field('Exponent')
         return "Exponent={:s} : Result={:f}".format(res.summary(), self.float())
 
     repr = summary
@@ -1124,7 +1124,7 @@ class A30(pbinary.struct):
         return math.ldexp(1.0 + fraction, -self['Exponent'])
 
     def summary(self):
-        return "Mantissa={:s} Exponent={:s} : Result={:f}".format(self.item('Mantissa').summary(), self.item('Exponent').summary(), self.float())
+        return "Mantissa={:s} Exponent={:s} : Result={:f}".format(self.field('Mantissa').summary(), self.field('Exponent').summary(), self.float())
     repr = summary
 
 class ScalarArray(pbinary.array):
@@ -1137,7 +1137,7 @@ class QCD(pstruct.type):
     '''Quantization Default'''
     def __SPqcd(self):
         p, res, fields = self.parent, self['Sqcd'].li, ['Lqcd', 'Sqcd']
-        style, length = res.item('style'), 0 if p is None else (p.blocksize() - p['Type'].blocksize()) - sum(self[fld].li.size() for fld in fields)
+        style, length = res.field('style'), 0 if p is None else (p.blocksize() - p['Type'].blocksize()) - sum(self[fld].li.size() for fld in fields)
         if style['None']:
             return dyn.clone(ScalarArray, _object_=A29, length=length)
         elif style['Scalar derived']:
@@ -1173,7 +1173,7 @@ class QCC(pstruct.type):
 
     def __SPqcc(self):
         p, res, fields = self.parent, self['Sqcc'].li, ['Lqcc', 'Cqcc', 'Sqcc']
-        style, length = res.item('style'), 0 if p is None else (p.blocksize() - p['Type'].blocksize()) - sum(self[fld].li.size() for fld in fields)
+        style, length = res.field('style'), 0 if p is None else (p.blocksize() - p['Type'].blocksize()) - sum(self[fld].li.size() for fld in fields)
         if style['None']:
             return dyn.clone(pbinary.array, _object_=A29, length=length)
         elif style['Scalar derived']:

@@ -233,7 +233,7 @@ if __name__ == '__main__':
     for item in iterable: p(item)
     sys.exit()
 
-    p(x['profile_tier_level'].item('general_level_idc'))
+    p(x['profile_tier_level'].field('general_level_idc'))
 
     p(ptypes.config.partial)
     ptypes.Config.pbinary.offset = ptypes.config.partial.bit
