@@ -552,7 +552,7 @@ class ShareControlHeader(pstruct.type):
     def summary(self):
         res = []
         res.append("pduSource={:s}".format(self['pduSource'].summary()))
-        res.append("pduType={:s}({:d}) protocolVersion={:d}".format(self['pduType'].item('type').str(), self['pduType']['type'], self['pduType']['protocolVersion']))
+        res.append("pduType={:s}({:d}) protocolVersion={:d}".format(self['pduType'].field('type').str(), self['pduType']['type'], self['pduType']['protocolVersion']))
         return ' '.join(res)
 
 class PACKET_COMPR_(pbinary.enum):

@@ -275,7 +275,7 @@ class Constructed(parray.block):
 
     def __getitem__(self, index):
         if isinstance(index, six.string_types):
-            return self.item(index)
+            return self.field(index)
         return super(Constructed, self).__getitem__(index)
 
     def _object_(self):

@@ -205,7 +205,7 @@ class PDU(pstruct.type):
 
     def __value(self):
         res = self['header'].li
-        return DomainMCSPDU.get(res['choice'], ptype.undefined, __header__=res.item('value'))
+        return DomainMCSPDU.get(res['choice'], ptype.undefined, __header__=res.field('value'))
 
     _fields_ = [
         (_header, 'header'),
@@ -233,7 +233,7 @@ class PDU(pstruct.type):
 
         # If there is currently no '__header__' attribute, then explicitly assign one
         if not hasattr(res['value'], '__header__'):
-            res['value'].__header__ = res['header'].item('value')
+            res['value'].__header__ = res['header'].field('value')
         return res
 
 ### DomainMCSPDU definitions
@@ -341,7 +341,7 @@ class AttachUserConfirm(pstruct.type):
 
     def __field__(self, name):
         if name.lower() == 'result':
-            return self.__header__.item('result')
+            return self.__header__.field('result')
         return super(AttachUserConfirm, self).__field__(name)
 
     def summary(self):
@@ -414,7 +414,7 @@ class ChannelJoinConfirm(pstruct.type):
 
     def __field__(self, name):
         if name.lower() == 'result':
-            return self.__header__.item('result')
+            return self.__header__.field('result')
         return super(ChannelJoinConfirm, self).__field__(name)
 
     def summary(self):

@@ -270,7 +270,7 @@ class PDU(pstruct.type):
         res = header['gcc']
         pduType = GCCPDU.lookup(res)
         res = header['choice']
-        return pduType.get(res, ptype.undefined, __header__=header.item('pdu'))
+        return pduType.get(res, ptype.undefined, __header__=header.field('pdu'))
 
     def __unknown(self):
         res = sum(self[fld].li.size() for fld in ['header','pdu'])
@@ -299,7 +299,7 @@ class ConnectPDU(pstruct.type):
         res = self['header'].li
         res = res['connectPDU']
         res = res['choice']
-        return ConnectGCCPDU.get(res, __header__=self['header'].item('pdu'))
+        return ConnectGCCPDU.get(res, __header__=self['header'].field('pdu'))
 
     _fields_ = [
         (_header, 'header'),
