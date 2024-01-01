@@ -25,6 +25,7 @@ class VT_(object):
         ('BSTR', 0x0008),               # Type is CodePageString, and the minimum property set version is 0.
         ('ERROR', 0x000A),              # Type is HRESULT, and the minimum property set version is 0.
         ('BOOL', 0x000B),               # Type is VARIANT_BOOL, and the minimum property set version is 0.
+        ('VARIANT', 0x000C),            # Type is a variant which depends on the header type.
         ('DECIMAL', 0x000E),            # Type is DECIMAL, and the minimum property set version is 0.
         ('I1', 0x0010),                 # Type is 1-byte signed integer, and the minimum property set version is 1.
         ('UI1', 0x0011),                # Type is 1-byte unsigned integer, and the minimum property set version is 0.
@@ -215,12 +216,22 @@ class PropertyType(pbinary.struct):
 class TypedPropertyValue(pstruct.type):
     def __Value(self):
         property = self['Type'].li
-        type = TypedProperty.lookup(property['VariantType'])
+        type, variantType = TypedProperty.lookup(property['VariantType']), property.field('VariantType')
         header = property.field('HeaderType')
-        if header['VT_ARRAY']:
+        if header['VT_ARRAY'] and not variantType['VARIANT']:
             return dyn.clone(TypedPropertyArray, _object_=type)
-        elif header['VT_VECTOR']:
+
+        elif header['VT_VECTOR'] and not variantType['VARIANT']:
             return dyn.clone(TypedPropertyVector, _object_=type)
+
+        # Special handling for any of the nested variant types.
+        elif header['VT_ARRAY'] and variantType['VARIANT']:
+            object = dyn.clone(TypedPropertyArray, _object_=TypedPropertyValue)
+            return dyn.clone(TypedPropertyArray, _object_=object)
+
+        elif header['VT_VECTOR'] and variantType['VARIANT']:
+            object = dyn.clone(TypedPropertyVector, _object_=TypedPropertyValue)
+            return dyn.clone(TypedPropertyVector, _object_=object)
         return type
 
     _fields_ = [
@@ -266,8 +277,8 @@ class VT_ERROR(HRESULT):
 class VT_BOOL(VARIANT_BOOL):
     type = 0x000b
 @TypedProperty.define
-class VT_VARIANT(TypedPropertyVector):
-    type, _object_ = 0x000c, TypedPropertyValue
+class VT_VARIANT(ptype.undefined):
+    type = 0x000c
 @TypedProperty.define
 class VT_DECIMAL(DECIMAL):
     type = 0x000e
@@ -530,6 +541,14 @@ class PropertySet(pstruct.type):
         return
 
 class FMTID(GUID):
+    '''
+    FMTID_SummaryInformation    {F29F85E0-4FF9-1068-AB91-08002B27B3D9}  "\005SummaryInformation"
+    FMTID_DocSummaryInformation {D5CDD502-2E9C-101B-9397-08002B2CF9AE}  "\005DocumentSummaryInformation"
+    FMTID_UserDefinedProperties {D5CDD505-2E9C-101B-9397-08002B2CF9AE}  "\005DocumentSummaryInformation"
+    FMTID_GlobalInfo            {56616F00-C154-11CE-8553-00AA00A1F95B}  "\005GlobalInfo"
+    FMTID_ImageContents         {56616400-C154-11CE-8553-00AA00A1F95B}  "\005ImageContents"
+    FMTID_ImageInfo             {56616500-C154-11CE-8553-00AA00A1F95B}  "\005ImageInfo"
+    '''
     def identifier(self):
         iterable = (self[fld].int() for fld in self)
         return tuple(iterable)
