@@ -207,7 +207,7 @@ class float_t(type):
         '''Assign the python float number to the floating-point instance.'''
         if not values:
             return self.__setvalue__(*values, **attrs)
-        number, = values
+        [number] = values
 
         # Grab the exponent base and use it to break our
         # number down into its mantissa and exponent. If we're
@@ -246,7 +246,7 @@ class float_t(type):
             return super(type, self).__setvalue__(*values, **attrs)
 
         # extract the components from the parameters
-        components, = values
+        [components] = values
         mantissa, exponent = components
 
         # some constants we'll need to use
@@ -355,15 +355,13 @@ class fixed_t(type):
         return integer if math.fabs(integer) == 0.0 else math.trunc(integer), fraction
 
     def get(self):
+        '''Return the value of the fixed-point type as a floating-point number.'''
         magnitude = pow(2, self.fractional)
         integer, fraction = self.__getvalue__()
         return math.copysign(integer + float(fraction) / magnitude, integer)
 
     def float(self):
-        '''Return the value of the fixed-point type as a floating-point number.'''
-        magnitude = pow(2, self.fractional)
-        integer, fraction = self.__getvalue__()
-        return math.copysign(integer + float(fraction) / magnitude, integer)
+        return self.get()
 
     def __setvalue__(self, *values, **attrs):
         '''Assign the provided components to the fixed-point type.'''
@@ -371,7 +369,7 @@ class fixed_t(type):
             return super(type, self).__setvalue__(*values, **attrs)
         bits = 8 * self.length
 
-        parts, = values
+        [parts] = values
         integer, fraction = parts
         magnitude = pow(2, bits - self.fractional)
 
@@ -383,7 +381,7 @@ class fixed_t(type):
         if not values:
             return self.__setvalue__(*values, **attrs)
 
-        number, = values
+        [number] = values
         integer, fraction = math.floor(number), number - math.floor(number)
         magnitude = pow(2, self.fractional)
 
@@ -527,11 +525,11 @@ if __name__ == '__main__':
 
     def test_assignment(cls, float, expected):
         if cls.length == 4:
-            float, = struct.unpack('f', struct.pack('f', float))
-            f, = struct.unpack('f',bitmap.data(bitmap.new(expected,cls.length*8), reversed=True))
+            [float] = struct.unpack('f', struct.pack('f', float))
+            [f] = struct.unpack('f',bitmap.data(bitmap.new(expected,cls.length*8), reversed=True))
         elif cls.length == 8:
-            float, = struct.unpack('d', struct.pack('d', float))
-            f, = struct.unpack('d',bitmap.data(bitmap.new(expected,cls.length*8), reversed=True))
+            [float] = struct.unpack('d', struct.pack('d', float))
+            [f] = struct.unpack('d',bitmap.data(bitmap.new(expected,cls.length*8), reversed=True))
         else:
             f = float('NaN')
 
@@ -551,10 +549,10 @@ if __name__ == '__main__':
 
     def test_load(cls, integer, expected):
         if cls.length == 4:
-            expected, = struct.unpack('f', struct.pack('f', expected))
+            [expected] = struct.unpack('f', struct.pack('f', expected))
             i,_ = bitmap.join(bitmap.new(x,8) for x in reversed(bytearray(struct.pack('f',expected))))
         elif cls.length == 8:
-            expected, = struct.unpack('d', struct.pack('d', expected))
+            [expected] = struct.unpack('d', struct.pack('d', expected))
             i,_ = bitmap.join(bitmap.new(x,8) for x in reversed(bytearray(struct.pack('d',expected))))
         else:
             i = 0
@@ -669,6 +667,63 @@ if __name__ == '__main__':
         x = sdword(byteorder=config.byteorder.bigendian, source=ptypes.prov.bytes(b'\xff\xfe\xc0\x00'))
         x.set(-1.25)
         if bytearray(x.serialize()[2:]) == b'\xc0\x00': raise Success
+
+    # FIXME: this'd be cool if we could actually inherit from pfloat.sfixed_t
+    #        and then overload an __exponent_base__ method with the integer 10.
+    class sqword_base10(pfloat.sfixed_t):
+        length = 8
+        def get(self):
+            res = super(pfloat.type, self).__getvalue__()
+            unsigned = pow(2, 8 * self.length)
+            signed = res if res < unsigned // 2 else res - unsigned
+            return signed / pow(10, 4)
+        def set(self, float):
+            res = math.trunc(float * pow(10, 4))
+            unsigned = pow(2, 8 * self.length)
+            half = unsigned // 2
+            signed = min(res + unsigned, unsigned - 1) if res < 0 else min(res, half - 1)
+            return super(pfloat.type, self).__setvalue__(signed)
+
+    @TestCase
+    def sfixed_point_qword_exp10_get1():
+        x = sqword_base10(byteorder=config.byteorder.bigendian, source=ptypes.prov.bytes(b'\x00\x00\x00\x00\x00\x00\xCD\x14')).l
+        if x.float() == 5.25: raise Success
+        print(x.float(), '!=', 5.25)
+    @TestCase
+    def sfixed_point_qword_exp10_set1():
+        x = sqword_base10(byteorder=config.byteorder.bigendian)
+        x.set(5.25)
+        if bytearray(x.serialize()) == b'\x00\x00\x00\x00\x00\x00\xCD\x14':
+            raise Success
+        print(x.float(), '!=', 5.25)
+    @TestCase
+    def sfixed_point_qword_exp10_get2():
+        x = sqword_base10(byteorder=config.byteorder.bigendian, source=ptypes.prov.bytes(b'\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF')).l
+        goal = 922337203685477.5807
+        if x.float() == goal: raise Success
+        print(x.float(), '!=', goal)
+    @TestCase
+    def sfixed_point_qword_exp10_set2():
+        x = sqword_base10(byteorder=config.byteorder.bigendian)
+        goal = 922337203685477.5807
+        x.set(goal)
+        if bytearray(x.serialize()) == b'\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF':
+            raise Success
+        print(x.float(), '!=', goal)
+    @TestCase
+    def sfixed_point_qword_exp10_get3():
+        x = sqword_base10(byteorder=config.byteorder.bigendian, source=ptypes.prov.bytes(b'\x80\x00\x00\x00\x00\x00\x00\x00')).l
+        goal = -922337203685477.5808
+        if x.float() == goal: raise Success
+        print(x.float(), '!=', goal)
+    @TestCase
+    def sfixed_point_qword_exp10_set3():
+        x = sqword_base10(byteorder=config.byteorder.bigendian)
+        goal = -922337203685477.5808
+        x.set(goal)
+        if bytearray(x.serialize()) == b'\x80\x00\x00\x00\x00\x00\x00\x00':
+            raise Success
+        print(x.float(), '!=', goal)
 
 if __name__ == '__main__':
     import logging
