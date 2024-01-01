@@ -48,7 +48,28 @@ class VT_(object):
         ('VERSIONED_STREAM', 0x0049),   # Type is Stream with application-specific version GUID (VersionedStream). The minimum property set version is 0. VT_VERSIONED_STREAM is not allowed in a simple property set.
     ]
 
-class CURRENCY(INT64): pass
+class CURRENCY(INT64):
+    ''' [MS-OAUT] '''
+    def float(self):
+        res = self.get()
+        unsigned = pow(2, 8 * self.blocksize())
+        signed = res if res < unsigned // 2 else res - unsigned
+        return signed / pow(10, 4)
+
+    def set(self, number):
+        if not isinstance(number, float):
+            return super(CURRENCY, self).set(number)
+
+        unsigned = pow(2, 8 * self.blocksize())
+        half = unsigned // 2
+
+        res = math.trunc(number * pow(10, 4))
+        signed = min(res + unsigned, unsigned - 1) if res < 0 else min(res, half - 1)
+        return super(CURRENCY, self).set(signed)
+
+    def summary(self):
+        return "({:#x}) {:f}".format(self, self.float())
+
 class CodePageString(pstruct.type):
     def __Characters(self):
         expected = self['Size'].li
@@ -121,106 +142,7 @@ class VersionedStream(pstruct.type):
         (CodePageString, 'StreamName'), # XXX: not sure whether this is right
     ]
 
-class TypedProperty(ptype.definition):
-    cache = {}
-@TypedProperty.define
-class VT_EMPTY(ptype.undefined):
-    type = 0x0000
-@TypedProperty.define
-class VT_NULL(ptype.undefined):
-    type = 0x0001
-@TypedProperty.define
-class VT_I2(pstruct.type):
-    type, _fields_ = 0x0002, [(INT16, 'I'), (dyn.block(2), 'padding(I)')]
-    int = lambda self: self['I'].int()
-@TypedProperty.define
-class VT_I4(INT32):
-    type = 0x0003
-@TypedProperty.define
-class VT_R4(pfloat.single):
-    type = 0x0004
-@TypedProperty.define
-class VT_R8(pfloat.double):
-    type = 0x0005
-@TypedProperty.define
-class VT_CY(CURRENCY):
-    type = 0x0006
-@TypedProperty.define
-class VT_DATE(DATE):
-    type = 0x0007
-@TypedProperty.define
-class VT_BSTR(CodePageString):
-    type = 0x0008
-@TypedProperty.define
-class VT_ERROR(HRESULT):
-    type = 0x000a
-@TypedProperty.define
-class VT_BOOL(VARIANT_BOOL):
-    type = 0x000b
-@TypedProperty.define
-class VT_DECIMAL(DECIMAL):
-    type = 0x000e
-@TypedProperty.define
-class VT_I1(pstruct.type):
-    type, _fields_ = 0x0010, [(INT8, 'I'), (dyn.block(3), 'padding(I)')]
-    int = lambda self: self['I'].int()
-@TypedProperty.define
-class VT_UI1(pstruct.type):
-    type, _fields_ = 0x0011, [(UINT8, 'UI'), (dyn.block(3), 'padding(UI)')]
-    int = lambda self: self['UI'].int()
-@TypedProperty.define
-class VT_UI2(pstruct.type):
-    type, _fields_ = 0x0012, [(UINT16, 'UI'), (dyn.block(2), 'padding(UI)')]
-    int = lambda self: self['UI'].int()
-@TypedProperty.define
-class VT_UI4(UINT32):
-    type = 0x0013
-@TypedProperty.define
-class VT_UI8(UINT64):
-    type = 0x0014
-@TypedProperty.define
-class VT_I8(INT64):
-    type = 0x0015
-@TypedProperty.define
-class VT_INT(INT):
-    type = 0x0016
-@TypedProperty.define
-class VT_UINT(UINT):
-    type = 0x0017
-@TypedProperty.define
-class VT_LPSTR(CodePageString):
-    type = 0x001e
-@TypedProperty.define
-class VT_LPWSTR(UnicodeString):
-    type = 0x001f
-@TypedProperty.define
-class VT_FILETIME(FILETIME):
-    type = 0x0040
-@TypedProperty.define
-class VT_BLOB(BLOB):
-    type = 0x0041
-@TypedProperty.define
-class VT_STREAM(IndirectPropertyName):
-    type = 0x0042
-@TypedProperty.define
-class VT_STORAGE(IndirectPropertyName):
-    type = 0x0043
-@TypedProperty.define
-class VT_STREAMED_OBJECT(IndirectPropertyName):
-    type = 0x0044
-@TypedProperty.define
-class VT_STORED_OBJECT(IndirectPropertyName):
-    type = 0x0045
-@TypedProperty.define
-class VT_BLOB_OBJECT(BLOB):
-    type = 0x0046
-@TypedProperty.define
-class VT_CF(ClipboardData):
-    type = 0x0047
-@TypedProperty.define
-class VT_VERSIONED_STREAM(VersionedStream):
-    type = 0x0048
-
+################
 class VectorHeader(pstruct.type):
     _fields_ = [
         (DWORD, 'Length'),
@@ -306,6 +228,109 @@ class TypedPropertyValue(pstruct.type):
         (WORD, 'Padding'),
         (__Value, 'Value'),
     ]
+
+class TypedProperty(ptype.definition):
+    cache = {}
+@TypedProperty.define
+class VT_EMPTY(ptype.undefined):
+    type = 0x0000
+@TypedProperty.define
+class VT_NULL(ptype.undefined):
+    type = 0x0001
+@TypedProperty.define
+class VT_I2(pstruct.type):
+    type, _fields_ = 0x0002, [(INT16, 'I'), (dyn.block(2), 'padding(I)')]
+    int = lambda self: self['I'].int()
+@TypedProperty.define
+class VT_I4(INT32):
+    type = 0x0003
+@TypedProperty.define
+class VT_R4(pfloat.single):
+    type = 0x0004
+@TypedProperty.define
+class VT_R8(pfloat.double):
+    type = 0x0005
+@TypedProperty.define
+class VT_CY(CURRENCY):
+    type = 0x0006
+@TypedProperty.define
+class VT_DATE(DATE):
+    type = 0x0007
+@TypedProperty.define
+class VT_BSTR(CodePageString):
+    type = 0x0008
+@TypedProperty.define
+class VT_ERROR(HRESULT):
+    type = 0x000a
+@TypedProperty.define
+class VT_BOOL(VARIANT_BOOL):
+    type = 0x000b
+@TypedProperty.define
+class VT_VARIANT(TypedPropertyVector):
+    type, _object_ = 0x000c, TypedPropertyValue
+@TypedProperty.define
+class VT_DECIMAL(DECIMAL):
+    type = 0x000e
+@TypedProperty.define
+class VT_I1(pstruct.type):
+    type, _fields_ = 0x0010, [(INT8, 'I'), (dyn.block(3), 'padding(I)')]
+    int = lambda self: self['I'].int()
+@TypedProperty.define
+class VT_UI1(pstruct.type):
+    type, _fields_ = 0x0011, [(UINT8, 'UI'), (dyn.block(3), 'padding(UI)')]
+    int = lambda self: self['UI'].int()
+@TypedProperty.define
+class VT_UI2(pstruct.type):
+    type, _fields_ = 0x0012, [(UINT16, 'UI'), (dyn.block(2), 'padding(UI)')]
+    int = lambda self: self['UI'].int()
+@TypedProperty.define
+class VT_UI4(UINT32):
+    type = 0x0013
+@TypedProperty.define
+class VT_UI8(UINT64):
+    type = 0x0014
+@TypedProperty.define
+class VT_I8(INT64):
+    type = 0x0015
+@TypedProperty.define
+class VT_INT(INT):
+    type = 0x0016
+@TypedProperty.define
+class VT_UINT(UINT):
+    type = 0x0017
+@TypedProperty.define
+class VT_LPSTR(CodePageString):
+    type = 0x001e
+@TypedProperty.define
+class VT_LPWSTR(UnicodeString):
+    type = 0x001f
+@TypedProperty.define
+class VT_FILETIME(FILETIME):
+    type = 0x0040
+@TypedProperty.define
+class VT_BLOB(BLOB):
+    type = 0x0041
+@TypedProperty.define
+class VT_STREAM(IndirectPropertyName):
+    type = 0x0042
+@TypedProperty.define
+class VT_STORAGE(IndirectPropertyName):
+    type = 0x0043
+@TypedProperty.define
+class VT_STREAMED_OBJECT(IndirectPropertyName):
+    type = 0x0044
+@TypedProperty.define
+class VT_STORED_OBJECT(IndirectPropertyName):
+    type = 0x0045
+@TypedProperty.define
+class VT_BLOB_OBJECT(BLOB):
+    type = 0x0046
+@TypedProperty.define
+class VT_CF(ClipboardData):
+    type = 0x0047
+@TypedProperty.define
+class VT_VERSIONED_STREAM(VersionedStream):
+    type = 0x0048
 
 ############
 class _PROPERTY_IDENTIFIER_RESERVED(pint.enum):
