@@ -588,10 +588,10 @@ class File(pstruct.type, base.ElfXX_File):
                 # If we're not at the correct position, then we need to
                 # adjust the size of our item so the sections line up.
                 elif position > offset:
-                    delta = offset, position - offset
+                    delta = position - offset
                     #result[-1] = max(0, delta - previous), t
                     logging.debug("(clamp) {:#010x} goal:{:#010x} {:#04x}{:+#04x} : {:s}".format(base + offset, base + position, base + position, delta, block_t.typename()))
-                    result.append((entrysize - delta, item))
+                    result.append((offset, entrysize - delta, item))
                     position += entrysize - delta
 
                 # We should be good, so we just need to add it.
