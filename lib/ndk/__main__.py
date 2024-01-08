@@ -14,20 +14,23 @@ else:
     K32.GetCurrentProcess.restype = ctypes.wintypes.HANDLE
     K32.GetCurrentProcessId.argtypes = []
     K32.GetCurrentProcessId.restype = ctypes.wintypes.DWORD
-    K32.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_bool, ctypes.c_uint32]
-    K32.OpenProcess.restype = ctypes.c_size_t
-    K32.CloseHandle.argtypes = [ctypes.c_size_t]
-    K32.CloseHandle.restype = ctypes.c_bool
-    K32.GetProcessInformation.argtypes = [ ctypes.wintypes.HANDLE, ctypes.c_size_t, ctypes.c_void_p, ctypes.wintypes.DWORD ]
+    K32.OpenProcess.argtypes = [ctypes.wintypes.DWORD, ctypes.wintypes.BOOL, ctypes.wintypes.DWORD]
+    K32.OpenProcess.restype = ctypes.wintypes.HANDLE
+    K32.CloseHandle.argtypes = [ctypes.wintypes.HANDLE]
+    K32.CloseHandle.restype = ctypes.wintypes.BOOL
+    K32.GetProcessInformation.argtypes = [ ctypes.wintypes.HANDLE, ctypes.c_size_t, ctypes.wintypes.LPVOID, ctypes.wintypes.DWORD ]
     K32.GetProcessInformation.restype = ctypes.wintypes.BOOL
+    K32.IsWow64Process.argtypes = [ctypes.wintypes.HANDLE, ctypes.POINTER(ctypes.wintypes.BOOL)]
+    K32.IsWow64Process.restype = ctypes.wintypes.BOOL
 
 try:
     NT = ctypes.WinDLL('ntdll.dll')
 except Exception:
     raise OSError
 else:
-    NT.NtQueryInformationProcess.argtypes = [ ctypes.wintypes.HANDLE, ctypes.c_size_t, ctypes.c_void_p, ctypes.wintypes.ULONG, ctypes.wintypes.PULONG ]
-    NT.NtQueryInformationProcess.restype = ctypes.c_size_t
+    ctypes.wintypes.PVOID, ctypes.wintypes.NTSTATUS = ctypes.wintypes.LPVOID, ctypes.c_size_t
+    NT.NtQueryInformationProcess.argtypes = [ ctypes.wintypes.HANDLE, ctypes.c_size_t, ctypes.wintypes.PVOID, ctypes.wintypes.ULONG, ctypes.wintypes.PULONG ]
+    NT.NtQueryInformationProcess.restype = ctypes.wintypes.NTSTATUS
 
 # FIXME: this is terrible design that was repurposed from some pretty ancient code.
 class MemoryReference(ptypes.provider.memoryview):
@@ -115,16 +118,21 @@ if __name__ == '__main__':
 
     handle = K32.OpenProcess(0x30 | 0x400, False, pid)
 
-    with MemoryReference(ndk.pstypes.ProcessInfoClass.lookup('ProcessBasicInformation'), WIN64=1) as pbi:
+    _WIN64 = ctypes.wintypes.BOOL(1)
+    if not K32.IsWow64Process(handle, ctypes.pointer(_WIN64)):
+        raise WindowsError('unable due determine the address type for the given process', pid)
+    WIN64 = True if _WIN64.value else False
+
+    with MemoryReference(ndk.pstypes.ProcessInfoClass.lookup('ProcessBasicInformation'), WIN64=WIN64) as pbi:
         res = ctypes.wintypes.ULONG(0)
         status = NT.NtQueryInformationProcess(handle, pbi.type, pbi.getoffset(), pbi.size(), ctypes.pointer(res))
         if status != ndk.NTSTATUS.byname('STATUS_SUCCESS'):
-            raise WindowsError()
+            raise WindowsError(status)
         elif res.value != pbi.size():
             raise ValueError('unexpected size', res.value, pbi.size())
 
     source = ptypes.setsource(ptypes.prov.memory() if os.getpid() == pid else ptypes.prov.WindowsProcessHandle(handle))
-    peb = ndk.pstypes.PEB(offset = pbi['PebBaseAddress'].int())
+    peb = ndk.pstypes.PEB(offset = pbi['PebBaseAddress'].int(), WIN64=WIN64)
     peb = peb.l
 
     ldr = peb['Ldr'].d
