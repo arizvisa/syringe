@@ -225,17 +225,19 @@ class IMAGE_FILE_(pbinary.flags):
     ]
 
 class TimeDateStamp(DWORD):
+    __tzinfo_utc = type('UTC', (datetime.tzinfo,), {'utcoffset': (lambda *args: datetime.timedelta(0)), 'tzname': (lambda *args: 'UTC'), 'dst': (lambda *args: datetime.timedelta(0))})
+    __tzinfo_local = type('Local', (datetime.tzinfo,), {'utcoffset': (lambda *args: datetime.timedelta(seconds=-time.timezone)), 'tzname': (lambda *args: 'UTC'), 'dst': (lambda *args: datetime.timedelta(0))})
     def datetime(self):
         res = self.int()
-        epoch = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
+        epoch = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc if hasattr(datetime, 'timezone') else self.__tzinfo_utc())
         delta = datetime.timedelta(seconds=res)
         return epoch + delta
     def details(self):
-        tzinfo = datetime.timezone(datetime.timedelta(seconds=-(time.altzone if time.daylight else time.timezone)))
+        tzinfo = datetime.timezone(datetime.timedelta(seconds=-(time.altzone if time.daylight else time.timezone))) if hasattr(datetime, 'timezone') else self.__tzinfo_local()
         res = self.datetime().astimezone(tzinfo)
         return res.isoformat()
     def summary(self):
-        tzinfo = datetime.timezone(datetime.timedelta(seconds=-(time.altzone if time.daylight else time.timezone)))
+        tzinfo = datetime.timezone(datetime.timedelta(seconds=-(time.altzone if time.daylight else time.timezone))) if hasattr(datetime, 'timezone') else self.__tzinfo_local()
         res = self.datetime().astimezone(tzinfo)
         return '({:#0{:d}x}) {!s}'.format(self.int(), 2 + 2 * self.size(), res)
 
