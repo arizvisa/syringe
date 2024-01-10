@@ -576,10 +576,9 @@ if __name__ == '__main__':
 
         try:
             x = x.l
-            raise Failure
 
         except ptypes.error.LoadError:
-            pass
+            raise Failure
 
         if x.v is not None and not x.initializedQ() and x['b'].serialize() == b'BBBB' and x['c'].size() == 3:
             raise Success

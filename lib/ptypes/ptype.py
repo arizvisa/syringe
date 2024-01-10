@@ -1495,8 +1495,13 @@ class container(base):
             else:
                 Log.debug("container.load : {:s} : Cropped to {{{:x}:{:+x}}} : {!r}".format(self.instance(), ofs, s, E))
 
-            # and then re-raise because there's no more data left...
-            raise error.LoadError(self, consumed=s, offset=ofs)
+            ## and then re-raise because there's no more data left...
+            #raise error.LoadError(self, consumed=s, offset=ofs)
+
+            # XXX: the re-raising of the prior exception has been commented-out in
+            #      order to test out partially-initialized containers. this was
+            #      actually an unintended hack and there's a chance it might work.
+            return self
         return self
 
     def commit(self, **attrs):
