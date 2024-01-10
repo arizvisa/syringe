@@ -307,8 +307,18 @@ class IMAGE_DLLCHARACTERISTICS_EX_(pbinary.flags):
     ]
 
 @IMAGE_DEBUG_DIRECTORY_DATA.define
-class IMAGE_DEBUG_DATA_EX_DLLCHARACTERISTICS(pbinary.littleendian(IMAGE_DLLCHARACTERISTICS_EX_)):
+class IMAGE_DEBUG_DATA_EX_DLLCHARACTERISTICS(pstruct.type):
     type = IMAGE_DEBUG_TYPE_.byname('EX_DLLCHARACTERISTICS')
+    def __Padding(self):
+        bs, fields = self.blocksize(), ['ExDllCharacteristics']
+        res = max(0, bs - sum(self[fld].li.size() for fld in fields))
+        return dyn.block(res)
+    _fields_ = [
+        (pbinary.littleendian(IMAGE_DLLCHARACTERISTICS_EX_), 'ExDllCharacteristics'),
+        (__Padding, 'Padding'),
+    ]
+    def summary(self):
+        return "Padding={:#x} : ExDllCharacteristics={:s}".format(self['Padding'], self['ExDllCharacteristics'].summary())
 IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS = IMAGE_DEBUG_DATA_EX_DLLCHARACTERISTICS
 
 ## IMAGE_DEBUG_TYPE_POGO
