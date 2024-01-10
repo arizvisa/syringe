@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import argparse,logging,importlib
-import functools,operator,os,types,six,itertools,types
+import functools,operator,os,types,sys,itertools,types
 import ptypes,pecoff
 #ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 ptypes.config.defaults.ptype.clone_name = '{}'
@@ -9,11 +9,18 @@ ptypes.config.defaults.pint.littleendian_name = '{}'
 
 OFS = os.environ.get('IFS', os.environ.get('OFS', ':'))
 
+string_types = ''.__class__, u''.__class__
+def portable_print2(*args, **kwargs):
+    file = kwargs.pop('file', sys.stdout)
+    assert(not(kwargs))
+    print >>file, ' '.join(map("{!s}".format, args))
+print_ = portable_print2 if sys.version_info.major < 3 else eval('print')
+
 def Locate(path, obj):
     return Resolve(obj, path.split(':'))
 
 def Extract(obj, outformat, file=None):
-    out = lambda string, **kwargs: six.print_(string, **kwargs)
+    out = lambda string, **kwargs: print_(string, **kwargs)
     if outformat == 'print':
         res = "{!r}".format(obj)
     elif outformat == 'hex':
@@ -64,9 +71,9 @@ def dump_exe(t, outformat, F=None, output=None):
     if F:
         return Extract(F(result), outformat, file=output)
     if not outformat or outformat in {'print'}:
-        six.print_("{!r}\n".format(result), file=output)
-        six.print_("{!r}\n".format(result['Header']), file=output)
-        six.print_(result['Stub'].hexdump(), file=output)
+        print_("{!r}\n".format(result), file=output)
+        print_("{!r}\n".format(result['Header']), file=output)
+        print_(result['Stub'].hexdump(), file=output)
         return
     if outformat in {'hex','raw'}:
         t = ptypes.dyn.block(result['Header'].size() + result['Stub'].size())
@@ -79,9 +86,9 @@ def dump_header(t, outformat, F=None, output=None):
     if F:
         return Extract(F(result), outformat, file=output)
     if not outformat:
-        six.print_("{!r}".format(result.p['Signature']), "{!r}\n".format(result.p['Signature'].serialize() + result['SignaturePadding'].serialize()), file=output)
-        six.print_("{!r}\n".format(result['FileHeader']), file=output)
-        six.print_("{!r}\n".format(result['OptionalHeader']), file=output)
+        print_("{!r}".format(result.p['Signature']), "{!r}\n".format(result.p['Signature'].serialize() + result['SignaturePadding'].serialize()), file=output)
+        print_("{!r}\n".format(result['FileHeader']), file=output)
+        print_("{!r}\n".format(result['OptionalHeader']), file=output)
         return
     return Extract(result, outformat, file=output)
 
@@ -93,7 +100,7 @@ def list_sections(t, outformat, F=None, output=None):
     if not outformat:
         summary = lambda s: "{!r} {:#x}:{:+#x} Raw:{:#x}:{:+#x}".format(s['Name'].str(), s['VirtualAddress'].int(), s['VirtualSize'].int(), s['PointerToRawData'].int(), s['SizeOfRawData'].int())
         for i, S in enumerate(result):
-            six.print_("[{:d}] {:s}".format(i, summary(S)), file=output)
+            print_("[{:d}] {:s}".format(i, summary(S)), file=output)
         return
     if outformat in {'list'}:
         # FIXME: output some attributes that can be fielded
@@ -111,7 +118,7 @@ def extract_section(t, index, outformat, F=None, output=None):
     if F:
         return Extract(F(result), outformat, file=output)
     if outformat == 'print':
-        return six.print_("{!r}".format(S), file=output)
+        return print_("{!r}".format(S), file=output)
     elif outformat == 'list':
         content = result['PointerToRawData'].d.li
         data = content.serialize()
@@ -128,7 +135,7 @@ def list_entries(t, outformat, F=None, output=None):
     summary = lambda n: "{:s} {:#x}:{:+#x}".format(n.classname(), n['Address'].int(), n['Size'].int())
     if not outformat:
         for i, n in enumerate(result):
-            six.print_("[{:d}] {:s}".format(i, summary(n)), file=output)
+            print_("[{:d}] {:s}".format(i, summary(n)), file=output)
         return
     if outformat in {'list'}:
         # FIXME: output some attributes that can be fielded
@@ -164,9 +171,9 @@ def list_exports(t, outformat, F=None, output=None):
         return Extract(F(result), outformat, file=output)
     if not outformat:
         filename = result['Name'].d.li.str()
-        six.print_("Name:{:s} NumberOfFunctions:{:d} NumberOfNames:{:d}".format(filename, result['NumberOfFunctions'].int(), result['NumberOfNames'].int()), file=output)
+        print_("Name:{:s} NumberOfFunctions:{:d} NumberOfNames:{:d}".format(filename, result['NumberOfFunctions'].int(), result['NumberOfNames'].int()), file=output)
         for ofs, hint, name, ordinalstring, entrypoint, fwd in result.iterate():
-            six.print_("[{:d}] {!r} {!r} {:s}".format(hint, name, ordinalstring, "{:#x}".format(entrypoint) if fwd is None else fwd), file=output)
+            print_("[{:d}] {!r} {!r} {:s}".format(hint, name, ordinalstring, "{:#x}".format(entrypoint) if fwd is None else fwd), file=output)
         return
     if outformat in {'list'}:
         return Extract(("{:s}{OFS}{:s}{OFS}{:s}{OFS}{:s}{OFS}{:s}{OFS}{:s}".format('' if rva is None else "{:d}".format(rva), '' if hint is None else "{:d}".format(hint), name or '', ordinalstring or '', "{:d}".format(entrypoint) if fwd is None else '', fwd if entrypoint is None else '', OFS=OFS) for rva, hint, name, ordinalstring, entrypoint, fwd in result.iterate()), outformat, file=output)
@@ -183,7 +190,7 @@ def extract_export(t, index, outformat, F=None, output=None):
     global result; result = ete
     if not F and (not outformat or outformat in {'print'}):
         # rva, hint, name, ordinalname, entry, forwarded
-        six.print_("index={:d} rva={:#x} hint={:#x} name={!s} ordinalname={!s} entry={:#x} forwarded={!s}".format(index, *ete), file=output)
+        print_("index={:d} rva={:#x} hint={:#x} name={!s} ordinalname={!s} entry={:#x} forwarded={!s}".format(index, *ete), file=output)
         return
     if not F and outformat in {'raw','hex'}:
         aof, aon, no = (et[n].d.li[index] for n in ('AddressOfFunctions', 'AddressOfNames', 'AddressOfNameOrdinals'))
@@ -208,7 +215,7 @@ def list_imports(t, outformat, F=None, output=None):
         nmax = max([len(ite['Name'].d.li.str()) for ite in items] or [0])
         for i, ite in enumerate(result.iterate()):
             iat, int = ite['IAT'].d.li, ite['INT'].d.li
-            six.print_("[{:d}]{:s} {:<{:d}s} IAT[{:d}] INT[{:d}]".format(i, ' '*(imax-len(str(i))), ite['Name'].d.li.str(), nmax, len(iat), len(int)), file=output)
+            print_("[{:d}]{:s} {:<{:d}s} IAT[{:d}] INT[{:d}]".format(i, ' '*(imax-len(str(i))), ite['Name'].d.li.str(), nmax, len(iat), len(int)), file=output)
         return
     if outformat in {'list'}:
         return Extract(("{:d}{OFS}{:s}".format(i, n['Name'].d.li.str(), OFS=OFS) for i, n in enumerate(result[:-1])), outformat, file=output)
@@ -221,11 +228,11 @@ def extract_import(t, index, outformat, F=None, output=None):
     global it; it = E['Address'].d.li
 
     # if index is a string and using the correct characters, then convert to an int.
-    if isinstance(index, six.string_types) and all(ch in '0123456789' for ch in index):
+    if isinstance(index, string_types) and all(ch in '0123456789' for ch in index):
         index = int(index)
 
     # if it wasn't an integer, then try matching the imports by name.
-    elif isinstance(index, six.string_types):
+    elif isinstance(index, string_types):
         iterable = ((idx, item['Name'].d.l.str()) for idx, item in enumerate(it) if item['Name'].int())
         iterable = ((idx, {name.upper(), name.upper().rsplit('.', 1)[0]}) for idx, name in iterable)
         index = next(idx for idx, candidates in iterable if index.upper() in candidates)
@@ -239,7 +246,7 @@ def extract_import(t, index, outformat, F=None, output=None):
         # FIXME: separate these fields somehow
         summary = "hint={:d}{OFS}name={:s}{OFS}offset={:#x}{OFS}value={:#x}".format
         for ie in result.iterate():
-            six.print_(summary(*ie, OFS=OFS), file=output)
+            print_(summary(*ie, OFS=OFS), file=output)
         return
     return Extract(F(result) if F else result, outformat, file=output)
 
@@ -255,7 +262,7 @@ def list_resources(t, outformat, F=None, output=None):
     if not outformat:
         res = collectresources(result)
         for re in dumpresources(res):
-            six.print_('/'.join(map(str, re)), summary(followresource(re, rt)), file=output)
+            print_('/'.join(map(str, re)), summary(followresource(re, rt)), file=output)
         return
     elif outformat in {'list'}:
         def recurse(entry, state):
@@ -323,7 +330,7 @@ def list_signature(t, outformat, F=None, output=None):
     summary = lambda i, e: "[{:d}] {:+#x} wRevision:{:s} wCertificateType:{:s} bCertificate:{:d}".format(i, e.getoffset(), e['wRevision'].str(), e['wCertificateType'].str(), e['bCertificate'].size())
     if not outformat or outformat in {'print'}:
         for i, se in enumerate(result):
-            six.print_(summary(i, se), file=output)
+            print_(summary(i, se), file=output)
         return
     elif outformat in {'list'}:
         Fhexify = operator.methodcaller(*(['hex'] if hasattr(bytes, 'hex') else ['encode', 'hex']))
@@ -377,13 +384,13 @@ def emit_pdb(t, outformat, F=None, output=None):
     global result; result = item['PointerToRawData'].d.li
     info = result['Info']
     if not outformat:
-        six.print_("{!s}".format(info.SymUrl()), file=output)
+        print_("{!s}".format(info.SymUrl()), file=output)
         return
     if outformat in {'list'}:
         fields = [fld for fld in info]
-        six.print_(OFS.join(fields[0:1] + [info[fields[0]].str().upper()]))
-        six.print_(OFS.join(fields[1:2] + ["{:d}".format(info[fields[1]].int())]))
-        six.print_(OFS.join(fields[2:3] + [info[fields[2]].str()]))
+        print_(OFS.join(fields[0:1] + [info[fields[0]].str().upper()]))
+        print_(OFS.join(fields[1:2] + ["{:d}".format(info[fields[1]].int())]))
+        print_(OFS.join(fields[2:3] + [info[fields[2]].str()]))
         return
     if F:
         return Extract(F(info), outformat, file=output)
@@ -405,7 +412,7 @@ def list_debugpogo(t, outformat, F=None, output=None):
         items = [item for item in entries]
         for i, item in enumerate(items):
             rva, size = (item[fld] for fld in ['rva', 'size'])
-            six.print_("[{:d}] {:#x}-{:#x} {:+#x} {:s}".format(i, rva.int(), rva.int() + size.int(), size.int(), item['section'].str()))
+            print_("[{:d}] {:#x}-{:#x} {:+#x} {:s}".format(i, rva.int(), rva.int() + size.int(), size.int(), item['section'].str()))
         return
     if outformat in {'list'}:
         return Extract(("{:x}{:+x}{OFS}{:x}{OFS}{:s}".format(item['rva'].int(), item['rva'].int()+item['size'].int(), item['size'].int(), item['section'].str(), OFS=OFS) for item in entries), outformat, file=output)
