@@ -1,4 +1,4 @@
-import ptypes, ndk
+import ptypes, ndk, pecoff
 import ctypes, ctypes.wintypes, contextlib
 
 try:
@@ -112,6 +112,9 @@ class WindowsError(OSError):
         code, string = ptypes.provider.win32error.getLastErrorTuple()
         super(WindowsError, self).__init__(code, string)
 
+class missing_datadirectory_entry(pecoff.portable.headers.IMAGE_DATA_DIRECTORY):
+    addressing = staticmethod(pecoff.headers.virtualaddress)
+
 if __name__ == '__main__':
     import sys, os
     pid = int(sys.argv[1]) if len(sys.argv) == 2 else os.getpid()
@@ -138,12 +141,23 @@ if __name__ == '__main__':
     ldr = peb['Ldr'].d
     ldr = ldr.l
     for mod in ldr['InLoadOrderModuleList'].walk():
-        pe = mod['DllBase'].d
+        mz = mod['DllBase'].d
         print("{:#x}{:+#x} : {:s} : {:s}".format(mod['DllBase'], mod['SizeOfImage'], mod['BaseDllName'].str(), mod['FullDllName'].str()))
-        pe = pe.l
-        print("{:s} -> *{:#x}".format(pe.instance(), mod['EntryPoint'].int()))
-        print(pe['Next']['Header']['FileHeader']['Characteristics'].summary())
-        print(pe['Next']['Header']['OptionalHeader']['DllCharacteristics'].summary())
+        mz = mz.l
+        pe = mz['Next']
+        datadirectory = pe['Header']['DataDirectory']
+        pdebug = datadirectory['Debug']['Address'] if 6 < len(datadirectory) else missing_datadirectory_entry().a['Address']
+        ploader = datadirectory['LoaderConfig']['Address'] if 10 < len(datadirectory) else missing_datadirectory_entry().a['Address']
+        pcom = datadirectory['COM']['Address'] if 15 < len(datadirectory) else missing_datadirectory_entry().a['Address']
+        print("Entry: {:s} -> *{:#x}".format(mz.instance(), mod['EntryPoint'].int()))
+        print("Characteristics: {}".format(pe['Header']['FileHeader']['Characteristics'].summary()))
+        print("DllCharacteristics: {}".format(pe['Header']['OptionalHeader']['DllCharacteristics'].summary()))
+        if ploader.int(): print("GuardFlags: {}".format(ploader.d.li['GuardFlags'].summary()))
+        if ploader.int(): print("SecurityCookie: {}".format(ploader.d.li['SecurityCookie'].summary()))
+        if ploader.int(): print("SafeSEH: {:b}".format(True if ploader.d.li['SEHandlerTable'].int() and ploader.d.li['SEHandlerCount'].int() else False))
+        if pdebug.int() and any(entry['Type']['EX_DLLCHARACTERISTICS'] and entry['AddressOfRawData'].int() for entry in pdebug.d.li):
+            entry = next(entry for entry in pdebug.d.li if entry['Type']['EX_DLLCHARACTERISTICS'] and entry['AddressOfRawData'].int())
+            print("{}".format(entry['AddressOfRawData'].d.li.summary()))
         print()
 
     K32.CloseHandle(handle)
