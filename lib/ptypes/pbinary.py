@@ -1000,11 +1000,11 @@ class container(type):
             raise error.SyntaxError(self, 'container.__deserialize_consumer__', message='caller is responsible for pre-allocating the elements in self.value')
         self.value = []
 
-        # FIXME: We should be reading this data at the byte (8bit) boundary and
-        #        so we can probably consume objects that have a hardcoded blocksize
-        #        first as long as it fits within a byte (or the consumer already has
-        #        data cached) so that we can read a field that depends on bits
-        #        that follow it
+        # FIXME: we should be reading this data at the byte (8bit) boundary. So,
+        #        we can probably consume objects that have a hardcoded blocksize
+        #        first as long as we can guarantee that it fits within a byte
+        #        (or the consumer already has data cached). this should allow
+        #        us to read a field that depends on bits that might follow it
         self.__position__ = consumer.position // 8, consumer.position % 8
         for item in generator:
             item = self.__append__(item)
@@ -2028,6 +2028,13 @@ class partial(ptype.container):
         '''Load a pbinary.partial using the current source'''
         with utils.assign(self, **attrs):
             source, offset, self.value = self.source, self.getoffset(), [self.__object__()]
+
+            # If we have to worry about the byteorder and there's a zero-length blocksize,
+            # then we avoid decoding altogether. Instead we treat it as an allocation to
+            # avoid partially-initialized binary types.
+            if self.length > 1 and not utils.callable_eq(self, self.blocksize, partial, partial.blocksize) and not self.blocksize():
+                return self.a
+
             try:
                 object = self.__load_byteorder(offset, (source.consume(1) for index in itertools.count()))
             except (StopIteration, error.ProviderError):
