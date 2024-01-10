@@ -130,13 +130,21 @@ class IMAGE_LOAD_CONFIG_DIRECTORY(pstruct.type):
     #        sub-object that chooses the correct IMAGE_LOAD_CONFIG_DIRECTORY
     #        to use.
     def blocksize(self):
-        # If we're not allocated, then look at our parent directory for that size.
+        parent = self.getparent(IMAGE_DATA_DIRECTORY) if self.parent else None
+        minimum = self._fields_[0][0]().a.blocksize()
+
+        # If we're not allocated, then use the size from our parent directory.
         if not self.value:
-            p = self.getparent(IMAGE_DATA_DIRECTORY)
-            return p['Size'].int()
+            return parent['Size'].int() if parent else minimum
 
         # Otherwise, we're allocated and just need to read our size field.
-        return self['Size'].li.int()
+        try:
+            result = self['Size'].li.int()
+
+        # If we couldn't load the size, then just trust the data directory entry.
+        except ptypes.error.ConsumeError:
+            result = parent['Size'].int()
+        return max(result, minimum)
 
 class IMAGE_ENCLAVE_IMPORT_MATCH_(pint.enum, DWORD):
     _values_ = [
@@ -312,8 +320,8 @@ class IMAGE_LOAD_CONFIG_DIRECTORY32(IMAGE_LOAD_CONFIG_DIRECTORY):
         (TimeDateStamp, 'TimeDateStamp'),
         (WORD, 'MajorVersion'),
         (WORD, 'MinorVersion'),
-        (pbinary.littleendian(FLG_), 'GlobalFlagsClear'),
-        (pbinary.littleendian(FLG_), 'GlobalFlagsSet'),
+        (lambda self: pint.uint_t if self['Size'].li.int() < 0x10 else pbinary.littleendian(FLG_), 'GlobalFlagsClear'),
+        (lambda self: pint.uint_t if self['Size'].li.int() < 0x14 else pbinary.littleendian(FLG_), 'GlobalFlagsSet'),
         (DWORD, 'CriticalSectionDefaultTimeout'),
 
         (DWORD, 'DeCommitFreeBlockThreshold'),
@@ -323,9 +331,9 @@ class IMAGE_LOAD_CONFIG_DIRECTORY32(IMAGE_LOAD_CONFIG_DIRECTORY):
         (DWORD, 'VirtualMemoryThreshold'),
         (DWORD, 'ProcessAffinityMask'),
 
-        (pbinary.littleendian(HEAP_), 'ProcessHeapFlags'),      # XXX: maybe its from HeapCreate?
+        (lambda self: pint.uint_t if self['Size'].li.int() < 0x34 else pbinary.littleendian(HEAP_), 'ProcessHeapFlags'),      # XXX: maybe its from HeapCreate?
         (WORD, 'CSDVersion'),
-        (pbinary.littleendian(LOAD_LIBRARY_SEARCH_), 'DependentLoadFlags'),
+        (lambda self: pint.uint_t if self['Size'].li.int() < 0x38 else pbinary.littleendian(LOAD_LIBRARY_SEARCH_), 'DependentLoadFlags'),
 
         (realaddress(VOID, type=DWORD), 'EditList'),    # XXX: also probably a NULL-terminated list of VAs
         (realaddress(DWORD, type=DWORD), 'SecurityCookie'),
@@ -336,7 +344,7 @@ class IMAGE_LOAD_CONFIG_DIRECTORY32(IMAGE_LOAD_CONFIG_DIRECTORY):
         (realaddress(realaddress(VOID, type=DWORD), type=DWORD), 'GuardCFDispatchFunctionPointer'),
         (realaddress(lambda self: dyn.array(virtualaddress(VOID, type=DWORD), self.parent['GuardCFFunctionCount'].li.int()), type=DWORD), 'GuardCFFunctionTable'),
         (DWORD, 'GuardCFFunctionCount'),
-        (pbinary.littleendian(IMAGE_GUARD_), 'GuardFlags'),
+        (lambda self: pint.uint_t if self['Size'].li.int() < 0x40 else pbinary.littleendian(IMAGE_GUARD_), 'GuardFlags'),
 
         (IMAGE_LOAD_CONFIG_CODE_INTEGRITY, 'CodeIntegrity'),
         (realaddress(lambda self: dyn.array(DWORD, self.parent['GuardAddressTakenIatEntryCount'].li.int()), type=DWORD), 'GuardAddressTakenIatEntryTable'),
@@ -373,8 +381,8 @@ class IMAGE_LOAD_CONFIG_DIRECTORY64(IMAGE_LOAD_CONFIG_DIRECTORY):
         (TimeDateStamp, 'TimeDateStamp'),
         (WORD, 'MajorVersion'),
         (WORD, 'MinorVersion'),
-        (pbinary.littleendian(FLG_), 'GlobalFlagsClear'),
-        (pbinary.littleendian(FLG_), 'GlobalFlagsSet'),
+        (lambda self: pint.uint_t if self['Size'].li.int() < 0x10 else pbinary.littleendian(FLG_), 'GlobalFlagsClear'),
+        (lambda self: pint.uint_t if self['Size'].li.int() < 0x14 else pbinary.littleendian(FLG_), 'GlobalFlagsSet'),
         (DWORD, 'CriticalSectionDefaultTimeout'),
 
         (ULONGLONG, 'DeCommitFreeBlockThreshold'),
@@ -384,9 +392,9 @@ class IMAGE_LOAD_CONFIG_DIRECTORY64(IMAGE_LOAD_CONFIG_DIRECTORY):
         (ULONGLONG, 'VirtualMemoryThreshold'),
         (ULONGLONG, 'ProcessAffinityMask'),
 
-        (pbinary.littleendian(HEAP_), 'ProcessHeapFlags'),      # XXX: maybe its from HeapCreate?
+        (lambda self: pint.uint_t if self['Size'].li.int() < 0x4c else pbinary.littleendian(HEAP_), 'ProcessHeapFlags'),      # XXX: maybe its from HeapCreate?
         (WORD, 'CSDVersion'),
-        (pbinary.littleendian(LOAD_LIBRARY_SEARCH_), 'DependentLoadFlags'),
+        (lambda self: pint.uint_t if self['Size'].li.int() < 0x50 else pbinary.littleendian(LOAD_LIBRARY_SEARCH_), 'DependentLoadFlags'),
 
         (realaddress(VOID, type=ULONGLONG), 'EditList'),
         (realaddress(ULONGLONG, type=ULONGLONG), 'SecurityCookie'),
@@ -397,7 +405,7 @@ class IMAGE_LOAD_CONFIG_DIRECTORY64(IMAGE_LOAD_CONFIG_DIRECTORY):
         (realaddress(realaddress(VOID, type=ULONGLONG), type=ULONGLONG), 'GuardCFDispatchFunctionPointer'),
         (realaddress(lambda self: dyn.array(virtualaddress(VOID, type=DWORD), self.parent['GuardCFFunctionCount'].li.int()), type=ULONGLONG), 'GuardCFFunctionTable'),
         (ULONGLONG, 'GuardCFFunctionCount'),
-        (pbinary.littleendian(IMAGE_GUARD_), 'GuardFlags'),
+        (lambda self: pint.uint_t if self['Size'].li.int() < 0x94 else pbinary.littleendian(IMAGE_GUARD_), 'GuardFlags'),
 
         (IMAGE_LOAD_CONFIG_CODE_INTEGRITY, 'CodeIntegrity'),
         (realaddress(lambda self: dyn.array(ULONGLONG, self.parent['GuardAddressTakenIatEntryCount'].li.int()), type=ULONGLONG), 'GuardAddressTakenIatEntryTable'),
