@@ -340,12 +340,16 @@ class type(ptype.type):
 class uinteger_t(type):
     '''Provides unsigned integer support'''
     def summary(self):
+        if len(self.value or b'') < self.blocksize():
+            return super(uinteger_t, self).summary()
         res = self.int()
         return '{:-#0{:d}x} ({:d})'.format(res, 2 + self.blocksize() * 2, res)
 
 class sinteger_t(type):
     '''Provides signed integer support'''
     def summary(self):
+        if len(self.value or b'') < self.blocksize():
+            return super(uinteger_t, self).summary()
         res = self.int()
         return u"{:+#0{:d}x} ({:d})".format(res, 3 + self.blocksize() * 2, res)
 
