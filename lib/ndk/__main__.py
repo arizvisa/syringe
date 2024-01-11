@@ -116,9 +116,10 @@ class missing_datadirectory_entry(pecoff.portable.headers.IMAGE_DATA_DIRECTORY):
     addressing = staticmethod(pecoff.headers.virtualaddress)
 
 if __name__ == '__main__':
-    import sys, os
-    pid = int(sys.argv[1]) if len(sys.argv) == 2 else os.getpid()
-
+    import sys, os, fnmatch
+    pid = int(sys.argv[1]) if 1 < len(sys.argv) else os.getpid()
+    patterns = sys.argv[2:]
+    Fmatch = (lambda path: any(fnmatch.fnmatch(path, pattern) for pattern in patterns)) if patterns else (lambda path: True)
     handle = K32.OpenProcess(0x30 | 0x400, False, pid)
 
     _WIN64 = ctypes.wintypes.BOOL(1)
@@ -141,6 +142,9 @@ if __name__ == '__main__':
     ldr = peb['Ldr'].d
     ldr = ldr.l
     for mod in ldr['InLoadOrderModuleList'].walk():
+        if not Fmatch(mod['FullDllName'].str()):
+            continue
+
         mz = mod['DllBase'].d
         print("{:#x}{:+#x} : {:s} : {:s}".format(mod['DllBase'], mod['SizeOfImage'], mod['BaseDllName'].str(), mod['FullDllName'].str()))
         mz = mz.l
