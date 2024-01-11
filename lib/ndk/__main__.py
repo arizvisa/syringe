@@ -150,10 +150,12 @@ if __name__ == '__main__':
         mz = mz.l
         pe = mz['Next']
         datadirectory = pe['Header']['DataDirectory']
+        prelocations = datadirectory['Relocations']['Address'] if 5 < len(datadirectory) else missing_datadirectory_entry().a['Address']
         pdebug = datadirectory['Debug']['Address'] if 6 < len(datadirectory) else missing_datadirectory_entry().a['Address']
         ploader = datadirectory['LoaderConfig']['Address'] if 10 < len(datadirectory) else missing_datadirectory_entry().a['Address']
         pcom = datadirectory['COM']['Address'] if 15 < len(datadirectory) else missing_datadirectory_entry().a['Address']
         print("Entry: {:s} -> *{:#x}".format(mz.instance(), mod['EntryPoint'].int()))
+        print("HasRelocations: {:b}".format(True if prelocations.int() else False))
         print("Characteristics: {}".format(pe['Header']['FileHeader']['Characteristics'].summary()))
         print("DllCharacteristics: {}".format(pe['Header']['OptionalHeader']['DllCharacteristics'].summary()))
         if ploader.int(): print("GuardFlags: {}".format(ploader.d.li['GuardFlags'].summary()))
