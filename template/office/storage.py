@@ -896,7 +896,7 @@ class Directory(parray.block):
 
     def iterate(self, storage=None):
         '''Return the each entry from the directory in their sorted order.'''
-        storage = self.RootEntry() if store is None else storage
+        storage = self.RootEntry() if storage is None else storage
         for _, entry in self.children(storage):
             yield entry
         return
