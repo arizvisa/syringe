@@ -218,6 +218,68 @@ class SYSTEM_INFORMATION_CLASS(pint.enum):
         (209, 'SystemCodeIntegritySyntheticCacheInformation'),
     ]]
 
+class PROCESSOR_ARCHITECTURE_(pint.enum):
+    _values_ = [
+        ('AMD64', 9),
+        ('ARM', 5),
+        ('ARM64', 12),
+        ('IA64', 6),
+        ('INTEL', 0),
+        ('UNKNOWN', 0xffff),
+    ]
+
+class PROCESSOR_(pint.enum):
+    _values_ = [
+        ('SHx_SH3', 103),
+        ('SHx_SH4', 104),
+        ('INTEL_386', 386),
+        ('INTEL_486', 486),
+        ('INTEL_PENTIUM', 586),
+        ('PPC_601', 601),
+        ('PPC_603', 603),
+        ('PPC_604', 604),
+        ('PPC_620', 620),
+        ('MOTOROLA_821', 821),
+        ('ARM720', 1824),
+        ('ARM820', 2080),
+        ('ARM920', 2336),
+        ('STRONGARM', 2577),
+        ('INTEL_IA64', 2200),
+        ('MIPS_R4000', 4000),
+        ('AMD_X8664', 8664),
+        ('HITACHI_SH3', 10003),
+        ('HITACHI_SH3E', 10004),
+        ('HITACHI_SH4', 10005),
+        ('OPTIL', 18767),
+        ('ALPHA_21064', 21064),
+        ('ARM_7TDMI', 70001),
+    ]
+
+class SYSTEM_INFO(pstruct.type, versioned):
+    type = SYSTEM_INFORMATION_CLASS.byname('SystemBasicInformation')
+    class _wProcessorArchitecture(PROCESSOR_ARCHITECTURE_, WORD):
+        pass
+    class _dwProcessorType(PROCESSOR_, DWORD):
+        pass
+    def __return64(type32, type64):
+        def win32orwin64(self):
+            res = self['wProcessorArchitecture'].li
+            return type64 if res.int() else type32
+        return win32orwin64
+    _fields_ = [
+        (_wProcessorArchitecture, 'wProcessorArchitecture'),
+        (WORD, 'wReserved'),
+        (DWORD, 'dwPageSize'),
+        (__return64(PVOID, dyn.clone(PVOID, WIN64=1)), 'lpMinimumApplicationAddress'),
+        (__return64(PVOID, dyn.clone(PVOID, WIN64=1)), 'lpMaximumApplicationAddress'),
+        (__return64(DWORD_PTR, dyn.clone(DWORD_PTR, WIN64=1)), 'dwActiveProcessorMask'),
+        (DWORD, 'dwNumberOfProcessors'),
+        (_dwProcessorType, 'dwProcessorType'),
+        (DWORD, 'dwAllocationGranularity'),
+        (WORD, 'wProcessorLevel'),
+        (WORD, 'wProcessorRevision'),
+    ]
+
 class SYSTEM_MANUFACTURING_INFORMATION(pstruct.type):
     type = SYSTEM_INFORMATION_CLASS.byname('SystemManufacturingInformation')
     _fields_ = [
@@ -537,9 +599,9 @@ class POOL_HEADER(pstruct.type, versioned):
     def __Ulong1(self):
         nonpaged_attribute = self.NONPAGED if hasattr(self, 'NONPAGED') else not self.PAGED if hasattr(self, 'PAGED') else False
         if nonpaged_attribute:
-            pooltype32, pooltype64 = (POOL_HEADER._Ulong1_NonPagedPool, POOL_HEADER._Ulong164_NonPagedPool) 
+            pooltype32, pooltype64 = (POOL_HEADER._Ulong1_NonPagedPool, POOL_HEADER._Ulong164_NonPagedPool)
         else:
-            pooltype32, pooltype64 = (POOL_HEADER._Ulong1_PagedPool, POOL_HEADER._Ulong164_PagedPool) 
+            pooltype32, pooltype64 = (POOL_HEADER._Ulong1_PagedPool, POOL_HEADER._Ulong164_PagedPool)
         res = pooltype64 if getattr(self, 'WIN64', False) else pooltype
         return pbinary.littleendian(res)
 
