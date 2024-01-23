@@ -18,6 +18,8 @@ else:
     K32.OpenProcess.restype = ctypes.wintypes.HANDLE
     K32.CloseHandle.argtypes = [ctypes.wintypes.HANDLE]
     K32.CloseHandle.restype = ctypes.wintypes.BOOL
+    K32.GetNativeSystemInfo.argtypes = [ ctypes.wintypes.LPVOID ]
+    K32.GetNativeSystemInfo.restype = None
     K32.GetProcessInformation.argtypes = [ ctypes.wintypes.HANDLE, ctypes.c_size_t, ctypes.wintypes.LPVOID, ctypes.wintypes.DWORD ]
     K32.GetProcessInformation.restype = ctypes.wintypes.BOOL
     K32.IsWow64Process.argtypes = [ctypes.wintypes.HANDLE, ctypes.POINTER(ctypes.wintypes.BOOL)]
@@ -31,6 +33,8 @@ else:
     ctypes.wintypes.PVOID, ctypes.wintypes.NTSTATUS = ctypes.wintypes.LPVOID, ctypes.c_size_t
     NT.NtQueryInformationProcess.argtypes = [ ctypes.wintypes.HANDLE, ctypes.c_size_t, ctypes.wintypes.PVOID, ctypes.wintypes.ULONG, ctypes.wintypes.PULONG ]
     NT.NtQueryInformationProcess.restype = ctypes.wintypes.NTSTATUS
+    NT.NtQueryInformationThread.argtypes = [ ctypes.wintypes.HANDLE, ctypes.c_size_t, ctypes.wintypes.PVOID, ctypes.wintypes.ULONG, ctypes.wintypes.PULONG ]
+    NT.NtQueryInformationThread.restype = ctypes.wintypes.NTSTATUS
 
 # FIXME: this is terrible design that was repurposed from some pretty ancient code.
 class MemoryReference(ptypes.provider.memoryview):
@@ -108,9 +112,9 @@ class MemoryReference(ptypes.provider.memoryview):
         return result
 
 class WindowsError(OSError):
-    def __init__(self):
+    def __init__(self, *args):
         code, string = ptypes.provider.win32error.getLastErrorTuple()
-        super(WindowsError, self).__init__(code, string)
+        super(WindowsError, self).__init__((code, string), args)
 
 class missing_datadirectory_entry(pecoff.portable.headers.IMAGE_DATA_DIRECTORY):
     addressing = staticmethod(pecoff.headers.virtualaddress)
@@ -120,23 +124,38 @@ if __name__ == '__main__':
     pid = int(sys.argv[1]) if 1 < len(sys.argv) else os.getpid()
     patterns = sys.argv[2:]
     Fmatch = (lambda path: any(fnmatch.fnmatch(path, pattern) for pattern in patterns)) if patterns else (lambda path: True)
-    handle = K32.OpenProcess(0x30 | 0x400, False, pid)
 
-    _WIN64 = ctypes.wintypes.BOOL(1)
-    if not K32.IsWow64Process(handle, ctypes.pointer(_WIN64)):
-        raise WindowsError('unable due determine the address type for the given process', pid)
-    WIN64 = True if _WIN64.value else False
+    PROCESS_QUERY_INFORMATION = 0x0400
+    PROCESS_VM_WRITE = 0x0020
+    PROCESS_VM_READ = 0x0010
+    PROCESS_VM_OPERATION = 0x0008
 
-    with MemoryReference(ndk.pstypes.ProcessInfoClass.lookup('ProcessBasicInformation'), WIN64=WIN64) as pbi:
+    with MemoryReference(ndk.extypes.SYSTEM_INFO) as sbi:
+        K32.GetNativeSystemInfo(sbi.getoffset())
+    SYS64 = any(sbi['wProcessorArchitecture'][name] for name in {'AMD64', 'IA64', 'ARM64'})
+
+    handle = K32.OpenProcess(PROCESS_QUERY_INFORMATION|PROCESS_VM_WRITE|PROCESS_VM_READ|PROCESS_VM_OPERATION, False, pid)
+    if not handle:
+        raise WindowsError('unable to open process', pid)
+
+    WOW64 = ctypes.wintypes.BOOL(1)
+    if not K32.IsWow64Process(handle, ctypes.pointer(WOW64)):
+        raise WindowsError('unable to determine the address type for the given process', pid)
+    WIN64 = False if WOW64 else True
+
+    # FIXME: we should grab the main thread and use the TEB to get the PEB.
+    HACK = sbi['dwPageSize'].int() if SYS64 and WOW64 else 0
+
+    with MemoryReference(ndk.pstypes.ProcessInfoClass.lookup('ProcessBasicInformation'), WIN64=SYS64) as pbi:
         res = ctypes.wintypes.ULONG(0)
         status = NT.NtQueryInformationProcess(handle, pbi.type, pbi.getoffset(), pbi.size(), ctypes.pointer(res))
         if status != ndk.NTSTATUS.byname('STATUS_SUCCESS'):
-            raise WindowsError(status)
+            raise WindowsError('unable to query process information', "{:s}({:#0{:d}x})".format(ndk.NTSTATUS.byvalue(status), status, 2 + 8) if ndk.NTSTATUS.has(status) else status)
         elif res.value != pbi.size():
             raise ValueError('unexpected size', res.value, pbi.size())
 
     source = ptypes.setsource(ptypes.prov.memory() if os.getpid() == pid else ptypes.prov.WindowsProcessHandle(handle))
-    peb = ndk.pstypes.PEB(offset = pbi['PebBaseAddress'].int(), WIN64=WIN64)
+    peb = ndk.pstypes.PEB(offset = pbi['PebBaseAddress'].int() + HACK, WIN64=WIN64)
     peb = peb.l
 
     ldr = peb['Ldr'].d
