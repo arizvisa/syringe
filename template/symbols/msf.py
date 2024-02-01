@@ -15,7 +15,38 @@ class PN16(intsafe.unsigned___int16): pass
 class SPN16(intsafe.unsigned___int16): pass
 class PN32(intsafe.unsigned___int32): pass
 class SPN32(intsafe.unsigned___int32): pass
-PN, SPN, UPN, USPN = PN16, SPN16, PN32, SPN32
+#PN, SPN, UPN, USPN = PN16, SPN16, PN32, SPN32
+
+class Pointer(ptype.opointer_t):
+    def _object_(self):
+        if hasattr(self, '_cbPg'):
+            return dyn.block(self._cbPg)
+        p = self.getparent(None)    # XXX: should be MSF or File
+        hdr = p['hdr']
+        return dyn.block(hdr['cbPg'].int())
+
+    def summary(self):
+        return self.object.summary()
+
+class PagePointer(Pointer):
+    def _calculate_(self, index):
+        parent = self.parent
+        cbPg = getattr(parent if parent else self, '_cbPg', 0)
+        return index * cbPg
+
+    def _object_(self):
+        parent = self.parent
+        cbPg = getattr(parent if parent else self, '_cbPg', 0)
+        return dyn.block(cbPg)
+
+class PN(PagePointer): _value_ = PN16
+class SPN(PagePointer): _value_ = SPN16
+class UPN(PagePointer): _value_ = PN32
+class USPN(PagePointer): _value_ = SPN32
+
+# FIXME: the people (person?) who wrote the PDB parsing code is fucking nuts. no wonder
+#        nobody at micro$oft attempted to document it, it's completely unreadable fucking
+#        trash. reusage of method names for variables across different scopes? omfg...
 
 cbPgMax = 0x1000
 cbPgMin = 0x400
@@ -27,12 +58,55 @@ cpnDbMaxBigMsf = 0x100000           # 2^20 pages
 cbitsFpmMaxBigMsf = cpnDbMaxBigMsf
 cbFpmMaxBigMsf = cbitsFpmMaxBigMsf // 8
 
-cpnMaxForCb = lambda cb: ((cb) + cbPgMin - 1) // cbPgMin
-
 snMax = 0x1000              # max no of streams in msf
 pnMaxMax = 0xffff           # max no of pgs in any msf
 unsnMax = 0x10000           # 64K streams
 upnMaxMax = cpnDbMaxBigMsf  # 2^20 pages
+
+### https://github.com/microsoft/microsoft-pdb/blob/master/PDB/msf/msf.cpp#L196
+# XXX: this next shit is hilarious, look at what this next chunk of copied code actually means...
+
+# #ifdef SMALLPAGES
+#     MSF_PARMS(1024, 10, pnMaxMax, 8, 8),    // gives 64meg
+# #else
+#     MSF_PARMS(cbPgMin, 10, pnMaxMax, 8, 8), // gives 64meg (??)
+# #endif
+#     MSF_PARMS(2048,    11, pnMaxMax, 4, 4), // gives 128meg
+#     MSF_PARMS(cbPgMax, 12, 0x7fff,   2, 1)  // gives 128meg
+
+SMALLPAGES = False
+cbPgMax, cbPgMin = 0x1000, 0x200 if SMALLPAGES else 0x400
+
+rgmsfparms = [
+    (1024, 10) if SMALLPAGES else (cbPgMin, 10),             # ?!?! who in the fuck #ifdef'd cbPgMin to 0x400
+    (2048, 11),
+    (cbPgMax, 12),
+]
+
+# #ifdef SMALLPAGES
+#     MSFHC_PARMS(cbPgMin,  9, upnMaxMax, 4, 1),  // gives .5GB, note this is used
+#                                                 // primarily for small pdbs, so
+#                                                 // keep growth rate low (2K).
+#     MSFHC_PARMS(1024,    10, upnMaxMax, 8, 1),  // gives 1.0GB
+# #else
+#     MSFHC_PARMS(cbPgMin, 10, upnMaxMax, 8, 1),  // gives 1.0GB
+# #endif
+#     MSFHC_PARMS(2048,    11, upnMaxMax, 4, 1),  // gives 2.0GB
+#     MSFHC_PARMS(cbPgMax, 12, upnMaxMax, 2, 1)   // gives 4.0GB
+
+rgmsfparms_hc = (
+    [(cbPgMin, 9), (1024, 10)] if SMALLPAGES else [(cbPgMin, 10)]
+) + [
+    (2048, 11),
+    (cbPgMax, 12),
+]
+
+# XXX: and the best part about all of those conditionals being used to set some globals is that... both
+#      rgmsfparms and rgmsfparms_hc end up being the same damn thing (log2)... completely disregarding all
+#      the macro-specific options they defined. 56 lines of fucking obfuscation for no reason whatsoever...
+
+cpnMaxForCb = lambda cb: ((cb) + cbPgMin - 1) // cbPgMin    # XXX: love this naming scheme *pulls trigger*
+cpnForCbLgCbPg = lambda count, page: math.trunc((lambda shift, divisor: math.ceil((count + shift) // divisor))(pow(2, math.log2(page)) - 1, pow(2, math.log2(page))))
 
 class PG(ptype.block):
     length = cbPgMax
@@ -109,15 +183,29 @@ class szMagic(pstruct.type):
     def str(self):
         return u''.join(self[fld].str() for fld in self)
 
-class SI_PERSIST(pstruct.type):
+class SI(pstruct.type):
+    _fields_ = [
+        (CB, 'cb'),                     # https://github.com/microsoft/microsoft-pdb/blob/master/PDB/msf/msf.cpp#L1749
+        (lambda self: dyn.array(UPN, self['cb'].li.int()), 'mpspnpn'),
+    ]
+    def spnMac(self):
+        '''https://github.com/microsoft/microsoft-pdb/blob/master/PDB/msf/msf.cpp#L275'''
+        cb = self['cb'].int()
+        result, mask = cpnForCbLgCbPg(cb, self._cbPg), pow(2, 8 * USPN().a.blocksize()) - 1
+        assert(result == result & mask)
+        return result
+
+class SI_PERSIST(SI):
     # PDB/msf/msf.cpp:1331
     # PDB/msf/msf.cpp:1306
     _fields_ = [
-        (CB, 'cb'),
-        (intsafe.int32_t, 'mpspnpn'),
+        (CB, 'cb'),                     # https://github.com/microsoft/microsoft-pdb/blob/master/PDB/msf/msf.cpp#L1749
+        (intsafe.signed___int32, 'mpspnpn'),    # XXX: guessing this is an index into the mpspnpn field
     ]
+    def summary(self):
+        return "cb={:#x} mpspnpn={:#x}".format(self['cb'], self['mpspnpn'])
 
-cbMaxSerialization = snMax * SI_PERSIST().a.blocksize() + SN.length + ushort.length + pnMaxMax * PN.length
+cbMaxSerialization = snMax * SI_PERSIST().a.blocksize() + SN().a.blocksize() + ushort().a.blocksize() + pnMaxMax * PN().a.blocksize()
 class MSF_HDR(pstruct.type):
     '''PDB/msf/msf.cpp:933'''
     _fields_ = [
@@ -128,6 +216,10 @@ class MSF_HDR(pstruct.type):
         (SI_PERSIST, 'siSt'),
         #(dyn.array(PN, cpnMaxForCb(cbMaxSerialization)), 'mpspnpn'),
     ]
+
+    def summary(self):
+        return "cbPg={:#x} pnFpm={:#x} pnMac={:#x} siSt={{{:s}}}".format(self['cbPg'], self['pnFpm'], self['pnMac'], self['siSt'])
+
     def alloc(self, **fields):
         res = super(MSF_HDR, self).alloc(**fields)
         if 'cbPg' not in fields:
@@ -136,7 +228,7 @@ class MSF_HDR(pstruct.type):
             res.set(PnFpm=1)    # must be 1 or 2
         return res if 'cbPg' not in fields else res.set(cbPg=cbPgMax)
 
-cbBigMSFMaxSer = unsnMax * SI_PERSIST().a.blocksize() + UNSN.length + upnMaxMax * UPN.length
+cbBigMSFMaxSer = unsnMax * SI_PERSIST().a.blocksize() + UNSN().a.blocksize() + upnMaxMax * UPN().a.blocksize()
 class BIGMSF_HDR(MSF_HDR):
     '''PDB/msf/msf.cpp:946'''
     _fields_ = [
@@ -147,41 +239,179 @@ class BIGMSF_HDR(MSF_HDR):
         (SI_PERSIST, 'siSt'),
         #(dyn.array(PN32, cpnMaxForCb(cpnMaxForCb(cbBigMSFMaxSer) * PN32.length)), 'mpspnpn'),
     ]
+    def summary(self):
+        return "cbPg={:#x} pnFpm={:#x} pnMac={:#x} siSt={{{:s}}}".format(self['cbPg'], self['pnFpm'], self['pnMac'], self['siSt'].summary())
+
+class StrmTbl(pstruct.type):
+    '''https://github.com/microsoft/microsoft-pdb/blob/master/PDB/msf/msf.cpp#L554'''
+
+class StrmTbl_BigMsf2(StrmTbl):
+    '''https://github.com/Microsoft/microsoft-pdb/blob/master/PDB/msf/msf.cpp#L551'''
+
+    ### Size: https://github.com/microsoft/microsoft-pdb/blob/master/PDB/msf/msf.cpp#L753
+    ###       sizeof(SPN32) + snMacT*sizeof(CB);
+    def __streamLocations(self):
+        header, sizes = self._msfHeader, self['streamSizes'].li
+        table = [ cpnForCbLgCbPg(size.int(), self._msfHeader['cbPg'].int()) for size in sizes ]
+
+        # FIXME: this is a list of SPNs, but because of how large each entry can be,
+        #        it shouldn't only use SPNs as an intermediary. nobody should really
+        #        care about them being pointers anyways... (i sure as fuck don't).
+        class argh(parray.type):
+            pass
+        argh.length, argh._object_ = len(table), lambda self, table=table: dyn.block(4 * table[len(self.value)])
+        return argh
+
+    _fields_ = [
+        (SPN32, 'snMacT'),  # number of streams
+        (lambda self: dyn.array(CB, self['snMacT'].li.int()), 'streamSizes'),
+        (__streamLocations, 'streamLocations'),
+    ]
+
+class StrmTbl_SmallMsf(StrmTbl):
+    '''https://github.com/microsoft/microsoft-pdb/blob/master/PDB/msf/msf.cpp#L692'''
+
+    ### Size: https://github.com/microsoft/microsoft-pdb/blob/master/PDB/msf/msf.cpp#L857
+    ###       sizeof(SN) + sizeof(ushort) + snMacT * sizeof(SI_PERSIST)
+
+    # FIXME: not sure if this is an array of SI_PERSIST...
+    _fields_ = [
+        (SN, 'snMacT'), # number of streams
+        (ushort, '0'),
+        (lambda self: dyn.array(SI_PERSIST, self['snMacT'].li.int()), 'cbCopyRgsiSer'),
+    ]
+
+class _mpspnpn(parray.type):
+    '''This points to an array of segments that contain the stream table.'''
+    def enumerate(self):
+        if hasattr(self, '_msfHeader'):
+            minimum = self._msfHeader['pnFpm'].int()
+        elif isinstance(self.parent, MSF):
+            minimum = self.parent['hdr']['pnFpm'].int()
+        else:
+            minimum = 0
+
+        carry = 0
+        for segment in self:
+            if segment.int() < minimum:
+                continue
+            for index, pnpn in enumerate(segment.d.li):
+                yield carry + index, pnpn
+            carry += len(segment.d)
+        return
+
+    def iterate(self):
+        for _, segment in self.enumerate():
+            yield segment
+        return
+
+    def segments(self):
+        '''https://github.com/microsoft/microsoft-pdb/blob/master/PDB/msf/msf.cpp#L1960'''
+        if hasattr(self, '_msfHeader'):
+            header = self._msfHeader
+            pageSize = self._msfHeader['cbPg'].int()
+            start, size = (header['siSt'][field].int() for field in ['mpspnpn', 'cb'])
+        elif isinstance(self.parent, MSF):
+            header = self.parent['hdr']
+            pageSize = header['cgPg'].int()
+            start, size = (header['siSt'][field].int() for field in ['mpspnpn', 'cb'])
+        else:
+            pageSize = cbPgMin
+            start, size = 0, pageSize
+
+        count = math.trunc(math.ceil((size + pageSize - 1) // pageSize))
+        for valid, segment in zip(range(start + count), self.iterate()):
+            if valid >= start:
+                yield segment
+            continue
+        return
+
+    def dereference(self, **attrs):
+        table = [segment.d.l for segment in self.segments()]
+        source = ptypes.provider.disorderly(table, autocommit={})
+
+        if hasattr(self, '_msfHeader'):
+            header = self._msfHeader
+            pageSize = self._msfHeader['cbPg'].int()
+            start, size = (header['siSt'][field].int() for field in ['mpspnpn', 'cb'])
+        elif isinstance(self.parent, MSF):
+            header = self.parent['hdr']
+            pageSize = header['cgPg'].int()
+            start, size = (header['siSt'][field].int() for field in ['mpspnpn', 'cb'])
+        else:
+            pageSize = cbPgMin
+            start, size = 0, pageSize
+
+        # create a backing type using the collected segments as its source,
+        # and then a block of the correct size that actually uses it.
+        segment_t = dyn.block(pageSize)
+        backing_t = dyn.array(segment_t, len(table))
+        backing = self.new(backing_t, recurse=self.attributes, source=source).l
+        return self.new(dyn.block(size), source=ptypes.provider.proxy(backing))
 
 class MSF(pstruct.type):
+    class _mpspnpn_SmallMsf(_mpspnpn):
+        class PageNumber(PN):
+            def _object_(self):
+                return dyn.array(PN, self._cbPg // PN().a.blocksize())
+        _object_ = PageNumber
+
+    class _mpspnpn_BigMsf2(_mpspnpn):
+        class UnsignedPageNumber(UPN):
+            def _object_(self):
+                return dyn.array(UPN, self._cbPg // UPN().a.blocksize())
+        _object_ = UnsignedPageNumber
+
     def __mpspnpn(self):
         res = self['szMagic'].li
-        ty, length = (PN32, cpnMaxForCb(cpnMaxForCb(cbBigMSFMaxSer) * PN32.length)) if res.BigHeader() else (PN, cpnMaxForCb(cbMaxSerialization))
-        return dyn.array(ty, length)
+        _mpspnpn_BigMsf2 = self._mpspnpn_BigMsf2
+        _mpspnpn_SmallMsf = self._mpspnpn_SmallMsf
+        ty, length = (_mpspnpn_BigMsf2, cpnMaxForCb(cpnMaxForCb(cbBigMSFMaxSer) * PN32.length)) if res.BigHeader() else (_mpspnpn_SmallMsf, cpnMaxForCb(cbMaxSerialization))
+        return dyn.clone(ty, length=length)
 
     def __padding(self):
-        fields = ['szMagic', 'align(szMagic)', 'hdr', 'mpspnpn']
-        length = max(0, cbPgMax - sum(self[fld].li.size() for fld in fields))
-        return dyn.clone(PG, length=length)
+        hdr, fields = self['hdr'].li, ['szMagic', 'align(szMagic)', 'hdr', 'reserved', 'mpspnpn']
+        pgsize, count = hdr['cbpg'].int(), hdr['pnFpm'].int()
+        length = pgsize * count - sum(self[fld].li.size() for fld in fields)
+        return dyn.block(max(0, length))
 
     @property
     def PG(self):
+        raise AssertionError('this property has been deprecated, because it is pretty fucking stupid.')
         if self.initializedQ():
             return dyn.clone(PG, length=self['hdr']['cbPg'].int())
         return dyn.clone(PG, length=cbPgMax)
 
-    def __free_page_map(self):
-        hdr = self['hdr'].li
-        return dyn.array(self.PG, hdr['pnFpm'].int())
+    #def __free_page_map(self):
+    #    hdr = self['hdr'].li
+    #    page = dyn.clone(PG, length=hdr['cbpg'].int())
+    #    return dyn.array(page, hdr['pnFpm'].int())
 
-    def __pages(self):
-        hdr = self['hdr'].li
-        count = hdr['pnMac'].int() - sum([1, hdr['pnFpm'].int()])
-        return dyn.array(self.PG, max(0, count))
+    #def __pages(self):
+    #    hdr = self['hdr'].li
+    #    pgsize, total = hdr['cbpg'].int(), hdr['pnMac'].int()
+
+    #    count = hdr['pnMac'].int() - hdr['pnFpm'].int()
+    #    return dyn.clone(ptype.block, length=pgsize * max(0, count))
+    #    return dyn.array(block, max(0, count))
+
+    def __reserved_boundary(self):
+        '''hook decoding an empty field in order to propagate the page size'''
+        self._msfHeader = self.attributes['_msfHeader'] = hdr = self['hdr'].li
+        self._cbPg = self.attributes['_cbPg'] = hdr['cbPg'].int()
+        spnMac = hdr['siSt']['cb']
+        self._cpnForCbLgCbPg = self.attributes['_cpnForCbLgCbPg'] = cpnForCbLgCbPg(spnMac.int(), hdr['cbPg'].int())
+        return ptype.undefined
 
     _fields_ = [
         (szMagic, 'szMagic'),
         (dyn.align(4), 'align(szMagic)'),
         (lambda self: BIGMSF_HDR if self['szMagic'].li.BigHeader() else MSF_HDR, 'hdr'),
-        (__mpspnpn, 'mpspnpn'),
+        (__reserved_boundary, 'reserved'),
+        (__mpspnpn, 'mpspnpn'),         # XXX: this looks like it references an allocation table
         (__padding, 'padding'),
-        (__free_page_map, 'Fpm'),
-        (__pages, 'Mac'),   # XXX: what the fuck is with this naming?
+        #(__free_page_map, 'Fpm'),
+        #(__pages, 'Mac'),   # XXX: what the fuck is with this naming?
     ]
 
     def alloc(self, **fields):
@@ -691,26 +921,27 @@ if __name__ == '__main__':
     if len(sys.argv) != 2:
         raise FileNotFoundError(sys.argv)
     source = ptypes.prov.file(sys.argv[1], 'rb')
-    z = MSF(source=source)
-    z = z.l
-    assert(z['szmagic'].str() == 'Microsoft C/C++')
+    z = MSF(source=source).l
+    assert(z['szmagic'].str().startswith('Microsoft C/C++'))
     assert(z['szmagic'].Version() == 7.)
     assert(z['szmagic']['CRLF'].str() == '\r\n')
     assert(z['szmagic']['1A'].str() == '\x1a')
     assert(z['szmagic']['DSJG'].str() == 'DS')
     assert(z['szmagic']['DSJG'].str() == 'DS')
     assert(z['szmagic'].str() == 'Microsoft C/C++ MSF 7.00\r\n\x1a\x44\x53')
-    assert(z['hdr'].int() == 0x1000)
-    a = MSF().a
-    assert(a.str() == 'Microsoft C/C++ MSF 7.00\r\n\x1a\x44\x53')
-    p(a)
-    p(a['hdr'])
+    #assert(z['hdr'].int() == 0x1000), # not sure what this was for
 
-    p(a['hdr']['sist'])
-    for item in a['mpspnpn']:
-        p(item)
+    if False:
+        a = MSF().a
+        assert(a['szmagic'].str() == 'Microsoft C/C++ MSF 7.00\r\n\x1a\x44\x53')
+        print(a)
+        print(a['hdr'])
 
-    p(a['Fpm'][0].hexdump())
-    p(a.size())
-    for item in a['mac']:
-        p(item)
+        print(a['hdr']['sist'])
+        for item in a['mpspnpn']:
+            print(item)
+
+        print(a['Fpm'][0].hexdump())
+        print(a.size())
+        #for item in a['mac']:
+        #    print(item)
