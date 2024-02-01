@@ -79,6 +79,7 @@ class RTL_USER_PROCESS_PARAMETERS(pstruct.type, versioned):
         (ULONG, 'DebugFlags'),
         (PVOID, 'ConsoleHandle'),
         (ULONG, 'ConsoleFlags'),
+        (lambda self: dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(ConsoleFlags)'),
         (PVOID, 'StandardInput'),
         (PVOID, 'StandardOutput'),
         (PVOID, 'StandardError'),
@@ -86,9 +87,9 @@ class RTL_USER_PROCESS_PARAMETERS(pstruct.type, versioned):
         (umtypes.UNICODE_STRING, 'DllPath'),
         (umtypes.UNICODE_STRING, 'ImagePathName'),
         (umtypes.UNICODE_STRING, 'CommandLine'),
-#        (P(lambda s: dyn.block(s.getparent(RTL_USER_PROCESS_PARAMETERS)['EnvironmentSize'].int())), 'Environment'),
-#        (P(lambda s: dyn.lazyblockarray(pstr.szwstring, s.getparent()['EnvironmentSize'].li.int())), 'Environment'),
-        (P(lambda s: dyn.blockarray(pstr.szwstring, s.getparent()['EnvironmentSize'].li.int())), 'Environment'),
+#        (P(lambda self: dyn.block(self.getparent(RTL_USER_PROCESS_PARAMETERS)['EnvironmentSize'].int())), 'Environment'),
+#        (P(lambda self: dyn.lazyblockarray(pstr.szwstring, self.getparent()['EnvironmentSize'].li.int())), 'Environment'),
+        (P(lambda self: dyn.blockarray(pstr.szwstring, self.getparent()['EnvironmentSize'].li.int())), 'Environment'),
         (ULONG, 'StartingX'),
         (ULONG, 'StartingY'),
         (ULONG, 'CountX'),
@@ -98,14 +99,16 @@ class RTL_USER_PROCESS_PARAMETERS(pstruct.type, versioned):
         (ULONG, 'FillAttribute'),
         (ULONG, 'WindowFlags'),
         (ULONG, 'ShowWindowFlags'),
+        (lambda self: dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(ShowWindowFlags)'),
         (umtypes.UNICODE_STRING, 'WindowTitle'),
         (umtypes.UNICODE_STRING, 'DesktopInfo'),
         (umtypes.UNICODE_STRING, 'ShellInfo'),
         (umtypes.UNICODE_STRING, 'RuntimeData'),
 
         (dyn.array(RTL_DRIVE_LETTER_CURDIR, 32), 'CurrentDirectories'),
-        (ULONG, 'EnvironmentSize'),
-        (ULONG, 'EnvironmentVersion'),
+        (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'EnvironmentSize'),
+        (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'EnvironmentVersion'),
+
         (PVOID, 'PackageDependencyData'),
         (ULONG, 'ProcessGroupId'),
 
@@ -114,7 +117,9 @@ class RTL_USER_PROCESS_PARAMETERS(pstruct.type, versioned):
 
         (lambda self: ptype.undefined if self.NTDDI_VERSION < sdkddkver.NTDDI_WIN10_19H1 else umtypes.UNICODE_STRING, 'HeapPartitionName'),
         (lambda self: ptype.undefined if self.NTDDI_VERSION < sdkddkver.NTDDI_WIN10_19H1 else ULONG_PTR, 'DefaultThreadpoolCpuSetMasks'),
-        (lambda self: ptype.undefined if self.NTDDI_VERSION < sdkddkver.NTDDI_WIN10_21H2 else ULONG, 'DefaultThreadpoolCpuSetMaskCount'),
+        (lambda self: ptype.undefined if self.NTDDI_VERSION < sdkddkver.NTDDI_WIN10_19H1 else ULONG, 'DefaultThreadpoolCpuSetMaskCount'),
+        (lambda self: ptype.undefined if self.NTDDI_VERSION < sdkddkver.NTDDI_WIN10_20H1 else ULONG, 'DefaultThreadpoolThreadMaximum'),
+        (lambda self: ptype.undefined if self.NTDDI_VERSION < sdkddkver.NTDDI_WIN11_22H2 else ULONG, 'HeapMemoryTypeMask'),
     ]
 
 class RTL_PATH_TYPE(pint.enum):
