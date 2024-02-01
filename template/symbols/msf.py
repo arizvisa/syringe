@@ -328,7 +328,7 @@ class WriteSuperBlock(pstruct.type):
         (int, 'BlockSize'),
         (int, 'Free block'),
         (int, 'BlockCount'),
-        (int, 'DirectoryStream.Length')
+        (int, 'DirectoryStream.Length'),
         (int, 'Unknown'),
         (int, 'DirectoryHints.Blocks.Head'),
     ]
@@ -350,7 +350,7 @@ class WriteDirectory(pstruct.type):
             ('Publics', 6),
             ('Symbols', 7),
         ]
-        _
+
     _fields_ = [
         (int, 'CountAdditionalStreams'),
         (lambda self: dyn.array(self['CountAdditionalStreams'].li.int()), 'Length'),
@@ -477,7 +477,7 @@ class EmitDBIModule(pstruct.type):
         (short, 'padding'),
         (int, 'file name offsets'),
         (int, 'name index for source file name'),
-        (int, 'name index for path to compiler PDB')
+        (int, 'name index for path to compiler PDB'),
         (pstr.string, 'SourceFile'),
         (char, 'modsize'),
         (dyn.padding(4), 'padding(modsize)'),
@@ -623,6 +623,16 @@ class WriteIPIStream(pstruct.type):
             res['Number of hash buckets'].set(262143)
         return res
 
+class WriteUnknown(pstruct.type):
+    _fields_ = [(int, 'unknown')]
+
+class WriteGlobalsStream(WriteUnknown): pass
+class WritePublicsStream(WriteUnknown): pass
+class WritePublicSymbolRecordsStream(WriteUnknown): pass
+class WriteDBIModuleSymbols(WriteUnknown): pass
+class WritePDBStrings(WriteUnknown): pass
+class WritePDBSectionHeaders(WriteUnknown): pass
+
 class File(pstruct.type):
     def __WriteBlockMap(self):
         res = self['SuperBlock'].li
@@ -675,28 +685,32 @@ class File(pstruct.type):
         return res
 
 if __name__ == '__main__':
-    import ptypes
-    pdbpath = ['tmp', 'ida', 'WPDShServiceObj.pdb', '82295FF85B7242C3A5F218DD2BB2BAA11', 'WPDShServiceObj.pdb']
-    source = ptypes.prov.file(os.path.join(os.path.expanduser('~'), *pdbpath), 'rb')
-    x = MSF(source=source).l
-    assert(x['szmagic'].str() == 'Microsoft C/C++')
-    assert(x['szmagic'].Version() == 7.)
-    assert(x['szmagic']['CRLF'].str() == '\r\n')
-    assert(x['szmagic']['1A'].str() == '\x1a')
-    assert(x['szmagic']['DSJG'].str() == 'DS')
-    assert(x['szmagic']['DSJG'].str() == 'DS')
-    assert(x['szmagic'].str() == 'Microsoft C/C++ MSF 7.00\r\n\x1a\x44\x53')
-    assert(x['hdr'].int() == 0x1000)
-    x = MSF().a
-    assert(x.str() == 'Microsoft C/C++ MSF 7.00\r\n\x1a\x44\x53')
-    p(x)
-    p(x['hdr'])
+    import sys, os, ptypes
+    #pdbpath = ['tmp', 'ida', 'WPDShServiceObj.pdb', '82295FF85B7242C3A5F218DD2BB2BAA11', 'WPDShServiceObj.pdb']
+    #source = ptypes.prov.file(os.path.join(os.path.expanduser('~'), *pdbpath), 'rb')
+    if len(sys.argv) != 2:
+        raise FileNotFoundError(sys.argv)
+    source = ptypes.prov.file(sys.argv[1], 'rb')
+    z = MSF(source=source)
+    z = z.l
+    assert(z['szmagic'].str() == 'Microsoft C/C++')
+    assert(z['szmagic'].Version() == 7.)
+    assert(z['szmagic']['CRLF'].str() == '\r\n')
+    assert(z['szmagic']['1A'].str() == '\x1a')
+    assert(z['szmagic']['DSJG'].str() == 'DS')
+    assert(z['szmagic']['DSJG'].str() == 'DS')
+    assert(z['szmagic'].str() == 'Microsoft C/C++ MSF 7.00\r\n\x1a\x44\x53')
+    assert(z['hdr'].int() == 0x1000)
+    a = MSF().a
+    assert(a.str() == 'Microsoft C/C++ MSF 7.00\r\n\x1a\x44\x53')
+    p(a)
+    p(a['hdr'])
 
-    p(x['hdr']['sist'])
-    for item in x['mpspnpn']:
+    p(a['hdr']['sist'])
+    for item in a['mpspnpn']:
         p(item)
 
-    p(x['Fpm'][0].hexdump())
-    p(x.size())
-    for item in x['mac']:
+    p(a['Fpm'][0].hexdump())
+    p(a.size())
+    for item in a['mac']:
         p(item)
