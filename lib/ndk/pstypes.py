@@ -1,7 +1,7 @@
 import ptypes, pecoff
 from ptypes import *
 
-from . import error, ldrtypes, rtltypes, umtypes, mmtypes, ketypes, Ntddk, heaptypes, sdkddkver
+from . import error, ldrtypes, rtltypes, umtypes, mmtypes, ketypes, oletypes, Ntddk, heaptypes, sdkddkver
 from .datatypes import *
 
 class PEB_FREE_BLOCK(pstruct.type): pass
@@ -631,7 +631,7 @@ class TEB(pstruct.type, versioned):
             (aligned, 'align(ReservedForPerf)'),
             (PVOID, 'ReservedForPerf'),
             (aligned, 'align(ReservedForOle)'),
-            (PVOID, 'ReservedForOle'),
+            (P(oletypes.SOleTlsData), 'ReservedForOle'),
             (ULONG, 'WaitingOnLoaderLock'),
             (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(WaitingOnLoaderLock)'),
         ])
