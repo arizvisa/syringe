@@ -253,13 +253,13 @@ class BaseRelocationEntry(pbinary.partial):
     def apply(self, entry, imagebase, sectiontable, segment, **addresses):
         '''
         Apply the current relocation to the provided segment (data) using the
-        specified IMAGE_BASERELOC_DIRECTORY_ENTRY along with the imagebase to
-        convert the relocation target address into an offset, and the provided
-        section table to calculate the new relocated address that is written.
-        If any section names are provided as extra arguments, then use that as
-        the segment base address instead.
+        specified IMAGE_BASE_RELOCATION along with the imagebase to convert
+        the relocation target address into an offset, and the provided section
+        table to calculate the new relocated address that is written. If any
+        section names are provided as extra arguments, then use that as the
+        segment base address instead.
         '''
-        relocation, page = self.field('Offset'), entry['Page RVA'].int()
+        relocation, page = self.field('Offset'), entry['VirtualAddress'].int()
         section = sectiontable.getsectionbyaddress(page)
 
         # FIXME: I haven't actually verified this is working correctly since
@@ -291,29 +291,36 @@ class BaseRelocationBlock(ptype.block):
             yield item
         return
 
-class IMAGE_BASERELOC_DIRECTORY_ENTRY(pstruct.type):
+class IMAGE_BASE_RELOCATION(pstruct.type):
+    def __TypeOffset(self):
+        res, fields = self['SizeOfBlock'].li, ['VirtualAddress', 'SizeOfBlock']
+        size = res.int() - sum(self[fld].li.size() for fld in fields)
+        return dyn.clone(BaseRelocationBlock, length=max(0, size))
+        #return dyn.blockarray(WORD, max(0, size))
+        #return dyn.clone(pbinary.blockarray,_object_=BaseRelocationEntry, blockbits=lambda _, octets=max(0, size): 8 * octets)
+        #return dyn.clone(BaseRelocationArray, blocksize=lambda _, cb=max(0, size): cb)
+
     _fields_ = [
-        (uint32, 'Page RVA'),   # FIXME: this can be a virtualaddress(...) to the page
-        (uint32, 'Size'),
-        (lambda self: dyn.clone(BaseRelocationBlock, length=self['Size'].li.int() - 8), 'Relocations'),
-#        (lambda self: dyn.clone(pbinary.blockarray,_object_=BaseRelocationEntry, blockbits=lambda _: 8 * (self['Size'].li.int() - 8)), 'Relocations')
-#        (lambda self: dyn.clone(BaseRelocationArray, blocksize=lambda _: self['Size'].li.int() - 8), 'Relocations')
+        (virtualaddress(VOID, type=DWORD), 'VirtualAddress'),
+        (DWORD, 'SizeOfBlock'),
+        (__TypeOffset, 'TypeOffset'),
     ]
 
     def summary(self):
-        res = self['Relocations'].array()
-        return "Page RVA={:#x} Size={:#x} Relocations=...{:d} entr{:s}...".format(self['Page RVA'], self['Size'], len(res), 'y' if len(res) == 1 else 'ies')
+        res = self['TypeOffset'].array()
+        return "VirtualAddress={:#x} SizeOfBlock={:#x} TypeOffset=...{:d} entr{:s}...".format(self['VirtualAddress'], self['SizeOfBlock'], len(res), 'y' if len(res) == 1 else 'ies')
 
     def extract(self):
         '''Return a list of tuples containing the relocation type and offset contained within this entry.'''
-        block = self['Relocations'].serialize()
+        block = self['TypeOffset'].serialize()
         relocations = array.array('I' if len(array.array('I', 4 * b'\0')) > 1 else 'H', block)
         return [((item & 0xf000) // 0x1000, item & 0x0fff) for item in relocations]
 
     def getrelocations(self, section):
-        pageoffset = self['Page RVA'].int() - section['VirtualAddress'].int()
-        if not (pageoffset >= 0 and pageoffset < section.getloadedsize()):
-            raise AssertionError("Page Offset in RVA outside bounds of section : not(0 <= {:#x} < {:#x}) : Page RVA {:#x}, VA = {:#x}, Section = {:s}".format(pageoffset, section.getloadedsize(), self['Page RVA'].int(), section['VirtualAddress'].int(), section['Name'].str()))
+        pageoffset, loadedsize = self['VirtualAddress'].int() - section['VirtualAddress'].int(), section.getloadedsize()
+        if not (pageoffset >= 0 and pageoffset < loadedsize):
+            va, sectionva, name = self['VirtualAddress'].int(), section['VirtualAddress'].int(), section['Name'].str()
+            raise AssertionError("Page Offset in RVA outside bounds of section ({:#x} not in {:#x}..{:#x}) : IMAGE_BASE_RELOCATION.VirtualAddress({:#x}) IMAGE_SECTION_HEADER.VirtualAddress({:#x}{:+#x}) IMAGE_SECTION_HEADER.Name({!r})".format(va, sectionva, sectionva + loadedsize, va, sectionva, loadedsize, name))
 
         for type, offset in self.extract():
             if type == 0:
@@ -322,11 +329,11 @@ class IMAGE_BASERELOC_DIRECTORY_ENTRY(pstruct.type):
         return
 
 class IMAGE_BASERELOC_DIRECTORY(parray.block):
-    _object_ = IMAGE_BASERELOC_DIRECTORY_ENTRY
+    _object_ = IMAGE_BASE_RELOCATION
     def filter(self, section):
         '''Return each relocation item that is within the specified IMAGE_SECTION_HEADER.'''
         for item in self:
-            res = item['Page RVA']
+            res = item['VirtualAddress']
             if section.containsaddress(res.int()):
                 yield item
             continue
