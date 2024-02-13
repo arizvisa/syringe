@@ -1,6 +1,7 @@
 import ptypes
 from ptypes import pstruct,parray,ptype,pbinary,pstr,dyn
 from .headers import IMAGE_DATA_DIRECTORY
+from .relocations import IMAGE_BASE_RELOCATION
 from ..headers import *
 
 class IMAGE_LOAD_CONFIG_CODE_INTEGRITY(pstruct.type):
@@ -12,18 +13,27 @@ class IMAGE_LOAD_CONFIG_CODE_INTEGRITY(pstruct.type):
     ]
 
 class IMAGE_DYNAMIC_RELOCATION(pstruct.type):
+    def __BaseRelocations(self):
+        res, fields = self['BaseReloc'].li, ['Symbol', 'BaseRelocSize']
+        return dyn.blockarray(DWORD, res.int())
+
     _fields_ = [
         (realaddress(VOID, type=DWORD), 'Symbol'),
         (DWORD, 'BaseRelocSize'),
-        (lambda self: dyn.blockarray(DWORD, self['BaseRelocSize'].li.int()), 'BaseRelocations'),
+        (__BaseRelocations, 'BaseRelocations'),
     ]
 IMAGE_DYNAMIC_RELOCATION32 = IMAGE_DYNAMIC_RELOCATION
 
 class IMAGE_DYNAMIC_RELOCATION64(pstruct.type):
+    def __BaseRelocations(self):
+        res, fields = self['BaseReloc'].li, ['Symbol', 'BaseRelocSize']
+        return dyn.blockarray(DWORD, res.int())
+
     _fields_ = [
         (realaddress(VOID, type=ULONGLONG), 'Symbol'),
         (DWORD, 'BaseRelocSize'),
-        (lambda self: dyn.blockarray(DWORD, self['BaseRelocSize'].li.int()), 'BaseRelocations'),
+        (__BaseRelocations, 'BaseRelocations'),
+        #(lambda self: dyn.blockarray(DWORD, self['BaseRelocSize'].li.int()), 'BaseRelocations'),
     ]
 
 class IMAGE_DYNAMIC_RELOCATION64_V2(pstruct.type):
@@ -315,6 +325,11 @@ class LOAD_LIBRARY_SEARCH_(pbinary.flags):
     ]
 
 class IMAGE_LOAD_CONFIG_DIRECTORY32(IMAGE_LOAD_CONFIG_DIRECTORY):
+    def __Unknown(self):
+        res, fields = self['Size'].li.int(), [field for field in self][:-1]
+        size = res - sum(self[fld].li.size() for fld in fields)
+        return dyn.block(max(0, size))
+
     _fields_ = [
         (DWORD, 'Size'),
         (TimeDateStamp, 'TimeDateStamp'),
@@ -373,9 +388,16 @@ class IMAGE_LOAD_CONFIG_DIRECTORY32(IMAGE_LOAD_CONFIG_DIRECTORY):
         (realaddress(VOID, type=DWORD), 'GuardXFGDispatchFunctionPointer'),
         (realaddress(VOID, type=DWORD), 'GuardXFGTableDispatchFunctionPointer'),
         (DWORD, 'CastGuardOsDeterminedFailureMode'),
+        (DWORD, 'GuardMemcpyFunctionPointer'),
+        (__Unknown, 'Unknown'),
     ]
 
 class IMAGE_LOAD_CONFIG_DIRECTORY64(IMAGE_LOAD_CONFIG_DIRECTORY):
+    def __Unknown(self):
+        res, fields = self['Size'].li.int(), [field for field in self][:-1]
+        size = res - sum(self[fld].li.size() for fld in fields)
+        return dyn.block(max(0, size))
+
     _fields_ = [
         (DWORD, 'Size'),
         (TimeDateStamp, 'TimeDateStamp'),
@@ -433,4 +455,6 @@ class IMAGE_LOAD_CONFIG_DIRECTORY64(IMAGE_LOAD_CONFIG_DIRECTORY):
         (realaddress(VOID, type=ULONGLONG), 'GuardXFGDispatchFunctionPointer'),
         (realaddress(VOID, type=ULONGLONG), 'GuardXFGTableDispatchFunctionPointer'),
         (ULONGLONG, 'CastGuardOsDeterminedFailureMode'),
+        (ULONGLONG, 'GuardMemcpyFunctionPointer'),
+        (__Unknown, 'Unknown'),
     ]
