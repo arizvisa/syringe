@@ -141,10 +141,10 @@ if __name__ == '__main__':
     WOW64 = ctypes.wintypes.BOOL(1)
     if not K32.IsWow64Process(handle, ctypes.pointer(WOW64)):
         raise WindowsError('unable to determine the address type for the given process', pid)
-    WIN64 = False if WOW64 else True
+    WIN64 = SYS64 and not WOW64.value
 
     # FIXME: we should grab the main thread and use the TEB to get the PEB.
-    HACK = sbi['dwPageSize'].int() if SYS64 and WOW64 else 0
+    HACK = sbi['dwPageSize'].int() if SYS64 and WOW64.value else 0
 
     with MemoryReference(ndk.pstypes.ProcessInfoClass.lookup('ProcessBasicInformation'), WIN64=SYS64) as pbi:
         res = ctypes.wintypes.ULONG(0)
