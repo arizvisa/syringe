@@ -1077,39 +1077,195 @@ try:
 except OSError:
     Log.info("{:s} : Skipping defining any linux-based providers (`LinuxProcessId`) due to being on a non-linux platform ({:s}).".format(__name__, sys.platform))
 
+### Windows Native APIs
 try:
-    import ctypes
+    import ctypes, ctypes.wintypes
 
     try:
-        k32 = ctypes.WinDLL('kernel32.dll')
-    except Exception:
-        raise OSError
+        class NATIVE(object):
+            __available__ = {item for item in []}
+
+            WORD = ctypes.wintypes.WORD
+            DWORD = ctypes.wintypes.DWORD
+            LPVOID = PVOID = LPCVOID = ctypes.wintypes.LPVOID
+            HANDLE = ctypes.wintypes.HANDLE
+            SIZE_T = ctypes.c_size_t
+            BOOL = ctypes.wintypes.BOOL
+            LPCSTR = ctypes.wintypes.LPCSTR
+            LARGE_INTEGER = ctypes.wintypes.LARGE_INTEGER
+            PLARGE_INTEGER = ctypes.wintypes.PLARGE_INTEGER
+            NTSTATUS = ctypes.c_size_t
+            DWORD_PTR = ctypes.c_void_p
+            ULONG_PTR = ctypes.c_void_p
+            KPRIORITY = ctypes.c_ulong
+            ULONG = ctypes.wintypes.ULONG
+            PULONG = ctypes.wintypes.PULONG
+            ULONGLONG = ctypes.c_ulonglong
+            PULONGLONG = ctypes.POINTER(ctypes.c_ulonglong)
+
+        NATIVE.K32 = ctypes.WinDLL('kernel32.dll')
+        NATIVE.NT = ctypes.WinDLL('ntdll.dll')
+
+        class CONST(object): pass
+        NATIVE.CONST = CONST
+        del(CONST)
+
+        class SYSTEM_INFO(ctypes.Structure):
+            _fields_ = [
+                ('wProcessorArchitecture', NATIVE.WORD),
+                ('wReserved', NATIVE.WORD),
+                ('dwPageSize', NATIVE.DWORD),
+                ('lpMinimumApplicationAddress', NATIVE.PVOID),
+                ('lpMaximumApplicationAddress', NATIVE.PVOID),
+                ('dwActiveProcessorMask', NATIVE.DWORD_PTR),
+                ('dwNumberOfProcessors', NATIVE.DWORD),
+                ('dwProcessorType', NATIVE.DWORD),
+                ('dwAllocationGranularity', NATIVE.DWORD),
+                ('wProcessorLevel', NATIVE.WORD),
+                ('wProcessorRevision', NATIVE.WORD),
+            ]
+
+        NATIVE.SYSTEM_INFO = SYSTEM_INFO
+        del(SYSTEM_INFO)
+
+        NATIVE.K32.GetNativeSystemInfo.argtypes = [ ctypes.POINTER(NATIVE.SYSTEM_INFO) ]
+        NATIVE.K32.GetNativeSystemInfo.restype = None
+
+    except Exception as E:
+        class NATIVE(object):
+            __available__ = {}
+        raise OSError(E)
 
     # Define the ctypes parameters for the windows api used by win32error
-    k32.GetLastError.restype = ctypes.c_uint32
-    k32.FormatMessageA.argtypes = [ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p]
-    k32.FormatMessageA.restype = ctypes.c_uint32
-    k32.LocalFree.argtypes = [ctypes.c_void_p]
-    k32.LocalFree.restype = ctypes.c_void_p
+    try:
+        NATIVE.K32.GetLastError.argtypes = []
+        NATIVE.K32.GetLastError.restype = NATIVE.DWORD
+        NATIVE.K32.FormatMessageA.argtypes = [NATIVE.DWORD, NATIVE.LPVOID, NATIVE.DWORD, NATIVE.DWORD, NATIVE.LPVOID, NATIVE.DWORD, NATIVE.LPVOID]
+        NATIVE.K32.FormatMessageA.restype = NATIVE.DWORD
+        NATIVE.K32.LocalFree.argtypes = [NATIVE.HANDLE]
+        NATIVE.K32.LocalFree.restype = NATIVE.HANDLE
+
+    except AttributeError: pass
+    else: NATIVE.__available__ |= {'WIN32ERROR'}
+
+    # Define the ctypes parameters for the windows api used by WindowsProcessId and WindowsProcessHandle
+    try:
+        NATIVE.K32.DebugBreak.argtypes = []
+        NATIVE.K32.DebugBreak.restypes = None
+
+        NATIVE.K32.GetCurrentProcess.argtypes = []
+        NATIVE.K32.GetCurrentProcess.restype = NATIVE.HANDLE
+        NATIVE.K32.GetCurrentProcessId.argtypes = []
+        NATIVE.K32.GetCurrentProcessId.restype = NATIVE.DWORD
+        NATIVE.K32.OpenProcess.argtypes = [NATIVE.DWORD, NATIVE.BOOL, NATIVE.DWORD]
+        NATIVE.K32.OpenProcess.restype = NATIVE.HANDLE
+
+        NATIVE.K32.GetProcessInformation.argtypes = [ NATIVE.HANDLE, ctypes.c_size_t, NATIVE.LPVOID, NATIVE.DWORD ]
+        NATIVE.K32.GetProcessInformation.restype = NATIVE.BOOL
+
+        NATIVE.K32.CloseHandle.argtypes = [NATIVE.HANDLE]
+        NATIVE.K32.CloseHandle.restype = NATIVE.BOOL
+
+        class PROCESS_BASIC_INFORMATION(ctypes.Structure):
+            _fields_ = [
+                ('ExitStatus', NATIVE.NTSTATUS),
+                ('PebBaseAddress', NATIVE.PVOID),
+                ('AffinityMask', NATIVE.ULONG_PTR),
+                ('BasePriority', NATIVE.KPRIORITY),
+                ('UniqueProcessId', NATIVE.ULONG_PTR),
+                ('InheritedFromUniqueProcessId', NATIVE.ULONG_PTR),
+            ]
+
+        NATIVE.PROCESS_BASIC_INFORMATION = PROCESS_BASIC_INFORMATION
+        del(PROCESS_BASIC_INFORMATION)
+        NATIVE.CONST.ProcessBasicInformation = 0
+
+        NATIVE.NT.NtQueryInformationProcess.argtypes = [ NATIVE.HANDLE, ctypes.c_size_t, NATIVE.PVOID, NATIVE.ULONG, NATIVE.PULONG ]
+        NATIVE.NT.NtQueryInformationProcess.restype = NATIVE.NTSTATUS
+        NATIVE.NT.NtQueryInformationThread.argtypes = [ NATIVE.HANDLE, ctypes.c_size_t, NATIVE.PVOID, NATIVE.ULONG, NATIVE.PULONG ]
+        NATIVE.NT.NtQueryInformationThread.restype = NATIVE.NTSTATUS
+
+        NATIVE.K32.ReadProcessMemory.argtypes = [NATIVE.HANDLE, NATIVE.LPCVOID, NATIVE.LPVOID, NATIVE.SIZE_T, ctypes.POINTER(NATIVE.SIZE_T)]
+        NATIVE.K32.ReadProcessMemory.restype = NATIVE.BOOL
+        NATIVE.K32.WriteProcessMemory.argtypes = [NATIVE.HANDLE, NATIVE.LPVOID, NATIVE.LPCVOID, NATIVE.SIZE_T, ctypes.POINTER(NATIVE.SIZE_T)]
+        NATIVE.K32.WriteProcessMemory.restype = NATIVE.BOOL
+
+        NATIVE.CONST.PROCESS_QUERY_INFORMATION = 0x0400
+        NATIVE.CONST.PROCESS_VM_WRITE = 0x0020
+        NATIVE.CONST.PROCESS_VM_READ = 0x0010
+        NATIVE.CONST.PROCESS_VM_OPERATION = 0x0008
+
+    except AttributeError: pass
+    else: NATIVE.__available__ |= {'PROCESS'}
+
+    # Define the ctypes parameters for the windows api used by WindowsFile
+    try:
+        NATIVE.K32.CreateFileA.argtypes = [NATIVE.LPCSTR, NATIVE.DWORD, NATIVE.DWORD, ctypes.c_void_p, NATIVE.DWORD, NATIVE.DWORD, NATIVE.HANDLE]
+        NATIVE.K32.CreateFileA.restype = NATIVE.HANDLE
+        NATIVE.K32.SetFilePointerEx.argtypes = [NATIVE.HANDLE, NATIVE.LARGE_INTEGER, NATIVE.PLARGE_INTEGER, NATIVE.DWORD]
+        NATIVE.K32.SetFilePointerEx.restype = NATIVE.BOOL
+        NATIVE.K32.ReadFile.argtypes = [NATIVE.HANDLE, NATIVE.LPVOID, NATIVE.DWORD, ctypes.POINTER(NATIVE.DWORD), ctypes.c_void_p]
+        NATIVE.K32.ReadFile.restype = NATIVE.BOOL
+        NATIVE.K32.WriteFile.argtypes = [NATIVE.HANDLE, NATIVE.LPCVOID, NATIVE.DWORD, ctypes.POINTER(NATIVE.DWORD), ctypes.c_void_p]
+        NATIVE.K32.WriteFile.restype = NATIVE.BOOL
+        NATIVE.K32.CloseHandle.argtypes = [NATIVE.HANDLE]
+        NATIVE.K32.CloseHandle.restype = NATIVE.BOOL
+
+    except AttributeError: pass
+    else: NATIVE.__available__ |= {'FILE'}
+
+    # Define the ctypes parameters for the windows api used by Wow64
+    try:
+        NATIVE.K32.IsWow64Process.argtypes = [NATIVE.HANDLE, ctypes.POINTER(NATIVE.BOOL)]
+        NATIVE.K32.IsWow64Process.restype = NATIVE.BOOL
+        NATIVE.NT.NtWow64QueryInformationProcess64.argtypes = [ NATIVE.HANDLE, ctypes.c_size_t, NATIVE.PVOID, NATIVE.ULONG, NATIVE.PULONG ]
+        NATIVE.NT.NtWow64QueryInformationProcess64.restype = NATIVE.NTSTATUS
+
+        class PROCESS_BASIC_INFORMATION_WOW64(ctypes.Structure):
+            _fields_ = [
+                ('ExitStatus', NATIVE.NTSTATUS),
+                ('PebBaseAddress', NATIVE.ULONGLONG),
+                ('AffinityMask', NATIVE.ULONGLONG),
+                ('BasePriority', NATIVE.KPRIORITY),
+                ('UniqueProcessId', NATIVE.ULONGLONG),
+                ('InheritedFromUniqueProcessId', NATIVE.ULONGLONG),
+            ]
+
+        NATIVE.PROCESS_BASIC_INFORMATION_WOW64 = PROCESS_BASIC_INFORMATION_WOW64
+        del(PROCESS_BASIC_INFORMATION_WOW64)
+
+    except AttributeError: pass
+    else: NATIVE.__available__ |= {'WOW64'}
+
+except ImportError:
+    Log.info("{:s} : Unable to import the 'ctypes' module. This will prevent the availability of providers that are for the Windows platforms.".format(__name__))
+
+except OSError as E:
+    Log.info("{:s} : Unable to load the required libraries into the current process ({!s}). Providers for the Windows platform will be unavailable.".format(__name__, E))
+
+### Now we'll define the classes based on whatever APIs we were able to build ctypes for.
+try:
+    if 'WIN32ERROR' not in NATIVE.__available__:
+        raise OSError
 
     class win32error:
         @staticmethod
         def getLastErrorTuple():
-            errorCode = k32.GetLastError()
+            errorCode = NATIVE.K32.GetLastError()
             p_string = ctypes.c_void_p(0)
 
             # FORMAT_MESSAGE_
             ALLOCATE_BUFFER = 0x100
             FROM_SYSTEM = 0x1000
-            res = k32.FormatMessageA(
+            res = NATIVE.K32.FormatMessageA(
                 ALLOCATE_BUFFER | FROM_SYSTEM, 0, errorCode,
                 0, ctypes.pointer(p_string), 0, None
             )
             res = ctypes.cast(p_string, ctypes.c_char_p)
             errorString = builtins.bytes(res.value)
-            res = k32.LocalFree(res)
+            res = NATIVE.K32.LocalFree(res)
             if res == 0:
-                raise AssertionError("KERNEL32.dll!LocalFree failed. Error {:#0{:d}x}.".format(k32.GetLastError(), 2 + 8))
+                raise AssertionError("KERNEL32.dll!LocalFree failed. Error {:#0{:d}x}.".format(NATIVE.K32.GetLastError(), 2 + 8))
 
             return (errorCode, errorString)
 
@@ -1118,11 +1274,18 @@ try:
             code, string = getLastErrorTuple()
             return string
 
-    # Define the ctypes parameters for the windows api used by WindowsProcessHandle
-    k32.ReadProcessMemory.argtypes = [ctypes.c_size_t, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t)]
-    k32.ReadProcessMemory.restype = ctypes.c_bool
-    k32.WriteProcessMemory.argtypes = [ctypes.c_size_t, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t)]
-    k32.WriteProcessMemory.restype = ctypes.c_bool
+    class WindowsError(OSError):
+        def __init__(self, *args):
+            code, string = win32error.getLastErrorTuple()
+            super(WindowsError, self).__init__((code, string), args)
+
+except OSError:
+    Log.info("{:s} : Error handling for the Windows platform (`{:s}`) will be unavailable.".format(__name__, 'WindowsError'))
+
+### Windows Process API
+try:
+    if 'PROCESS' not in NATIVE.__available__:
+        raise OSError
 
     class WindowsProcessHandle(memorybase):
         '''Windows memory provider that will use a process handle in order to access memory.'''
@@ -1147,7 +1310,7 @@ try:
             buffer = buffer_t()
 
             # FIXME: instead of failing on an incomplete read, perform a partial read
-            res = k32.ReadProcessMemory(self.handle, self.address, buffer, amount, ctypes.pointer(NumberOfBytesRead))
+            res = NATIVE.K32.ReadProcessMemory(self.handle, self.address, buffer, amount, ctypes.pointer(NumberOfBytesRead))
             if (res == 0) or (NumberOfBytesRead.value != amount):
                 try:
                     raise ValueError("Unable to read pid({:x})[{:08x}:{:08x}].".format(self.handle, self.address, self.address + amount))
@@ -1166,7 +1329,7 @@ try:
             buffer = buffer_t()
             buffer.value = value
 
-            res = k32.WriteProcessMemory(self.handle, self.address, buffer, len(value), ctypes.pointer(NumberOfBytesWritten))
+            res = NATIVE.K32.WriteProcessMemory(self.handle, self.address, buffer, len(value), ctypes.pointer(NumberOfBytesWritten))
             if (res == 0) or (NumberOfBytesWritten.value != len(value)):
                 try:
                     raise OSError("Unable to write to pid({:x})[{:08x}:{:08x}].".format(self.id, self.address, self.address + len(value)))
@@ -1176,26 +1339,18 @@ try:
             self.address += len(value)
             return NumberOfBytesWritten.value
 
-    # Define the ctypes parameters for the windows api used by WindowsProcessId
-    k32.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_bool, ctypes.c_uint32]
-    k32.OpenProcess.restype = ctypes.c_size_t
-
     def WindowsProcessId(pid, **attributes):
         '''Return a provider that allows one to read/write from memory owned by the specified windows process ``pid``.'''
-        handle = k32.OpenProcess(0x30, False, pid)
+        handle = NATIVE.K32.OpenProcess(0x30, False, pid)
         return WindowsProcessHandle(handle)
 
-    # Define the ctypes parameters for the windows api used by WindowsFile
-    k32.CreateFileA.argtypes = [ctypes.c_char_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_size_t]
-    k32.CreateFileA.restype = ctypes.c_size_t
-    k32.SetFilePointerEx.argtypes = [ctypes.c_size_t, ctypes.c_longlong, ctypes.c_longlong, ctypes.c_uint32]
-    k32.SetFilePointerEx.restype = ctypes.c_bool
-    k32.ReadFile.argtypes = [ctypes.c_size_t, ctypes.c_void_p, ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32), ctypes.c_void_p]
-    k32.ReadFile.restype = ctypes.c_bool
-    k32.WriteFile.argtypes = [ctypes.c_size_t, ctypes.c_void_p, ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32), ctypes.c_void_p]
-    k32.WriteFile.restype = ctypes.c_bool
-    k32.CloseHandle.argtypes = [ctypes.c_size_t]
-    k32.CloseHandle.restype = ctypes.c_bool
+except OSError:
+    Log.info("{:s} : Opening a remote process by its handle on the Windows platform (`{:s}`, `{:s}`) will be unavailable.".format(__name__, 'WindowsProcessHandle', 'WindowsProcessId'))
+
+### Windows File API
+try:
+    if 'FILE' not in NATIVE.__available__:
+        raise OSError
 
     class WindowsFile(base):
         '''A provider that uses the Windows File API.'''
@@ -1220,7 +1375,7 @@ try:
                 smode = FILE_SHARE_READ
                 amode = GENERIC_READ|GENERIC_WRITE
 
-            result = k32.CreateFileA(
+            result = NATIVE.K32.CreateFileA(
                 filename, amode, smode, None, cmode,
                 FILE_ATTRIBUTE_NORMAL, None
             )
@@ -1233,7 +1388,7 @@ try:
             '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
             distance, resultDistance = ctypes.c_longlong(offset), ctypes.c_longlong(offset)
             FILE_BEGIN = 0
-            result = k32.SetFilePointerEx(
+            result = NATIVE.K32.SetFilePointerEx(
                 self.handle, distance, ctypes.byref(resultDistance),
                 FILE_BEGIN
             )
@@ -1249,7 +1404,7 @@ try:
             resultBuffer = buffer_t()
 
             amount, resultAmount = ctypes.c_ulong(amount), ctypes.c_ulong(amount)
-            result = k32.ReadFile(
+            result = NATIVE.K32.ReadFile(
                 self.handle, ctypes.pointer(resultBuffer),
                 amount, ctypes.pointer(resultAmount),
                 None
@@ -1271,7 +1426,7 @@ try:
             buffer = buffer_t(value)
             resultWritten = ctypes.c_ulong()
 
-            result = k32.WriteFile(
+            result = NATIVE.K32.WriteFile(
                 self.handle, buffer,
                 len(value), ctypes.pointer(resultWritten),
                 None
@@ -1286,18 +1441,14 @@ try:
 
         @utils.mapexception(any=error.ProviderError)
         def close(self):
-            result = k32.CloseHandle(self.handle)
+            result = NATIVE.K32.CloseHandle(self.handle)
             if (result == 0):
                 raise OSError(win32error.getLastErrorTuple())
             self.handle = None
             return result
 
-    Log.info("{:s} : Successfully loaded the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.".format(__name__))
-except ImportError:
-    Log.info("{:s} : Unable to import the 'ctypes' module. Failed to define the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.".format(__name__))
-
-except OSError as E:
-    Log.info("{:s} : Unable to load 'kernel32.dll' ({!s}). Failed to define the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.".format(__name__, E))
+except OSError:
+    Log.info("{:s} : Opening a file using the native api on the Windows platform (`{:s}`) will be unavailable.".format(__name__, 'WindowsFile'))
 
 try:
     _ = 'idaapi' in sys.modules
