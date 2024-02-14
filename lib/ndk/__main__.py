@@ -126,9 +126,16 @@ class missing_datadirectory_entry(pecoff.portable.headers.IMAGE_DATA_DIRECTORY):
     addressing = staticmethod(pecoff.headers.virtualaddress)
 
 if __name__ == '__main__':
-    import sys, os, fnmatch
-    pid = int(sys.argv[1]) if 1 < len(sys.argv) else os.getpid()
-    patterns = sys.argv[2:]
+    import sys, os, fnmatch, argparse, itertools
+
+    argh = argparse.ArgumentParser(description='dump the loaded modules for the given process')
+    argh.add_argument('-p', '--pid', dest='pid', metavar='PID', type=int, default=os.getpid(), help='target process id')
+    argh.add_argument('-w', '--wide', dest='wide', action='store_true', default=False, help='use wide single-line output')
+    argh.add_argument('patterns', nargs='*', metavar='PATTERN', help='filter the listed modules using the specified globs (full module path)')
+    args = argh.parse_args()
+
+    pid = args.pid
+    patterns = args.patterns
     Fmatch = (lambda path: any(fnmatch.fnmatch(path, pattern) for pattern in patterns)) if patterns else (lambda path: True)
 
     PROCESS_QUERY_INFORMATION = 0x0400
@@ -176,30 +183,163 @@ if __name__ == '__main__':
     peb = ndk.pstypes.PEB(offset = pbi['PebBaseAddress'].int() + HACK, WIN64=WIN64)
     peb = peb.l
 
+    def get_datadirectory(portable):
+        datadirectory = portable['Header']['DataDirectory']
+        prelocations = datadirectory['Relocations']['Address'] if 5 < len(datadirectory) else missing_datadirectory_entry().a['Address']
+        pexceptions = datadirectory['Exceptions']['Address'] if 3 < len(datadirectory) else missing_datadirectory_entry().a['Address']
+        pdebug = datadirectory['Debug']['Address'] if 6 < len(datadirectory) else missing_datadirectory_entry().a['Address']
+        ploader = datadirectory['LoaderConfig']['Address'] if 10 < len(datadirectory) else missing_datadirectory_entry().a['Address']
+        pcom = datadirectory['COM']['Address'] if 15 < len(datadirectory) else missing_datadirectory_entry().a['Address']
+        return pexceptions, prelocations, pdebug, ploader, pcom
+
+    def multiple():
+        module = (yield)
+        try:
+            while True:
+                print("{:#x}{:+#x} : {:s} : {:s}".format(module['DllBase'], module['SizeOfImage'], module['BaseDllName'].str(), module['FullDllName'].str()))
+
+                executable = (yield)
+                portable = executable['Next']
+                exceptions, relocations, debug, loader, com = get_datadirectory(portable)
+
+                print("Entry: {:s} -> *{:#x}".format(executable.instance(), module['EntryPoint'].int()))
+                print("HasRelocations: {:b}".format(True if relocations.int() else False))
+                print("Characteristics: {}".format(portable['Header']['FileHeader']['Characteristics'].summary()))
+                print("DllCharacteristics: {}".format(portable['Header']['OptionalHeader']['DllCharacteristics'].summary()))
+
+                if loader.int(): print("GuardFlags: {}".format(loader.d.li['GuardFlags'].summary()))
+                if loader.int(): print("SecurityCookie: {}".format(loader.d.li['SecurityCookie'].summary()))
+                if loader.int(): print("SafeSEH: {:b}".format(True if loader.d.li['SEHandlerTable'].int() and loader.d.li['SEHandlerCount'].int() else False))
+                if debug.int() and any(entry['Type']['EX_DLLCHARACTERISTICS'] and entry['AddressOfRawData'].int() for entry in debug.d.li):
+                    entry = next(entry for entry in debug.d.li if entry['Type']['EX_DLLCHARACTERISTICS'] and entry['AddressOfRawData'].int())
+                    print("{}".format(entry['AddressOfRawData'].d.li.summary()))
+
+                module = (yield)
+                print()
+        except GeneratorExit:
+            pass
+        return
+
+    def single():
+        '''
+        EXE - EXECUTABLE_IMAGE
+        DLL - DLL
+        SYS - SYSTEM
+
+        File:
+            ALARGE - LARGE_ADDRESS_AWARE
+            SWAP - REMOVABLE_RUN_FROM_SWAP || NET_RUN_FROM_SWAP
+            -RELO - Relocations stripped
+
+        Optional:
+            ASLR64 - HIGH_ENTROPY_VA
+            DYN - DYNAMIC_BASE
+            INT - FORCE_INTEGRITY
+            NX - NX_COMPAT
+            -SEH - NO_SEH
+            +SEH - !NO_SEH
+            CFG - GUARD_CF
+
+        GuardFlags:
+            -C - SECURITY_COOKIE_UNUSED
+            IAT+ - PROTECT_DELAYLOAD_IAT
+            -EXP - CF_ENABLE_EXPORT_SUPPRESSION | CF_EXPORT_SUPPRESSION_INFO_PRESENT
+            CFI - CF_INSTRUMENTED | CF_FUNCTION_TABLE_PRESENT
+            CFW - CFW_INSTRUMENTED | CF_FUNCTION_TABLE_PRESENT
+            RET - RETPOLINE_PRESENT && RF_ENABLE
+            RET+ - RETPOLINE_PRESENT && RF_STRICT
+
+        Directory:
+            R - Relocations
+        C - Characterstics
+        D - DllCharacteristics
+        G - GuardFlags
+        SC - SecurityCookie
+        SEH - SafeSEH
+        EX - ExDllCharacteristics
+        COR - DotNET (COR)
+        '''
+        class stash(object):
+            pass
+
+        try:
+            while True:
+                module = (yield)
+                executable = (yield)
+                portable = executable['Next']
+                exceptions, relocations, debug, loader, com = get_datadirectory(portable)
+
+                # FIXME: This was thrown together and I'm almost 100% sure that none of this is accurate. I seriously
+                #        couldn't find a single resource that tells you which fields correlate to which mitigation.
+                has_relocations = True if relocations.int() else False
+                characteristics = portable['Header']['FileHeader']['Characteristics']
+                dll_characteristics = portable['Header']['OptionalHeader']['DllCharacteristics']
+                guard_flags = loader.d.li['GuardFlags'] if loader.int() else None
+                securty_cookie = loader.d.li['SecurityCookie'] if loader.int() else None
+                sehandlertable = loader.d.li['SEHandlerTable'] if loader.int() else None
+                sehandlercount = loader.d.li['SEHandlerCount'] if loader.int() else None
+
+                has_ex_dllcharacteristics = debug.int() and any(entry['Type']['EX_DLLCHARACTERISTICS'] and entry['AddressOfRawData'].int() for entry in debug.d.li)
+                iterable = (entry for entry in debug.d.li if entry['Type']['EX_DLLCHARACTERISTICS'] and entry['AddressOfRawData'].int())
+                ex_dllcharacteristics_entry = next(iterable, None) if has_ex_dllcharacteristics else None
+
+                # IMAGE_FILE_HEADER
+                file = stash()
+
+                descriptions = {'DLL': 'DLL', 'SYSTEM': 'SYS'}
+                file.image_type = sorted({descriptions[name] for name in descriptions if characteristics[name]} or {'EXE'} if characteristics['EXECUTABLE_IMAGE'] else {})
+
+                descriptions = {'LARGE_ADDRESS_AWARE': 'LARGE', 'REMOVABLE_RUN_FROM_SWAP': 'SWAP', 'NET_RUN_FROM_SWAP': 'SWAP', 'RELOCS_STRIPPED': 'RELOSTRIP'}
+                file.flags = sorted({descriptions[name] for name in descriptions if characteristics[name]})
+
+                # IMAGE_OPTIONAL_HEADER
+                optional = stash()
+
+                descriptions = {'HIGH_ENTROPY_VA': 'ASLR64', 'DYNAMIC_BASE': 'DYN', 'FORCE_INTEGRITY': 'INT', 'NX_COMPAT': 'NX', 'GUARD_CF': 'CF'}
+                optional.flags = sorted({descriptions[name] for name in descriptions if dll_characteristics[name]})
+                optional.seh = "{:s}SEH".format('-' if dll_characteristics['NO_SEH'] else '+')
+
+                # Directory
+                directory = stash()
+                directory.relocations = True if relocations.int() else False
+                directory.exceptions = True if exceptions.int() else False
+                directory.cor = True if com.int() else False
+
+                # GuardFlags
+                guard = stash()
+                guard.canary = '' if guard_flags is None else '-C' if guard_flags['SECURITY_COOKIE_UNUSED'] else '+C' if loader.d['SecurityCookie'].int() else ''
+                guard.seh = 'SEH' if loader.int() and all([loader.d[fld].int() for fld in ['SEHandlerCount', 'SEHandlerTable']]) else ''
+                guard.ret = '' if guard_flags is None else '' if not guard_flags['RETPOLINE_PRESENT'] else 'RET+' if guard_flags['RF_ENABLE'] and guard_flags['RF_STRICT'] else 'RET' if guard_flags['RF_ENABLE'] else '' if not guard_flags['RF_ENABLE'] else 'RET?'
+                guard.cfg = True if loader.int() and all([loader.d[fld].int() for fld in ['GuardCFCheckFunctionPointer', 'GuardCFDispatchFunctionPointer', 'GuardCFFunctionCount', 'GuardCFFunctionTable']]) else False
+                guard.cf = '' if guard_flags is None else '' if not guard_flags['CF_FUNCTION_TABLE_PRESENT'] else 'CFI' if guard_flags['CF_INSTRUMENTED'] else 'CFW' if guard_flags['CFW_INSTRUMENTED'] else ''
+
+                # Loader (FIXME: should probably check XFG and the other stupid shit)
+                load = stash()
+
+                print("{:s} : {:#x}{:+#x} : {:s} : File({:s}) Optional({:s}) : Directory({:s}) : GuardFlags({:s})".format(
+                    ','.join(file.image_type),
+                    executable.getoffset(), executable.size(), module['BaseDllName'].str(),
+                    ','.join(file.flags),
+                    ','.join(itertools.chain([optional.seh],optional.flags)),
+                    ','.join(["{:s}RELO".format('+' if directory.relocations else '-'), "{:s}EXC".format('+' if directory.exceptions else '-')] + (['COR'] if directory.cor else [])),
+                    ','.join(item for item in itertools.chain([guard.canary, guard.seh, guard.ret, 'CFG' if guard.cfg and guard.cf else '']) if item)
+                ))
+
+        except GeneratorExit:
+            pass
+        return
+
+    emitter = single() if args.wide else multiple()
+    emitter.send(None)
+
     ldr = peb['Ldr'].d
     ldr = ldr.l
     for mod in ldr['InLoadOrderModuleList'].walk():
         if not Fmatch(mod['FullDllName'].str()):
             continue
+        emitter.send(mod)
 
         mz = mod['DllBase'].d
-        print("{:#x}{:+#x} : {:s} : {:s}".format(mod['DllBase'], mod['SizeOfImage'], mod['BaseDllName'].str(), mod['FullDllName'].str()))
         mz = mz.l
-        pe = mz['Next']
-        datadirectory = pe['Header']['DataDirectory']
-        prelocations = datadirectory['Relocations']['Address'] if 5 < len(datadirectory) else missing_datadirectory_entry().a['Address']
-        pdebug = datadirectory['Debug']['Address'] if 6 < len(datadirectory) else missing_datadirectory_entry().a['Address']
-        ploader = datadirectory['LoaderConfig']['Address'] if 10 < len(datadirectory) else missing_datadirectory_entry().a['Address']
-        pcom = datadirectory['COM']['Address'] if 15 < len(datadirectory) else missing_datadirectory_entry().a['Address']
-        print("Entry: {:s} -> *{:#x}".format(mz.instance(), mod['EntryPoint'].int()))
-        print("HasRelocations: {:b}".format(True if prelocations.int() else False))
-        print("Characteristics: {}".format(pe['Header']['FileHeader']['Characteristics'].summary()))
-        print("DllCharacteristics: {}".format(pe['Header']['OptionalHeader']['DllCharacteristics'].summary()))
-        if ploader.int(): print("GuardFlags: {}".format(ploader.d.li['GuardFlags'].summary()))
-        if ploader.int(): print("SecurityCookie: {}".format(ploader.d.li['SecurityCookie'].summary()))
-        if ploader.int(): print("SafeSEH: {:b}".format(True if ploader.d.li['SEHandlerTable'].int() and ploader.d.li['SEHandlerCount'].int() else False))
-        if pdebug.int() and any(entry['Type']['EX_DLLCHARACTERISTICS'] and entry['AddressOfRawData'].int() for entry in pdebug.d.li):
-            entry = next(entry for entry in pdebug.d.li if entry['Type']['EX_DLLCHARACTERISTICS'] and entry['AddressOfRawData'].int())
-            print("{}".format(entry['AddressOfRawData'].d.li.summary()))
-        print()
-    sys.exit(0)
+        emitter.send(mz)
+    emitter.close()
