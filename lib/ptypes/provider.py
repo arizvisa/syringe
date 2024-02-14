@@ -1420,6 +1420,49 @@ try:
         def seek_handle(cls, handle, old, new):
             return new
 
+except OSError:
+    Log.info("{:s} : Opening a remote process by its handle on the Windows platform (`{:s}`) will be unavailable.".format(__name__, 'WindowsProcessHandle'))
+
+try:
+    if 'WOW64' not in NATIVE.__available__:
+        raise OSError
+
+    class WindowsProcessHandleWow64(WindowsProcessHandle):
+        '''Windows memory provider that will use a process handle in order to access memory.'''
+
+        @classmethod
+        def read_handle(cls, handle, address, amount):
+            NumberOfBytesRead = NATIVE.ULONG64()
+            buffer_t = ctypes.c_char * amount
+
+            buffer = buffer_t()
+            result = NATIVE.NT.NtWow64ReadVirtualMemory64(handle, address, ctypes.pointer(buffer), amount, ctypes.pointer(NumberOfBytesRead))
+            if result != NATIVE.CONST.STATUS_SUCCESS:
+                raise OSError("Unable to read from address {:#x}..{:#x} ({:+#x}) with handle {:#x}.".format(address, address + amount, amount, handle))
+            return NumberOfBytesRead.value, buffer
+
+        @classmethod
+        def write_handle(cls, handle, address, data):
+            NumberOfBytesWritten = NATIVE.ULONG64()
+
+            buffer_t = ctypes.c_char * len(data)
+            buffer = buffer_t(data)
+
+            result = NATIVE.NT.NtWow64WriteVirtualMemory64(handle, address, ctypes.pointer(buffer), len(data), ctypes.pointer(NumberOfBytesWritten))
+            if result != NATIVE.CONST.STATUS_SUCCESS:
+                raise OSError("Unable to write to address {:#x}..{:#x} ({:+#x}) with handle {:#x}.".format(address, address + len(data), len(data), handle))
+            return NumberOfBytesWritten.value, buffer
+
+except OSError:
+    Log.info("{:s} : Opening a remote wow64 process by its handle on the Windows platform (`{:s}`) will be unavailable.".format(__name__, 'WindowsProcessHandleWow64'))
+
+except AttributeError:
+    pass
+
+try:
+    if 'PROCESS' not in NATIVE.__available__:
+        raise OSError
+
     def WindowsProcessId(pid, **attributes):
         '''Return a provider that allows one to read/write from memory owned by the specified windows process ``pid``.'''
         flags = NATIVE.CONST.PROCESS_QUERY_INFORMATION | NATIVE.CONST.PROCESS_VM_WRITE | NATIVE.CONST.PROCESS_VM_READ
@@ -1427,7 +1470,7 @@ try:
         return WindowsProcessHandle(handle)
 
 except OSError:
-    Log.info("{:s} : Opening a remote process by its handle on the Windows platform (`{:s}`, `{:s}`) will be unavailable.".format(__name__, 'WindowsProcessHandle', 'WindowsProcessId'))
+    Log.info("{:s} : Opening a remote process by its id on the Windows platform (`{:s}`) will be unavailable.".format(__name__, 'WindowsProcessId'))
 
 ### Windows File API
 try:
