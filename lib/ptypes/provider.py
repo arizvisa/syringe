@@ -1093,21 +1093,23 @@ try:
             BOOL = ctypes.wintypes.BOOL
             LPCSTR = ctypes.wintypes.LPCSTR
             LARGE_INTEGER = ctypes.wintypes.LARGE_INTEGER
-            PLARGE_INTEGER = ctypes.wintypes.PLARGE_INTEGER
+            PLARGE_INTEGER = ctypes.POINTER(LARGE_INTEGER)
             NTSTATUS = ctypes.c_size_t
             DWORD_PTR = ctypes.c_void_p
             ULONG_PTR = ctypes.c_void_p
             KPRIORITY = ctypes.c_ulong
             ULONG = ctypes.wintypes.ULONG
-            PULONG = ctypes.wintypes.PULONG
-            ULONGLONG = ctypes.c_ulonglong
-            PULONGLONG = ctypes.POINTER(ctypes.c_ulonglong)
+            PULONG = ctypes.POINTER(ULONG)
+            ULONGLONG = ULONG64 = ctypes.c_ulonglong
+            PULONGLONG = PULONG64 = ctypes.POINTER(ULONG64)
+            PVOID64 = ctypes.c_ulonglong
 
         NATIVE.K32 = ctypes.WinDLL('kernel32.dll')
         NATIVE.NT = ctypes.WinDLL('ntdll.dll')
 
         class CONST(object): pass
         NATIVE.CONST = CONST
+        NATIVE.CONST.STATUS_SUCCESS = 0
         del(CONST)
 
         class SYSTEM_INFO(ctypes.Structure):
@@ -1127,6 +1129,13 @@ try:
 
         NATIVE.SYSTEM_INFO = SYSTEM_INFO
         del(SYSTEM_INFO)
+
+        NATIVE.CONST.PROCESSOR_ARCHITECTURE_AMD64 = 9
+        NATIVE.CONST.PROCESSOR_ARCHITECTURE_ARM = 5
+        NATIVE.CONST.PROCESSOR_ARCHITECTURE_ARM64 = 12
+        NATIVE.CONST.PROCESSOR_ARCHITECTURE_IA64 = 6
+        NATIVE.CONST.PROCESSOR_ARCHITECTURE_INTEL = 0
+        NATIVE.CONST.PROCESSOR_ARCHITECTURE_UNKNOWN = 0xffff
 
         NATIVE.K32.GetNativeSystemInfo.argtypes = [ ctypes.POINTER(NATIVE.SYSTEM_INFO) ]
         NATIVE.K32.GetNativeSystemInfo.restype = None
@@ -1153,6 +1162,9 @@ try:
         NATIVE.K32.DebugBreak.argtypes = []
         NATIVE.K32.DebugBreak.restypes = None
 
+        NATIVE.K32.CloseHandle.argtypes = [NATIVE.HANDLE]
+        NATIVE.K32.CloseHandle.restype = NATIVE.BOOL
+
         NATIVE.K32.GetCurrentProcess.argtypes = []
         NATIVE.K32.GetCurrentProcess.restype = NATIVE.HANDLE
         NATIVE.K32.GetCurrentProcessId.argtypes = []
@@ -1163,8 +1175,9 @@ try:
         NATIVE.K32.GetProcessInformation.argtypes = [ NATIVE.HANDLE, ctypes.c_size_t, NATIVE.LPVOID, NATIVE.DWORD ]
         NATIVE.K32.GetProcessInformation.restype = NATIVE.BOOL
 
-        NATIVE.K32.CloseHandle.argtypes = [NATIVE.HANDLE]
-        NATIVE.K32.CloseHandle.restype = NATIVE.BOOL
+        # 5.1
+        NATIVE.K32.IsWow64Process.argtypes = [NATIVE.HANDLE, ctypes.POINTER(NATIVE.BOOL)]
+        NATIVE.K32.IsWow64Process.restype = NATIVE.BOOL
 
         class PROCESS_BASIC_INFORMATION(ctypes.Structure):
             _fields_ = [
@@ -1216,10 +1229,17 @@ try:
 
     # Define the ctypes parameters for the windows api used by Wow64
     try:
-        NATIVE.K32.IsWow64Process.argtypes = [NATIVE.HANDLE, ctypes.POINTER(NATIVE.BOOL)]
-        NATIVE.K32.IsWow64Process.restype = NATIVE.BOOL
+        # 5.2
         NATIVE.NT.NtWow64QueryInformationProcess64.argtypes = [ NATIVE.HANDLE, ctypes.c_size_t, NATIVE.PVOID, NATIVE.ULONG, NATIVE.PULONG ]
         NATIVE.NT.NtWow64QueryInformationProcess64.restype = NATIVE.NTSTATUS
+        #NATIVE.NT.NtWow64QueryVirtualMemory64.argtypes = [NATIVE.HANDLE, NATIVE.PVOID64, ctypes.c_size_t, NATIVE.PVOID, NATIVE.ULONG64, NATIVE.PULONG64]
+        #NATIVE.NT.NtWow64QueryVirtualMemory64.restype = NATIVE.NTSTATUS
+        NATIVE.NT.NtWow64ReadVirtualMemory64.argtypes = [NATIVE.HANDLE, NATIVE.PVOID64, NATIVE.PVOID, NATIVE.ULONG64, NATIVE.PULONG64]
+        NATIVE.NT.NtWow64ReadVirtualMemory64.restype = NATIVE.NTSTATUS
+
+        # 6.0
+        NATIVE.NT.NtWow64WriteVirtualMemory64.argtypes = [NATIVE.HANDLE, NATIVE.PVOID64, NATIVE.PVOID, NATIVE.ULONG64, NATIVE.PULONG64]
+        NATIVE.NT.NtWow64WriteVirtualMemory64.restype = NATIVE.NTSTATUS
 
         class PROCESS_BASIC_INFORMATION_WOW64(ctypes.Structure):
             _fields_ = [
@@ -1341,7 +1361,8 @@ try:
 
     def WindowsProcessId(pid, **attributes):
         '''Return a provider that allows one to read/write from memory owned by the specified windows process ``pid``.'''
-        handle = NATIVE.K32.OpenProcess(0x30, False, pid)
+        flags = NATIVE.CONST.PROCESS_QUERY_INFORMATION | NATIVE.CONST.PROCESS_VM_WRITE | NATIVE.CONST.PROCESS_VM_READ
+        handle = NATIVE.K32.OpenProcess(flags, False, pid)
         return WindowsProcessHandle(handle)
 
 except OSError:
