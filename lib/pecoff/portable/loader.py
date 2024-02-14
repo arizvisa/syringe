@@ -389,7 +389,6 @@ class IMAGE_LOAD_CONFIG_DIRECTORY32(IMAGE_LOAD_CONFIG_DIRECTORY):
         (realaddress(VOID, type=DWORD), 'GuardXFGTableDispatchFunctionPointer'),
         (DWORD, 'CastGuardOsDeterminedFailureMode'),
         (DWORD, 'GuardMemcpyFunctionPointer'),
-        (__Unknown, 'Unknown'),
     ]
 
 class IMAGE_LOAD_CONFIG_DIRECTORY64(IMAGE_LOAD_CONFIG_DIRECTORY):
@@ -456,5 +455,4 @@ class IMAGE_LOAD_CONFIG_DIRECTORY64(IMAGE_LOAD_CONFIG_DIRECTORY):
         (realaddress(VOID, type=ULONGLONG), 'GuardXFGTableDispatchFunctionPointer'),
         (ULONGLONG, 'CastGuardOsDeterminedFailureMode'),
         (ULONGLONG, 'GuardMemcpyFunctionPointer'),
-        (__Unknown, 'Unknown'),
     ]
