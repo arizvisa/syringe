@@ -1465,9 +1465,30 @@ try:
 
     def WindowsProcessId(pid, **attributes):
         '''Return a provider that allows one to read/write from memory owned by the specified windows process ``pid``.'''
+        sysinfo = NATIVE.SYSTEM_INFO()
+        NATIVE.K32.GetNativeSystemInfo(ctypes.pointer(sysinfo))
+
+        wProcessorArchitecture = sysinfo.wProcessorArchitecture
+        SYS64 = wProcessorArchitecture in {NATIVE.CONST.PROCESSOR_ARCHITECTURE_AMD64, NATIVE.CONST.PROCESSOR_ARCHITECTURE_ARM64, NATIVE.CONST.PROCESSOR_ARCHITECTURE_IA64}
+
+        current = NATIVE.K32.GetCurrentProcess()
+        current_wow64_ = NATIVE.BOOL()
+        current_wow64 = current_wow64_.value if 'WOW64' in NATIVE.__available__ and NATIVE.K32.IsWow64Process(current, ctypes.pointer(current_wow64_)) else False
+
         flags = NATIVE.CONST.PROCESS_QUERY_INFORMATION | NATIVE.CONST.PROCESS_VM_WRITE | NATIVE.CONST.PROCESS_VM_READ
-        handle = NATIVE.K32.OpenProcess(flags, False, pid)
-        return WindowsProcessHandle(handle)
+        other = NATIVE.K32.OpenProcess(flags, False, pid)
+
+        if not other:
+            if 'WIN32ERROR' in NATIVE.__available__:
+                raise OSError(win32error.getLastErrorTuple())
+            raise OSError("Unable to open a handle to the process id {:d} ({:#x}).".format(pid, pid))
+
+        other_wow64_ = NATIVE.BOOL()
+        other_wow64 = other_wow64_.value if 'WOW64' in NATIVE.__available__ and NATIVE.K32.IsWow64Process(other, ctypes.pointer(other_wow64_)) else False
+
+        if 'WOW64' in NATIVE.__available__:
+            return WindowsProcessHandleWow64(other) if current_wow64 and not other_wow64 else WindowsProcessHandle(other)
+        return WindowsProcessHandle(other)
 
 except OSError:
     Log.info("{:s} : Opening a remote process by its id on the Windows platform (`{:s}`) will be unavailable.".format(__name__, 'WindowsProcessId'))
