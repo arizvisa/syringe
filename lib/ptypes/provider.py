@@ -283,8 +283,8 @@ class proxy(proxied):
             result = buf[left:]
             return result
 
-        available = len(buf) - left
-        raise error.ConsumeError(self, left, right - available, amount)
+        consumed = len(buf) - left
+        raise error.ConsumeError(self, left, amount, amount=consumed)
 
     @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError,))
     def store(self, data):
