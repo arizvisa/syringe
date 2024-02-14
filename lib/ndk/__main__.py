@@ -36,6 +36,12 @@ else:
     NT.NtQueryInformationThread.argtypes = [ ctypes.wintypes.HANDLE, ctypes.c_size_t, ctypes.wintypes.PVOID, ctypes.wintypes.ULONG, ctypes.wintypes.PULONG ]
     NT.NtQueryInformationThread.restype = ctypes.wintypes.NTSTATUS
 
+    try:
+        NT.NtWow64QueryInformationProcess64.argtypes = [ ctypes.wintypes.HANDLE, ctypes.c_size_t, ctypes.wintypes.PVOID, ctypes.wintypes.ULONG, ctypes.wintypes.PULONG ]
+        NT.NtWow64QueryInformationProcess64.restype = ctypes.wintypes.NTSTATUS
+    except AttributeError:
+        pass
+
 # FIXME: this is terrible design that was repurposed from some pretty ancient code.
 class MemoryReference(ptypes.provider.memoryview):
     def __init__(self, instance, **attributes):
@@ -134,27 +140,39 @@ if __name__ == '__main__':
         K32.GetNativeSystemInfo(sbi.getoffset())
     SYS64 = any(sbi['wProcessorArchitecture'][name] for name in {'AMD64', 'IA64', 'ARM64'})
 
+    ME_WOW64_ = ctypes.wintypes.BOOL(-1)
+    if not K32.IsWow64Process(K32.GetCurrentProcess(), ctypes.pointer(ME_WOW64_)):
+        raise WindowsError('unable to determine the address type for the current process', os.getpid())
+    ME_WOW64 = True if ME_WOW64_.value else False
+    ME_WIN64 = False if not SYS64 or ME_WOW64 else True
+
     handle = K32.OpenProcess(PROCESS_QUERY_INFORMATION|PROCESS_VM_WRITE|PROCESS_VM_READ|PROCESS_VM_OPERATION, False, pid)
     if not handle:
         raise WindowsError('unable to open process', pid)
 
-    WOW64 = ctypes.wintypes.BOOL(1)
-    if not K32.IsWow64Process(handle, ctypes.pointer(WOW64)):
+    WOW64_ = ctypes.wintypes.BOOL(-1)
+    if not K32.IsWow64Process(handle, ctypes.pointer(WOW64_)):
         raise WindowsError('unable to determine the address type for the given process', pid)
-    WIN64 = SYS64 and not WOW64.value
+    WOW64 = True if WOW64_.value else False
+    WIN64 = False if not SYS64 or WOW64 else True
+
+    USE_WOW64 = ME_WOW64 and not WOW64
+    PEB64 = True if USE_WOW64 else ME_WIN64
 
     # FIXME: we should grab the main thread and use the TEB to get the PEB.
-    HACK = sbi['dwPageSize'].int() if SYS64 and WOW64.value else 0
+    HACK = sbi['dwPageSize'].int() if not ME_WOW64 and WOW64 else 0
 
-    with MemoryReference(ndk.pstypes.ProcessInfoClass.lookup('ProcessBasicInformation'), WIN64=SYS64) as pbi:
+    FQueryInformationProcess = NT.NtWow64QueryInformationProcess64 if USE_WOW64 else NT.NtQueryInformationProcess
+    with MemoryReference(ndk.pstypes.ProcessInfoClass.lookup('ProcessBasicInformation'), WIN64=PEB64) as pbi:
         res = ctypes.wintypes.ULONG(0)
-        status = NT.NtQueryInformationProcess(handle, pbi.type, pbi.getoffset(), pbi.size(), ctypes.pointer(res))
+        status = FQueryInformationProcess(handle, pbi.type, pbi.getoffset(), pbi.size(), ctypes.pointer(res))
         if status != ndk.NTSTATUS.byname('STATUS_SUCCESS'):
             raise WindowsError('unable to query process information', "{:s}({:#0{:d}x})".format(ndk.NTSTATUS.byvalue(status), status, 2 + 8) if ndk.NTSTATUS.has(status) else status)
         elif res.value != pbi.size():
             raise ValueError('unexpected size', res.value, pbi.size())
+    K32.CloseHandle(handle)
 
-    source = ptypes.setsource(ptypes.prov.memory() if os.getpid() == pid else ptypes.prov.WindowsProcessHandle(handle))
+    source = ptypes.setsource(ptypes.prov.memory() if os.getpid() == pid else ptypes.prov.WindowsProcessId(pid))
     peb = ndk.pstypes.PEB(offset = pbi['PebBaseAddress'].int() + HACK, WIN64=WIN64)
     peb = peb.l
 
@@ -184,5 +202,4 @@ if __name__ == '__main__':
             entry = next(entry for entry in pdebug.d.li if entry['Type']['EX_DLLCHARACTERISTICS'] and entry['AddressOfRawData'].int())
             print("{}".format(entry['AddressOfRawData'].d.li.summary()))
         print()
-
-    K32.CloseHandle(handle)
+    sys.exit(0)
