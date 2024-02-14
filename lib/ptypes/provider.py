@@ -1302,62 +1302,123 @@ try:
 except OSError:
     Log.info("{:s} : Error handling for the Windows platform (`{:s}`) will be unavailable.".format(__name__, 'WindowsError'))
 
+class WindowsWithHandle(base):
+    '''Windows provider base class.'''
+    def __init__(self, handle=None, address=0):
+        self.__handle__ = handle
+        self.__address__ = address
+
+    @classmethod
+    def read_handle(cls, handle, address, amount):
+        raise NotImplementedError("Current provider {!s} does not implement this method.".format(cls))
+
+    @classmethod
+    def write_handle(cls, handle, address, data):
+        raise NotImplementedError("Current provider {!s} does not implement this method.".format(cls))
+
+    @classmethod
+    def close_handle(cls, handle):
+        raise NotImplementedError("Current provider {!s} does not implement this method.".format(cls))
+
+    @classmethod
+    def seek_handle(cls, handle, old, new):
+        raise NotImplementedError("Current provider {!s} does not implement this method.".format(cls))
+
+    @utils.mapexception(any=error.ProviderError)
+    def seek(self, offset):
+        '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
+        handle, address = self.__handle__, self.__address__
+        new_offset = self.seek_handle(handle, address, offset)
+        result, self.__address__ = address, new_offset
+        return result
+
+    @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
+    def consume(self, amount):
+        '''Consume ``amount`` bytes from the provider.'''
+        if amount < 0:
+            raise error.UserError(self, 'consume', message="tried to consume a negative number of bytes ({:x}:{:+x}) from {!s}".format(self.address, amount, self))
+
+        handle, address = self.__handle__, self.__address__
+
+        try:
+            result, buffer = self.read_handle(handle, address, amount)
+        except Exception as E:
+            raise error.ConsumeError(self, address, amount)
+
+        if result != amount:
+            raise error.ConsumeError(self, address, amount, result)
+
+        self.__address__ = address + result
+        return builtins.memoryview(buffer).tobytes()
+
+    @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError,))
+    def store(self, data):
+        '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
+        handle, address = self.__handle__, self.__address__
+
+        try:
+            result, buffer = self.write_handle(handle, address, data)
+        except Exception as E:
+            raise error.StoreError(self, address, len(data))
+
+        if result != len(data):
+            raise error.StoreError(self, address, len(data), written=result)
+
+        self.__address__ = address + result
+        return result
+
+    @utils.mapexception(any=error.ProviderError)
+    def close(self):
+        handle = self.__handle__
+        result, new_handle = self.close_handle(handle)
+        self.__handle__ = new_handle
+        return result
+
 ### Windows Process API
 try:
     if 'PROCESS' not in NATIVE.__available__:
         raise OSError
 
-    class WindowsProcessHandle(memorybase):
+    class WindowsProcessHandle(memorybase, WindowsWithHandle):
         '''Windows memory provider that will use a process handle in order to access memory.'''
-        address = 0
-        handle = None
         def __init__(self, handle):
-            self.handle = handle
+            super(WindowsProcessHandle, self).__init__(handle)
 
-        def seek(self, offset):
-            '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
-            res, self.address = self.address, offset
-            return res
-
-        @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
-        def consume(self, amount):
-            '''Consume ``amount`` bytes from the provider.'''
-            if amount < 0:
-                raise error.UserError(self, 'consume', message="tried to consume a negative number of bytes ({:x}:{:+x}) from {!s}".format(self.address, amount, self))
-
-            NumberOfBytesRead = ctypes.c_size_t()
+        @classmethod
+        def read_handle(cls, handle, address, amount):
+            NumberOfBytesRead = NATIVE.SIZE_T()
             buffer_t = ctypes.c_char * amount
+
             buffer = buffer_t()
+            result = NATIVE.K32.ReadProcessMemory(handle, address, ctypes.pointer(buffer), amount, ctypes.pointer(NumberOfBytesRead))
+            if not result:
+                raise OSError("Unable to read from address {:#x}..{:#x} ({:+#x}) with handle {:#x}.".format(address, address + amount, amount, handle))
+            return NumberOfBytesRead.value, buffer
 
-            # FIXME: instead of failing on an incomplete read, perform a partial read
-            res = NATIVE.K32.ReadProcessMemory(self.handle, self.address, buffer, amount, ctypes.pointer(NumberOfBytesRead))
-            if (res == 0) or (NumberOfBytesRead.value != amount):
-                try:
-                    raise ValueError("Unable to read pid({:x})[{:08x}:{:08x}].".format(self.handle, self.address, self.address + amount))
-                except Exception:
-                    raise error.ConsumeError(self, self.address, amount, NumberOfBytesRead.value)
+        @classmethod
+        def write_handle(cls, handle, address, data):
+            NumberOfBytesWritten = NATIVE.SIZE_T()
 
-            self.address += amount
-            return builtins.memoryview(buffer).tobytes()
+            buffer_t = ctypes.c_char * len(data)
+            buffer = buffer_t(data)
 
-        @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError,))
-        def store(self, value):
-            '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-            NumberOfBytesWritten = ctypes.c_size_t()
+            result = NATIVE.K32.WriteProcessMemory(handle, address, ctypes.pointer(buffer), len(data), ctypes.pointer(NumberOfBytesWritten))
+            if not result:
+                raise OSError("Unable to write to address {:#x}..{:#x} ({:+#x}) with handle {:#x}.".format(address, address + len(data), len(data), handle))
+            return NumberOfBytesWritten.value, buffer
 
-            buffer_t = ctypes.c_char * len(value)
-            buffer = buffer_t()
-            buffer.value = value
+        @classmethod
+        def close_handle(cls, handle):
+            result = NATIVE.K32.CloseHandle(handle)
+            if not result:
+                if 'WIN32ERROR' in NATIVE.__available__:
+                    raise OSError(win32error.getLastErrorTuple())
+                raise OSError("Unable to close the specified handle {:#x}.".format(handle))
+            return result, None
 
-            res = NATIVE.K32.WriteProcessMemory(self.handle, self.address, buffer, len(value), ctypes.pointer(NumberOfBytesWritten))
-            if (res == 0) or (NumberOfBytesWritten.value != len(value)):
-                try:
-                    raise OSError("Unable to write to pid({:x})[{:08x}:{:08x}].".format(self.id, self.address, self.address + len(value)))
-                except Exception:
-                    raise error.StoreError(self, self.address, len(value), written=NumberOfBytesWritten.value)
-
-            self.address += len(value)
-            return NumberOfBytesWritten.value
+        @classmethod
+        def seek_handle(cls, handle, old, new):
+            return new
 
     def WindowsProcessId(pid, **attributes):
         '''Return a provider that allows one to read/write from memory owned by the specified windows process ``pid``.'''
@@ -1373,12 +1434,9 @@ try:
     if 'FILE' not in NATIVE.__available__:
         raise OSError
 
-    class WindowsFile(base):
+    class WindowsFile(WindowsWithHandle):
         '''A provider that uses the Windows File API.'''
-        offset = 0
         def __init__(self, filename, mode='rb'):
-            self.offset = 0
-
             GENERIC_READ, GENERIC_WRITE = 0x40000000, 0x80000000
             FILE_SHARE_READ, FILE_SHARE_WRITE = 1, 2
             OPEN_EXISTING, OPEN_ALWAYS = 3, 4
@@ -1402,71 +1460,65 @@ try:
             )
             if result == INVALID_HANDLE_VALUE:
                 raise OSError(win32error.getLastErrorTuple())
-            self.handle = result
 
-        @utils.mapexception(any=error.ProviderError)
-        def seek(self, offset):
-            '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
-            distance, resultDistance = ctypes.c_longlong(offset), ctypes.c_longlong(offset)
+            super(WindowsFile, self).__init__(result)
+
+        @classmethod
+        def seek_handle(cls, handle, old, new):
+            distance, resultDistance = ctypes.c_longlong(new), ctypes.c_longlong(new)
             FILE_BEGIN = 0
             result = NATIVE.K32.SetFilePointerEx(
-                self.handle, distance, ctypes.byref(resultDistance),
+                handle, distance, ctypes.byref(resultDistance),
                 FILE_BEGIN
             )
-            if result == 0:
-                raise OSError(win32error.getLastErrorTuple())
-            res, self.offset = self.offset, resultDistance.value
-            return res
+            if not result:
+                if 'WIN32ERROR' in NATIVE.__available__:
+                    raise OSError(win32error.getLastErrorTuple())
+                raise OSError("Unable to seek from offset {:#x} to {:#x} ({:+#x}) with handle {:#x}.".format(old, new, new - old, handle))
+            return resultDistance.value
 
-        @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
-        def consume(self, amount):
-            '''Consume ``amount`` bytes from the provider.'''
+        @classmethod
+        def read_handle(cls, handle, address, amount):
             buffer_t = ctypes.c_char * amount
             resultBuffer = buffer_t()
 
             amount, resultAmount = ctypes.c_ulong(amount), ctypes.c_ulong(amount)
             result = NATIVE.K32.ReadFile(
-                self.handle, ctypes.pointer(resultBuffer),
+                handle, ctypes.pointer(resultBuffer),
                 amount, ctypes.pointer(resultAmount),
                 None
             )
-            if (result == 0) or (resultAmount.value == 0 and amount > 0):
-                try:
+            if not result:
+                if 'WIN32ERROR' in NATIVE.__available__:
                     raise OSError(win32error.getLastErrorTuple())
-                except Exception:
-                    raise error.ConsumeError(self, self.offset, amount, resultAmount.value)
+                raise OSError("Unable to read from offset {:#x}..{:#x} ({:+#x}) with handle {:#x}.".format(address, address + amount, amount, handle))
+            return resultAmount.value, resultBuffer
 
-            if resultAmount.value == amount:
-                self.offset += resultAmount.value
-            return builtins.memoryview(resultBuffer).tobytes()
-
-        @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError,))
-        def store(self, value):
-            '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-            buffer_t = c-char * len(value)
-            buffer = buffer_t(value)
+        @classmethod
+        def write_handle(cls, handle, address, data):
+            buffer_t = ctypes.c_char * len(data)
+            buffer = buffer_t(data)
             resultWritten = ctypes.c_ulong()
 
             result = NATIVE.K32.WriteFile(
-                self.handle, buffer,
-                len(value), ctypes.pointer(resultWritten),
+                handle, buffer,
+                len(data), ctypes.pointer(resultWritten),
                 None
             )
-            if (result == 0) or (resultWritten.value != len(value)):
-                try:
+            if not result:
+                if 'WIN32ERROR' in NATIVE.__available__:
                     raise OSError(win32error.getLastErrorTuple())
-                except Exception:
-                    raise error.StoreError(self, self.offset, len(value), resultWritten.value)
-            self.offset += resultWritten.value
-            return resultWritten.value
+                raise OSError("Unable to write to offset {:#x}..{:#x} ({:+#x}) with handle {:#x}.".format(address, address + amount, amount, handle))
+            return resultWritten.value, buffer
 
-        @utils.mapexception(any=error.ProviderError)
-        def close(self):
+        @classmethod
+        def close_handle(cls, handle):
             result = NATIVE.K32.CloseHandle(self.handle)
-            if (result == 0):
-                raise OSError(win32error.getLastErrorTuple())
-            self.handle = None
-            return result
+            if not result:
+                if 'WIN32ERROR' in NATIVE.__available__:
+                    raise OSError(win32error.getLastErrorTuple())
+                raise OSError("Unable to close the specified handle {:#x}.".format(handle))
+            return result, None
 
 except OSError:
     Log.info("{:s} : Opening a file using the native api on the Windows platform (`{:s}`) will be unavailable.".format(__name__, 'WindowsFile'))
