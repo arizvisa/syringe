@@ -316,7 +316,7 @@ if __name__ == '__main__':
                 # Loader (FIXME: should probably check XFG and the other stupid shit)
                 load = stash()
 
-                print("{:s} : {:#x}{:+#x} : {:s} : File({:s}) Optional({:s}) : Directory({:s}) : GuardFlags({:s})".format(
+                print("{:s} : {:#x}{:+#x} : {:s} : File({:s}) Optional({:s}) Directory({:s}) GuardFlags({:s})".format(
                     ','.join(file.image_type),
                     executable.getoffset(), executable.size(), module['BaseDllName'].str(),
                     ','.join(file.flags),
