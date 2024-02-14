@@ -81,22 +81,22 @@ class ProviderError(Base):
     """Generic error raised by a provider"""
 class StoreError(ProviderError):
     """Error while attempting to store some number of bytes"""
-    def __init__(self, identity, offset, amount, written=0, **kwds):
+    def __init__(self, identity, offset, amount, written=None, **kwds):
         super(StoreError, self).__init__(*[(name, kwds[name]) for name in kwds])
         self.stored = identity, offset, amount, written
     def __str__(self):
         identity, offset, amount, written = self.stored
-        if written > 0:
+        if written is not None:
             return 'StoreError({!s}) : Only stored {:+#x} of {:+#x} bytes to {:#x}.'.format(type(identity), written, amount, offset)
         return 'StoreError({!s}) : Error storing {:+#x} bytes to {:#x}.'.format(type(identity), amount, offset)
 class ConsumeError(ProviderError):
     """Error while attempting to consume some number of bytes"""
-    def __init__(self, identity, offset, desired, amount=0, **kwds):
+    def __init__(self, identity, offset, desired, amount=None, **kwds):
         super(ConsumeError, self).__init__(**kwds)
         self.consumed = identity, offset, desired, amount
     def __str__(self):
         identity, offset, desired, amount = self.consumed
-        if amount > 0:
+        if amount is not None:
             return 'ConsumeError({!s}) : Only consumed {:+#x} of desired {:+#x} bytes from offset {:+#x}.'.format(type(identity), amount, desired, offset)
         return 'ConsumeError({!s}) : Error consuming {:+#x} bytes from {:#x}.'.format(type(identity), desired, offset)
 
