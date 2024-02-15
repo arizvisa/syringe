@@ -1079,9 +1079,9 @@ except OSError:
 
 ### Windows Native APIs
 try:
-    import ctypes, ctypes.wintypes
-
+    import ctypes
     try:
+        import ctypes.wintypes
         class NATIVE(object):
             __available__ = {item for item in []}
 
