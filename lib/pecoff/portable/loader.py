@@ -324,6 +324,112 @@ class LOAD_LIBRARY_SEARCH_(pbinary.flags):
         (8, 'LOAD_LIBRARY_FLAGS?'),
     ]
 
+# https://github.com/wine-mirror/wine/blob/master/include/winnt.h
+class ULONG(DWORD): pass
+class IMAGE_ARM64EC_REDIRECTION_ENTRY(pstruct.type):
+    _fields_ = [
+        (ULONG, 'Source'),
+        (ULONG, 'Destination'),
+    ]
+
+class IMAGE_ARM64EC_CODE_RANGE_ENTRY_POINT(pstruct.type):
+    _fields_ = [
+        #(ULONG, 'StartRva'),
+        (virtualaddress(VOID, type=ULONG), 'StartRva'),
+        #(ULONG, 'EndRva'),
+        (virtualaddress(VOID, type=ULONG), 'EndRva'),
+        #(ULONG, 'EntryPoint'),
+        (virtualaddress(VOID, type=ULONG), 'EntryPoint'),
+    ]
+
+class IMAGE_CHPE_RANGE_ENTRY(pstruct.type):
+    _fields_ = [
+        (1, 'NativeCode'),
+        (31, 'AddressBits'),
+    ]
+    def StartOffset(self):
+        '''ULONG'''
+        raise NotImplementedError
+
+#define IMAGE_DVRT_ARM64X_FIXUP_TYPE_ZEROFILL   0
+#define IMAGE_DVRT_ARM64X_FIXUP_TYPE_VALUE      1
+#define IMAGE_DVRT_ARM64X_FIXUP_TYPE_DELTA      2
+
+class IMAGE_DVRT_ARM64X_FIXUP_TYPE_(pint.enum):
+    _values_ = [
+        ('ZEROFILL', 0),
+        ('VALUE', 1),
+        ('DELTA', 2),
+    ]
+
+class IMAGE_DVRT_ARM64X_FIXUP_SIZE_(pint.enum):
+    _values_ = [
+        ('2BYTES', 1),
+        ('4BYTES', 2),
+        ('8BYTES', 3),
+    ]
+
+class IMAGE_DVRT_ARM64X_FIXUP_RECORD(pbinary.struct):
+    class _Type(pbinary.enum):
+        _width_, _values_ = 2, IMAGE_DVRT_ARM64X_FIXUP_TYPE_._values_
+    class _Size(pbinary.enum):
+        _width_, _values_ = 2, IMAGE_DVRT_ARM64X_FIXUP_SIZE_._values_
+    _fields_ = [
+        (12, 'Offset'),
+        (_Type, 'Type'),
+        (_Size, 'Size'),
+    ][::-1]
+
+class IMAGE_DVRT_ARM64X_DELTA_FIXUP_RECORD(pbinary.flags):
+    _fields_ = [
+        (12, 'Offset'),
+        (2, 'Type'),
+        (1, 'Sign'),
+        (1, 'Scale'),
+    ][::-1]
+
+class IMAGE_CHPE_METADATA_X86(pstruct.type):
+    _fields_ = [
+        (ULONG, 'Version'),
+        (ULONG, 'CHPECodeAddressRangeOffset'),
+        (ULONG, 'CHPECodeAddressRangeCount'),
+        (ULONG, 'WowA64ExceptionHandlerFunctionPointer'),
+        (ULONG, 'WowA64DispatchCallFunctionPointer'),
+        (ULONG, 'WowA64DispatchIndirectCallFunctionPointer'),
+        (ULONG, 'WowA64DispatchIndirectCallCfgFunctionPointer'),
+        (ULONG, 'WowA64DispatchRetFunctionPointer'),
+        (ULONG, 'WowA64DispatchRetLeafFunctionPointer'),
+        (ULONG, 'WowA64DispatchJumpFunctionPointer'),
+        (ULONG, 'CompilerIATPointer'),
+        (ULONG, 'WowA64RdtscFunctionPointer'),
+        (dyn.array(ULONG, 4), 'unknown'),
+    ]
+
+class IMAGE_ARM64EC_METADATA(pstruct.type):
+    _fields_ = [
+        (ULONG, 'Version'),
+        (ULONG, 'CodeMap'),
+        (ULONG, 'CodeMapCount'),
+        (ULONG, 'CodeRangesToEntryPoints'),
+        (ULONG, 'RedirectionMetadata'),
+        (ULONG, '__os_arm64x_dispatch_call_no_redirect'),
+        (ULONG, '__os_arm64x_dispatch_ret'),
+        (ULONG, '__os_arm64x_dispatch_call'),
+        (ULONG, '__os_arm64x_dispatch_icall'),
+        (ULONG, '__os_arm64x_dispatch_icall_cfg'),
+        (ULONG, 'AlternateEntryPoint'),
+        (ULONG, 'AuxiliaryIAT'),
+        (ULONG, 'CodeRangesToEntryPointsCount'),
+        (ULONG, 'RedirectionMetadataCount'),
+        (ULONG, 'GetX64InformationFunctionPointer'),
+        (ULONG, 'SetX64InformationFunctionPointer'),
+        (ULONG, 'ExtraRFETable'),
+        (ULONG, 'ExtraRFETableSize'),
+        (ULONG, '__os_arm64x_dispatch_fptr'),
+        (ULONG, 'AuxiliaryIATCopy'),
+    ]
+
+### load config directory definitions
 class IMAGE_LOAD_CONFIG_DIRECTORY32(IMAGE_LOAD_CONFIG_DIRECTORY):
     def __Unknown(self):
         res, fields = self['Size'].li.int(), [field for field in self][:-1]
@@ -368,7 +474,7 @@ class IMAGE_LOAD_CONFIG_DIRECTORY32(IMAGE_LOAD_CONFIG_DIRECTORY):
         (DWORD, 'GuardLongJumpTargetCount'),
 
         (realaddress(IMAGE_DYNAMIC_RELOCATION_TABLE, type=DWORD), 'DynamicValueRelocTable'),
-        (realaddress(VOID, type=DWORD), 'CHPEMetadataPointer'),     # FIXME
+        (realaddress(IMAGE_CHPE_METADATA_X86, type=DWORD), 'CHPEMetadataPointer'), # FIXME
         (realaddress(VOID, type=DWORD), 'GuardRFFailureRoutine'),
         (realaddress(VOID, type=DWORD), 'GuardRFFailureRoutineFunctionPointer'),
         (DWORD, 'DynamicValueRelocTableOffset'),   # XXX: depends on DynamicValueRelocTableSection
@@ -435,7 +541,7 @@ class IMAGE_LOAD_CONFIG_DIRECTORY64(IMAGE_LOAD_CONFIG_DIRECTORY):
         (ULONGLONG, 'GuardLongJumpTargetCount'),
 
         (realaddress(IMAGE_DYNAMIC_RELOCATION_TABLE, type=ULONGLONG), 'DynamicValueRelocTable'),
-        (realaddress(VOID, type=ULONGLONG), 'CHPEMetadataPointer'),
+        (realaddress(IMAGE_ARM64EC_METADATA, type=ULONGLONG), 'CHPEMetadataPointer'),     # FIXME
         (realaddress(VOID, type=ULONGLONG), 'GuardRFFailureRoutine'),
         (realaddress(VOID, type=ULONGLONG), 'GuardRFFailureRoutineFunctionPointer'),
         (DWORD, 'DynamicValueRelocTableOffset'),
