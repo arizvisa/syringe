@@ -207,6 +207,16 @@ def list_imports(t, outformat, F=None, output=None):
         raise ValueError("No Imports directory entry was found.")
     global it; it = E['Address'].d.li
     global result; result = it
+    return list_imports_(E, result, t, outformat, F, output)
+
+def extract_import(t, index, outformat, F=None, output=None):
+    E = t['Next']['Header']['DataDirectory']['Import']
+    if E['Address'].int() == 0:
+        raise ValueError("No Imports directory entry was found.")
+    global it; it = E['Address'].d.li
+    return extract_import_(it, t, index, outformat, F, output)
+
+def list_imports_(E, result, t, outformat, F=None, output=None):
     if F:
         return Extract(F(result), outformat, file=output)
     if not outformat:
@@ -221,11 +231,7 @@ def list_imports(t, outformat, F=None, output=None):
         return Extract(("{:d}{OFS}{:s}".format(i, n['Name'].d.li.str(), OFS=OFS) for i, n in enumerate(result[:-1])), outformat, file=output)
     return Extract(result, outformat, file=output)
 
-def extract_import(t, index, outformat, F=None, output=None):
-    E = t['Next']['Header']['DataDirectory']['Import']
-    if E['Address'].int() == 0:
-        raise ValueError("No Imports directory entry was found.")
-    global it; it = E['Address'].d.li
+def extract_import_(it, t, index, outformat, F=None, output=None):
 
     # if index is a string and using the correct characters, then convert to an int.
     if isinstance(index, string_types) and all(ch in '0123456789' for ch in index):
