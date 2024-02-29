@@ -240,6 +240,63 @@ class IMAGE_DELAYLOAD_DIRECTORY_ENTRY(pstruct.type):
         (TimeDateStamp, 'TimeStamp'),
     ]
 
+    def Hint(self, index):
+        '''Given an index into the import directory entry, return the hint'''
+        Header = LocateHeader(self)
+        sections = Header['Sections']
+        entry = self['DINT'].d.li[index]
+        if entry.OrdinalQ():
+            res = entry['Ordinal']
+            return res['Ordinal Number'] & 0xffff
+        res = entry['Name']
+        name = res.d.li
+        return name['Hint'].int()
+
+    def Name(self, index):
+        '''Given an index into the import directory entry, return its name'''
+        Header = LocateHeader(self)
+        sections = Header['Sections']
+        entry = self['DINT'].d.li[index]
+        if entry.OrdinalQ():
+            res = entry['Ordinal']
+            hint = res['Ordinal Number'] & 0xffff
+            return "Ordinal{:d}".format(hint)
+        res = entry['Name']
+        name = res.d.li
+        return name['String'].str()
+
+    def Offset(self, index):
+        '''Given an index into the import directory entry, return the va of the address containing the import.'''
+        entry = self['DIAT'].d.li[index]
+        offset = CalculateRelativeOffset(self, self['DIAT'].int())
+        return offset + index * entry.size()
+
+    def iterate(self):
+        '''[(hint, importentry_name, importentry_offset, importentry_value),...]'''
+        Header = LocateHeader(self)
+        int, iat = self['DINT'], self['DIAT']
+
+        cache, sections = {}, Header['Sections']
+        for entry, address in zip(int.d.li[:-1], iat.d.li[:-1]):
+            if entry.OrdinalQ():
+                ordinal = entry['Ordinal']
+                hint = ordinal['Ordinal Number'] & 0xffff
+                yield hint, "Ordinal{:d}".format(hint), address.getoffset(), address.int()
+                continue
+            entryname = entry['Name']
+            entryname_va = entryname['Name']
+            section = sections.getsectionbyaddress(entryname_va)
+            section_offset = section.getoffset()
+            if section_offset in cache:
+                sectionva, data = cache[section_offset]
+            else:
+                sectionva, data = cache.setdefault(section_offset, (section['VirtualAddress'].int(), bytearray(section.data().li.serialize())))
+            hint_offset = entryname_va - sectionva
+            hint = functools.reduce(lambda agg, by: agg * 0x100 + by, data[hint_offset : 2 + hint_offset][::-1])
+            name = bytearray(itertools.takewhile(lambda by: by > 0, data[2 + hint_offset:]))
+            yield hint, bytes(name).decode('utf-8', 'replace'), address.getoffset(), address.int()
+        return
+
 class IMAGE_DELAYLOAD_DIRECTORY(parray.block):
     _object_ = IMAGE_DELAYLOAD_DIRECTORY_ENTRY
 
