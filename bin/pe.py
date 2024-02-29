@@ -216,6 +216,21 @@ def extract_import(t, index, outformat, F=None, output=None):
     global it; it = E['Address'].d.li
     return extract_import_(it, t, index, outformat, F, output)
 
+def list_delayed_imports(t, outformat, F=None, output=None):
+    E = t['Next']['Header']['DataDirectory']['DelayImport']
+    if E['Address'].int() == 0:
+        raise ValueError("No Delayed Imports directory entry was found.")
+    global it; it = E['Address'].d.li
+    global result; result = it
+    return list_imports_(E, result, t, outformat, F, output)
+
+def extract_delayed_import(t, index, outformat, F=None, output=None):
+    E = t['Next']['Header']['DataDirectory']['DelayImport']
+    if E['Address'].int() == 0:
+        raise ValueError("No Delayed Imports directory entry was found.")
+    global it; it = E['Address'].d.li
+    return extract_import_(it, t, index, outformat, F, output)
+
 def list_imports_(E, result, t, outformat, F=None, output=None):
     if F:
         return Extract(F(result), outformat, file=output)
@@ -224,8 +239,9 @@ def list_imports_(E, result, t, outformat, F=None, output=None):
         imax = len(str(len(items)))
         nmax = max([len(ite['Name'].d.li.str()) for ite in items] or [0])
         for i, ite in enumerate(result.iterate()):
-            iat, int = ite['IAT'].d.li, ite['INT'].d.li
-            print_("[{:d}]{:s} {:<{:d}s} IAT[{:d}] INT[{:d}]".format(i, ' '*(imax-len(str(i))), ite['Name'].d.li.str(), nmax, len(iat), len(int)), file=output)
+            iatname, intname = ('DIAT', 'DINT') if isinstance(ite, pecoff.portable.imports.IMAGE_DELAYLOAD_DIRECTORY_ENTRY) else ('IAT', 'INT')
+            iat, int = ite[iatname].d.li, ite[intname].d.li
+            print_("[{:d}]{:s} {:<{:d}s} {:s}[{:d}] {:s}[{:d}]".format(i, ' '*(imax-len(str(i))), ite['Name'].d.li.str(), nmax, iatname, len(iat), intname, len(int)), file=output)
         return
     if outformat in {'list'}:
         return Extract(("{:d}{OFS}{:s}".format(i, n['Name'].d.li.str(), OFS=OFS) for i, n in enumerate(result[:-1])), outformat, file=output)
@@ -442,6 +458,8 @@ def args():
     res.add_argument('-E','--dump-export', action='store', nargs=1, type=int, dest='xexport', metavar='index', help='dump the specified export')
     res.add_argument('-i','--list-imports', action='store_const', const=list_imports, dest='command', help='list all the libraries listed in the import directory')
     res.add_argument('-I','--dump-import', action='store', nargs=1, dest='ximport', metavar='index', help='list all the imported functions from the specified library')
+    res.add_argument('-id','--list-delay-imports', action='store_const', const=list_delayed_imports, dest='command', help='list all the libraries listed in the delayed import directory')
+    res.add_argument('-Id','--dump-delay-import', action='store', nargs=1, dest='xdimport', metavar='index', help='list all the delay-imported functions from the specified library')
     res.add_argument('-r','--list-resource', action='store_const', const=list_resources, dest='command', help='display the resource directory tree')
     res.add_argument('-R','--dump-resource', action='store', nargs=1, type=str, dest='xresource', metavar='path', help='dump the resource with the \'/\'-separated specified path')
     res.add_argument('-l','--dump-loaderconfig', action='store_const', const=dump_loadconfig, dest='command', help='dump the LoadConfig directory entry')
@@ -464,6 +482,8 @@ def figureargs(ns):
         return lambda t,format,loc=F,output=sys.stdout: extract_export(t, ns.xexport[0], format, loc, output=output)
     elif ns.ximport:
         return lambda t,format,loc=F,output=sys.stdout: extract_import(t, ns.ximport[0], format, loc, output=output)
+    elif ns.xdimport:
+        return lambda t,format,loc=F,output=sys.stdout: extract_delayed_import(t, ns.xdimport[0], format, loc, output=output)
     elif ns.xresource:
         return lambda t,format,loc=F,output=sys.stdout: extract_resource(t, ns.xresource[0], format, loc, output=output)
     elif ns.xsignature:
