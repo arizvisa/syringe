@@ -140,6 +140,8 @@ class RecordGeneral(pstruct.type):
             RecordData._object_ = res
             return RecordData
 
+        if issubclass(res, parray.block):
+            return dyn.clone(res, blocksize=lambda _, bs=length: bs)
         return dyn.clone(res, blocksize=lambda _, bs=length: bs) if length < self.new(res).a.size() else res
 
     def __extra(self):
