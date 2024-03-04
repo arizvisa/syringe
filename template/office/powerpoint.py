@@ -1,8 +1,7 @@
 import ptypes
 from ptypes import *
 from . import *
-from . import art,graph
-from array import array
+from . import art,graph,storage
 
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 pbinary.setbyteorder(ptypes.config.byteorder.littleendian)
@@ -333,7 +332,7 @@ class PersistDirectoryEntry(pstruct.type):
     def summary(self):
         info = self['info']
         info_s = 'info.persistId:{:#x} info.cPersist:{:#x}'.format(info['persistId'], info['cPersist'])
-        offset = array('L', self['offsets'].serialize())
+        offset = __import__('array').array('L', self['offsets'].serialize())
         res = map('{:#x}'.format, offset)
         offset_s = 'offsets:({:s})'.format(','.join(res))
         return ' '.join((info_s, offset_s))
@@ -821,6 +820,10 @@ class DocInfoListContainer(RecordContainer):
     _values = [
     # FIXME
     ]
+
+@storage.DirectoryStream.define
+class File(File):
+    type = 'PowerPoint Document'
 
 if __name__ == '__main__':
     import office.powerpoint as pp

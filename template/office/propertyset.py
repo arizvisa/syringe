@@ -1,7 +1,7 @@
 # [MS-OLEPS].pdf
 import sys, ptypes
 from ptypes import *
-from . import intsafe
+from . import intsafe, storage
 from .intsafe import *
 
 HRESULT = sys.modules['ndk.datatypes'].HRESULT if 'ndk.datatypes' in sys.modules else intsafe.LONG
@@ -615,6 +615,31 @@ class PropertySetStream(pstruct.type):
         for index, item in enumerate(self['FormatOffset']):
             yield index, item['FMTID'], item['Offset'].d.li
         return
+
+### Definitions, based on the PropertySetStream... Should allow
+### using office.storage to blindly decode these from the directory.
+
+# XXX: i'm pretty sure that the FMTID has to match in order to
+#      be sure about the contents for each of these streams.
+@storage.DirectoryStream.define
+class SummaryInformationStream(PropertySetStream):
+    type = '\005SummaryInformation'
+
+@storage.DirectoryStream.define
+class DocumentSummaryInformationStream(PropertySetStream):
+    type = '\005DocumentSummaryInformation'
+
+@storage.DirectoryStream.define
+class GlobalInfoStream(PropertySetStream):
+    type = '\005GlobalInfo'
+
+@storage.DirectoryStream.define
+class ImageContentsStream(PropertySetStream):
+    type = '\005ImageContents'
+
+@storage.DirectoryStream.define
+class ImageInfoStream(PropertySetStream):
+    type = '\005ImageInfo'
 
 if __name__ == '__main__':
     import builtins, operator, os, math, functools, itertools, sys, types

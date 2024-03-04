@@ -1,5 +1,5 @@
 from ptypes import *
-from . import art,graph
+from . import art,graph,storage
 from . import *
 
 import operator,functools,itertools
@@ -422,7 +422,9 @@ class BiffSubStream(RecordContainer):
         res['document-build'] = build.int()
         return res
 
+@storage.DirectoryStream.define
 class File(File):
+    type = 'Workbook'
     _object_ = BiffSubStream
 
     def __init__(self, **attributes):
