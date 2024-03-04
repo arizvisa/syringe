@@ -1771,6 +1771,7 @@ if __name__ == '__main__':
         ptypes.setsource(ptypes.prov.file(filename, mode='rb'))
 
     store = storage.File()
+    print('>>> Loading File...')
     store = store.l
     print(store['Header'])
     print()
