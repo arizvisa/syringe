@@ -1650,7 +1650,7 @@ class OfficeArtRGFOPTE(pstruct.type):
                 state = ((i,pr) for i,pr in enumerate(rgfopte) if pr['opid'].li['fComplex'])
                 self.__state = state
 
-            index,prop = self.__state.next()
+            index,prop = next(self.__state)
             #t = prop['op'].complex() if hasattr(prop['op'],'complex') else dyn.block(prop['op'].int())
             t = dyn.block(prop['op'].int())
             return dyn.clone(t, Property=property(lambda self: prop))

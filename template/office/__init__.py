@@ -8,6 +8,7 @@ ptypes.Config.pbinary.bigendian_name = 'be({})'
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 
 integer_types = (int, long) if sys.version_info.major < 3 else int
+string_types = (str, unicode) if sys.version_info.major < 3 else str
 
 ### utility functions
 R = lambda f: list(reversed(f))     # reverse a ._fields_ declaration because Micro$oft's documentation lists structures with bit 0 as the high bit
@@ -138,6 +139,7 @@ class RecordGeneral(pstruct.type):
             RecordData._value_ = dyn.block(length)
             RecordData._object_ = res
             return RecordData
+
         return dyn.clone(res, blocksize=lambda _, bs=length: bs) if length < self.new(res).a.size() else res
 
     def __extra(self):
