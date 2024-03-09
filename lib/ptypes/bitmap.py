@@ -340,10 +340,13 @@ class consumer(object):
             # XXX: but, in python3 byte-iterators always return ints...
             return iter(iterable)
 
-    def __init__(self, iterable=(), position=0):
+    def __init__(self, iterable=(), position=0, order='big'):
         self.source = self.__make_interator__(iterable)
         self.cache = new(0, 0)
         self.position = position
+
+        assert(order in {'little', 'big'})
+        self.order, self.__reorder = order, reverse_bits if order == 'little' else lambda *integer_size: integer_size
 
     def insert(self, bitmap):
         self.cache = insert(self.cache, bitmap)
@@ -353,7 +356,37 @@ class consumer(object):
         self.cache = push(self.cache, bitmap)
         return self
 
+    if hasattr(builtins.int, 'from_bytes'):
+        @staticmethod
+        def __read(source, bytes, from_bytes=builtins.int.from_bytes):
+            octets = bytearray(itertools.islice(source, bytes))
+            return from_bytes(octets), len(octets)
+    else:
+        @staticmethod
+        def __read(source, bytes):
+            octets = bytearray(itertools.islice(source, bytes))
+            result = functools.reduce(lambda agg, octet: octet | agg * 0x100, octets, 0)
+            return result, len(octets)
+
     def read(self, bytes):
+        '''Reads the specified number of bytes from iterable'''
+        if bytes > 1:
+            result, count = self.__read(self.source, bytes)
+            self.cache = push(self.cache, self.__reorder(result, 8 * count))
+            if count != bytes:
+                raise StopIteration(bytes, count)
+            return count
+
+        # push an octet onto the little end of our bitmap
+        elif bytes:
+            integer, bits = self.cache
+            result, integer = next(self.source), integer * 0x100
+            self.cache = result | integer, bits + 8
+            return 1
+
+        raise AssertionError("Invalid byte count < 0 : {:d}".format(bytes))
+
+    def slowread(self, bytes):
         '''Reads the specified number of bytes from iterable'''
         if bytes < 0:
             raise AssertionError("Invalid byte count < 0 : {:d}".format(bytes))
@@ -363,17 +396,21 @@ class consumer(object):
             result *= 256
             result += next(self.source)
             bytes, count = bytes - 1, count + 1
-        self.cache = push(self.cache, new(result, count * 8))
+        self.cache = push(self.cache, (result, count * 8))
         return count
 
     def consume(self, bits):
         '''Returns some number of bits as an integer'''
-        available = size(self.cache)
+        #available = size(self.cache)
+        integer, available = self.cache
         if bits > available:
             count = bits - available
-            bs = (count + 7) // 8
-            self.read(bs)
+            bs, extra = divmod(count, 8)
+            self.read(bs + 1) if extra else self.read(bs)
             return self.consume(bits)
+
+        # FIXME: not sure why i'm shifting from the front, here, because really we should be
+        #        consuming from the lsb to avoid processing bigints while reading (consuming).
         self.cache, result = shift(self.cache, bits)
         self.position += bits
         return result
