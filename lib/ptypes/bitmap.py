@@ -501,8 +501,33 @@ def rol(bitmap, shift=1):
     (value, size) = bitmap
     return new(((value << shift) | ((value & ((pow(2, size) - 1) ^ (pow(2, size - shift) - 1))) >> (size - shift))) & pow(2, size) - 1, size)
 
+def reverse_by_bits(size):
+    '''Return a function that will reverse a bitmap in chunks divided by the specified number of bits.'''
+    bits, mask, start = max(1, size), pow(2, size) - 1, pow(2, size - 1)
+
+    def reverse(integer, size):
+        '''flip the bit order of the specified `integer` with `size` bits.'''
+        res, counter, chunk = 0, size, 0
+        while counter >= bits:
+            chunk, little, big = integer & mask, 1, start
+            while big > little:
+                if (not(chunk & big)) != (not(chunk & little)):
+                    chunk ^= big | little
+                little, big = little << 1, big >> 1
+            res, integer, counter = chunk | res << bits, integer >> bits, counter - bits
+
+        # process the left over bits that were missed due to misalignment
+        chunk, missed, big, little = 0, counter, 1 << counter, 1
+        while counter:
+            big >>= 1
+            chunk |= big if integer & little else 0
+            counter, little = counter - 1, little << 1
+        return chunk | (res << missed) if missed else res, size
+    return reverse
+reverse_bits = reverse_by_bits(sys.int_info.bits_per_digit if hasattr(sys, 'int_info') else sys.long_info.bits_per_digit)
+
 def reverse(bitmap):
-    '''Flip the bit order of the bitmap'''
+    '''Flip the bit order of the bitmap (slowly)'''
     res, (_, size) = zero, bitmap
     while res[1] < size:
         bitmap, value = consume(bitmap, 1)
@@ -1321,6 +1346,72 @@ if __name__ == '__main__':
         x.push(0x3, 4)
         x.push(0x4, 4)
         if x.size() == 16 and x.serialize() == b'\x12\x34':
+            raise Success
+
+    @TestCase
+    def bits_reverse_1():
+        import random
+        size = 0x400
+        x = random.getrandbits(size)
+        expected = "{:0{:d}b}".format(x, size)[::-1]
+        y, size = bitmap.reverse((x, size))
+        result = "{:0{:d}b}".format(y, size)
+        if expected == result:
+            raise Success
+
+    @TestCase
+    def bits_reverse_2():
+        import random
+        size = random.randint(0x400, 0x800)
+        x = random.getrandbits(size)
+        expected = "{:0{:d}b}".format(x, size)[::-1]
+        y, size = bitmap.reverse((x, size))
+        result = "{:0{:d}b}".format(y, size)
+        if expected == result:
+            raise Success
+
+    @TestCase
+    def bits_reverse_3():
+        import random
+        size = 0x400
+        x = random.getrandbits(size)
+        expected = "{:0{:d}b}".format(x, size)[::-1]
+        y, size = bitmap.reverse_bits(x, size)
+        result = "{:0{:d}b}".format(y, size)
+        if expected == result:
+            raise Success
+
+    @TestCase
+    def bits_reverse_4():
+        import random
+        size = random.randint(0x400, 0x800)
+        x = random.getrandbits(size)
+        expected = "{:0{:d}b}".format(x, size)[::-1]
+        y, size = bitmap.reverse_bits(x, size)
+        result = "{:0{:d}b}".format(y, size)
+        if expected == result:
+            raise Success
+
+    @TestCase
+    def bits_reverse_5():
+        import random
+        size = 29
+        x = random.getrandbits(size)
+        expected = "{:0{:d}b}".format(x, size)[::-1]
+        y, size = bitmap.reverse((x, size))
+        result = "{:0{:d}b}".format(y, size)
+        if expected == result:
+            raise Success
+
+    @TestCase
+    def bits_reverse_6():
+        import random
+        size = 29
+        x = random.getrandbits(size)
+        expected = "{:0{:d}b}".format(x, size)[::-1]
+        y, size = bitmap.reverse_bits(x, size)
+        result = "{:0{:d}b}".format(y, size)
+        if expected == result:
             raise Success
 
 if __name__ == '__main__':
