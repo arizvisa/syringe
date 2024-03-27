@@ -360,7 +360,7 @@ class consumer(object):
         @staticmethod
         def __read(source, bytes, from_bytes=builtins.int.from_bytes):
             octets = bytearray(itertools.islice(source, bytes))
-            return from_bytes(octets), len(octets)
+            return from_bytes(octets, 'big'), len(octets)
     else:
         @staticmethod
         def __read(source, bytes):
