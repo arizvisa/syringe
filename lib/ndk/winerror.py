@@ -8811,8 +8811,8 @@ class ERROR(pint.enum, DWORD):
         ('ERROR_DS_UPN_VALUE_NOT_UNIQUE_IN_FOREST', 8648),                                  # The operation failed because UPN value provided for addition/modification is not unique forest-wide.
         ('ERROR_DS_MISSING_FOREST_TRUST', 8649),                                            # The operation failed because the addition/modification referenced an inbound forest-wide trust that is not present.
         ('ERROR_DS_VALUE_KEY_NOT_UNIQUE', 8650),                                            # The link value specified was not found, but a link value with that key was found.
-        ('DNS_ERROR_RESPONSE_CODES_BASE', 9000)
-        ('DNS_ERROR_MASK', 0x00002328)
+        ('DNS_ERROR_RESPONSE_CODES_BASE', 9000),
+        ('DNS_ERROR_MASK', 0x00002328),
         ('DNS_ERROR_RCODE_FORMAT_ERROR', 9001),                                             # DNS server unable to interpret format.
         ('DNS_ERROR_RCODE_SERVER_FAILURE', 9002),                                           # DNS server failure.
         ('DNS_ERROR_RCODE_NAME_ERROR', 9003),                                               # DNS name does not exist.
@@ -8826,7 +8826,7 @@ class ERROR(pint.enum, DWORD):
         ('DNS_ERROR_RCODE_BADSIG', 9016),                                                   # DNS signature failed to verify.
         ('DNS_ERROR_RCODE_BADKEY', 9017),                                                   # DNS bad key.
         ('DNS_ERROR_RCODE_BADTIME', 9018),                                                  # DNS signature validity expired.
-        ('DNS_ERROR_DNSSEC_BASE', 9100)
+        ('DNS_ERROR_DNSSEC_BASE', 9100),
         ('DNS_ERROR_KEYMASTER_REQUIRED', 9101),                                             # Only the DNS server acting as the key master for the zone may perform this operation.
         ('DNS_ERROR_NOT_ALLOWED_ON_SIGNED_ZONE', 9102),                                     # This operation is not allowed on a zone that is signed or has signing keys.
         ('DNS_ERROR_NSEC3_INCOMPATIBLE_WITH_RSA_SHA1', 9103),                               # NSEC3 is not compatible with the RSA-SHA-1 algorithm. Choose a different algorithm or use NSEC.
@@ -8857,7 +8857,7 @@ class ERROR(pint.enum, DWORD):
         ('DNS_ERROR_ROLLOVER_NOT_POKEABLE', 9128),                                          # The specified signing key is not waiting for parental DS update.
         ('DNS_ERROR_NSEC3_NAME_COLLISION', 9129),                                           # Hash collision detected during NSEC3 signing. Specify a different user-provided salt, or use a randomly generated salt, and attempt to sign the zone again.
         ('DNS_ERROR_NSEC_INCOMPATIBLE_WITH_NSEC3_RSA_SHA1', 9130),                          # NSEC is not compatible with the NSEC3-RSA-SHA-1 algorithm. Choose a different algorithm or use NSEC3.
-        ('DNS_ERROR_PACKET_FMT_BASE', 9500)
+        ('DNS_ERROR_PACKET_FMT_BASE', 9500),
         ('DNS_INFO_NO_RECORDS', 9501),                                                      # No records found for given DNS query.
         ('DNS_ERROR_BAD_PACKET', 9502),                                                     # Bad DNS packet.
         ('DNS_ERROR_NO_PACKET', 9503),                                                      # No DNS packet.
@@ -8867,10 +8867,10 @@ class ERROR(pint.enum, DWORD):
             #('DNS_ERROR_NO_MEMORY', ERROR_OUTOFMEMORY)
             #('DNS_ERROR_INVALID_NAME', ERROR_INVALID_NAME)
             #('DNS_ERROR_INVALID_DATA', ERROR_INVALID_DATA)
-        ('DNS_ERROR_NO_MEMORY', 14)
-        ('DNS_ERROR_INVALID_NAME', 123)
-        ('DNS_ERROR_INVALID_DATA', 13)
-        ('DNS_ERROR_GENERAL_API_BASE', 9550)
+        ('DNS_ERROR_NO_MEMORY', 14),
+        ('DNS_ERROR_INVALID_NAME', 123),
+        ('DNS_ERROR_INVALID_DATA', 13),
+        ('DNS_ERROR_GENERAL_API_BASE', 9550),
         ('DNS_ERROR_INVALID_TYPE', 9551),                                                   # Invalid DNS type.
         ('DNS_ERROR_INVALID_IP_ADDRESS', 9552),                                             # Invalid IP address.
         ('DNS_ERROR_INVALID_PROPERTY', 9553),                                               # Invalid property.
@@ -8894,7 +8894,7 @@ class ERROR(pint.enum, DWORD):
         ('DNS_ERROR_DELEGATION_REQUIRED', 9571),                                            # This operation requires credentials delegation.
         ('DNS_ERROR_INVALID_POLICY_TABLE', 9572),                                           # Name resolution policy table has been corrupted. DNS resolution will fail until it is fixed. Contact your network administrator.
         ('DNS_ERROR_ADDRESS_REQUIRED', 9573),                                               # Not allowed to remove all addresses.
-        ('DNS_ERROR_ZONE_BASE', 9600)
+        ('DNS_ERROR_ZONE_BASE', 9600),
         ('DNS_ERROR_ZONE_DOES_NOT_EXIST', 9601),                                            # DNS zone does not exist.
         ('DNS_ERROR_NO_ZONE_INFO', 9602),                                                   # DNS zone information not available.
         ('DNS_ERROR_INVALID_ZONE_OPERATION', 9603),                                         # Invalid operation for DNS zone.
@@ -8917,13 +8917,13 @@ class ERROR(pint.enum, DWORD):
         ('DNS_ERROR_ZONE_REQUIRES_MASTER_IP', 9620),                                        # This zone must be configured with one or more master DNS server IP addresses.
         ('DNS_ERROR_ZONE_IS_SHUTDOWN', 9621),                                               # The operation cannot be performed because this zone is shut down.
         ('DNS_ERROR_ZONE_LOCKED_FOR_SIGNING', 9622),                                        # This operation cannot be performed because the zone is currently being signed. Please try again later.
-        ('DNS_ERROR_DATAFILE_BASE', 9650)
+        ('DNS_ERROR_DATAFILE_BASE', 9650),
         ('DNS_ERROR_PRIMARY_REQUIRES_DATAFILE', 9651),                                      # Primary DNS zone requires datafile.
         ('DNS_ERROR_INVALID_DATAFILE_NAME', 9652),                                          # Invalid datafile name for DNS zone.
         ('DNS_ERROR_DATAFILE_OPEN_FAILURE', 9653),                                          # Failed to open datafile for DNS zone.
         ('DNS_ERROR_FILE_WRITEBACK_FAILED', 9654),                                          # Failed to write datafile for DNS zone.
         ('DNS_ERROR_DATAFILE_PARSING', 9655),                                               # Failure while reading datafile for DNS zone.
-        ('DNS_ERROR_DATABASE_BASE', 9700)
+        ('DNS_ERROR_DATABASE_BASE', 9700),
         ('DNS_ERROR_RECORD_DOES_NOT_EXIST', 9701),                                          # DNS record does not exist.
         ('DNS_ERROR_RECORD_FORMAT', 9702),                                                  # DNS record format error.
         ('DNS_ERROR_NODE_CREATION_FAILED', 9703),                                           # Node creation failure in DNS.
@@ -8946,16 +8946,16 @@ class ERROR(pint.enum, DWORD):
         ('DNS_ERROR_NODE_IS_DNAME', 9720),                                                  # Node is a DNAME DNS record.
         ('DNS_ERROR_DNAME_COLLISION', 9721),                                                # A DNAME record already exists for given name.
         ('DNS_ERROR_ALIAS_LOOP', 9722),                                                     # An alias loop has been detected with either CNAME or DNAME records.
-        ('DNS_ERROR_OPERATION_BASE', 9750)
+        ('DNS_ERROR_OPERATION_BASE', 9750),
         ('DNS_INFO_AXFR_COMPLETE', 9751),                                                   # DNS AXFR (zone transfer) complete.
         ('DNS_ERROR_AXFR', 9752),                                                           # DNS zone transfer failed.
         ('DNS_INFO_ADDED_LOCAL_WINS', 9753),                                                # Added local WINS server.
-        ('DNS_ERROR_SECURE_BASE', 9800)
+        ('DNS_ERROR_SECURE_BASE', 9800),
         ('DNS_STATUS_CONTINUE_NEEDED', 9801),                                               # Secure update call needs to continue update request.
-        ('DNS_ERROR_SETUP_BASE', 9850)
+        ('DNS_ERROR_SETUP_BASE', 9850),
         ('DNS_ERROR_NO_TCPIP', 9851),                                                       # TCP/IP network protocol not installed.
         ('DNS_ERROR_NO_DNS_SERVERS', 9852),                                                 # No DNS servers configured for local system.
-        ('DNS_ERROR_DP_BASE', 9900)
+        ('DNS_ERROR_DP_BASE', 9900),
         ('DNS_ERROR_DP_DOES_NOT_EXIST', 9901),                                              # The specified directory partition does not exist.
         ('DNS_ERROR_DP_ALREADY_EXISTS', 9902),                                              # The specified directory partition already exists.
         ('DNS_ERROR_DP_NOT_ENLISTED', 9903),                                                # This DNS server is not enlisted in the specified directory partition.
@@ -9013,7 +9013,7 @@ class ERROR(pint.enum, DWORD):
         ('DNS_ERROR_POLICY_INVALID_CRITERIA_FQDN', 9994),                                   # The criterion FQDN provided in the policy is invalid.
         ('DNS_ERROR_POLICY_INVALID_CRITERIA_QUERY_TYPE', 9995),                             # The criterion query type provided in the policy is invalid.
         ('DNS_ERROR_POLICY_INVALID_CRITERIA_TIME_OF_DAY', 9996),                            # The criterion time of day provided in the policy is invalid.
-        ('WSABASEERR', 10000)
+        ('WSABASEERR', 10000),
         ('WSAEINTR', 10004),                                                                # A blocking operation was interrupted by a call to WSACancelBlockingCall.
         ('WSAEBADF', 10009),                                                                # The file handle supplied is not valid.
         ('WSAEACCES', 10013),                                                               # An attempt was made to access a socket in a way forbidden by its access permissions.
