@@ -2311,6 +2311,12 @@ class flags(struct):
         res = utils.operator.getitem(self, field)
         return bool(res > 0)
 
+    def alloc(self, iterable=(), **fields):
+        if iterable:
+            bits, items = self.blockbits(), {fld for fld in iterable}
+            [fields.setdefault(flag, -1) for flag in items]
+        return super(flags, self).alloc(**fields)
+
 ## binary type conversion/generation
 def new(pb, **attrs):
     '''Create a new instance of /pb/ applying the attributes specified by /attrs/'''
