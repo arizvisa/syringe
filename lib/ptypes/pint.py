@@ -498,7 +498,9 @@ class enum(type):
     def str(self):
         '''Return enumeration as a string or just the integer if unknown.'''
         res = self.get()
-        return self.__byvalue__(res, u"{:x}".format(res))
+        if isinstance(res, integer_types):
+            return self.__byvalue__(res, u"{:x}".format(res))
+        return self.__byvalue__(res, res)
 
     def summary(self):
         res = self.get()
