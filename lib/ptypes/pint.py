@@ -135,7 +135,7 @@ Example usage of pint.enum:
     # return the instance as a name or an integer in string form
     print(instance.str())
 """
-import functools, itertools, math, builtins
+import sys, functools, itertools, math, builtins
 from . import ptype, bitmap, error, utils
 
 from . import config
@@ -143,7 +143,8 @@ Config = config.defaults
 Log = config.logging.getLogger('.'.join([Config.log.name, 'pint']))
 
 # Setup some version-agnostic types that we can perform checks with
-integer_types, string_types = bitmap.integer_types, utils.string_types
+integer_types, string_types, ordinal_types = bitmap.integer_types, utils.string_types, (utils.string_types, bytes)
+make_integers = (lambda integer: {integer, chr(integer) if integer & 0xff == integer else unichr(integer)}) if sys.version_info.major < 3 else (lambda integer: {integer, chr(integer)})
 
 __state__ = {}
 def setbyteorder(order):
@@ -427,19 +428,33 @@ class enum(type):
         if not hasattr(self, '_values_'):
             self._values_ = []
 
-        # check that enumeration's ._values_ are defined correctly
-        if any(not isinstance(name, string_types) or not isinstance(value, integer_types) for name, value in self._values_):
+        # check that enumeration's ._values_ are defined correctly and fix them if not.
+        for index, (name, value) in enumerate(self._values_[:]):
+            if not isinstance(name, string_types):
+                res = [item.__name__ for item in string_types]
+                stringtypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
+                res = [item.__name__ for item in integer_types]
+                integraltypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
+                raise error.TypeError(self, "{:s}.enum.__init__".format(__name__), "The definition of `{:s}` is of an incorrect format and should be a list of tuples with the following types. : [({:s}, {:s}), ...]".format('.'.join([self.typename(), '_values_']), stringtypes, integraltypes))
+
+            if isinstance(value, integer_types):
+                continue
+
+            elif isinstance(value, ordinal_types) and len(value) == 1:
+                value = ord(value)
+                self._values_[index] = name, value
+                continue
+
             res = [item.__name__ for item in string_types]
             stringtypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
-
             res = [item.__name__ for item in integer_types]
             integraltypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
-
             raise error.TypeError(self, "{:s}.enum.__init__".format(__name__), "The definition of `{:s}` is of an incorrect format and should be a list of tuples with the following types. : [({:s}, {:s}), ...]".format('.'.join([self.typename(), '_values_']), stringtypes, integraltypes))
 
         # collect duplicate values and give a warning if there are any found for a name
         res = {}
         for value, items in itertools.groupby(self._values_, utils.operator.itemgetter(0)):
+            iterable = ((ord(integer) if isinstance(integer, ordinal_types) and len(integer) == 1 else integer) for integer in items)
             res.setdefault(value, set()).update(map(utils.operator.itemgetter(1), items))
 
         for value, items in res.items():
@@ -455,8 +470,8 @@ class enum(type):
         '''Internal method to search the enumeration for the name representing the provided value.'''
         if len(default) > 1:
             raise error.TypeError(self, "{:s}.enum.byvalue".format(__name__), "{:s}.byvalue expected at most 3 arguments, got {:d}".format(self.typename(), 2 + len(default)))
-
-        iterable = (name for name, item in self._values_ if item == value)
+        values = make_integers(ord(value)) if isinstance(value, ordinal_types) and len(value) == 1 else make_integers(value)
+        iterable = (name for name, item in self._values_ if item in values)
         try:
             res = utils.next(iterable, *default)
 
@@ -500,11 +515,15 @@ class enum(type):
         res = self.get()
         if isinstance(res, integer_types):
             return self.__byvalue__(res, u"{:x}".format(res))
+        elif isinstance(res, ordinal_types) and len(res) == 1:
+            integer = ord(res)
+            return self.__byvalue__(integer, u"{:x}".format(integer))
         return self.__byvalue__(res, res)
 
     def summary(self):
         res = self.get()
-        try: return u"{:s}({:#x})".format(self.__byvalue__(res), res)
+        value = ord(res) if isinstance(res, ordinal_types) and len(res) == 1 else res
+        try: return u"{:s}({:#x})".format(self.__byvalue__(value), value)
         except (ValueError, KeyError): pass
         return super(enum, self).summary()
 
@@ -537,8 +556,8 @@ class enum(type):
         '''Lookup the string in an enumeration by it's first-defined value'''
         if len(default) > 1:
             raise TypeError("{:s}.byvalue expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
-
-        iterable = (name for name, item in cls._values_ if item == value)
+        values = make_integers(ord(value)) if isinstance(value, ordinal_types) and len(value) == 1 else make_integers(value)
+        iterable = (name for name, item in cls._values_ if item in values)
         try:
             result = utils.next(iterable, *default)
         except StopIteration:
@@ -564,7 +583,8 @@ class enum(type):
         if isinstance(value, string_types):
             iterable = (name == value for name, item in cls._values_)
         else:
-            iterable = (item == value for name, item in cls._values_)
+            values = make_integers(value)
+            iterable = (item in values for name, item in cls._values_)
         return any(iterable)
 
     def __format__(self, spec):
@@ -574,33 +594,41 @@ class enum(type):
         prefix, spec = spec[:-1], spec[-1:]
         if not prefix and spec in 's':
             res = self.get()
-            integer = "{:#0{:d}x}".format(res, 2 + 2 * self.size())
-            string = self.__byvalue__(res, None)
+            value = ord(value) if isinstance(value, ordinal_types) and len(value) == 1 else value
+            integer = "{:#0{:d}x}".format(value, 2 + 2 * self.size())
+            string = self.__byvalue__(value, None)
             summary = integer if string is None else "{:s}({:s})".format(string, integer)
             return "{:{:s}{:s}}".format(summary, prefix, spec)
 
         elif spec in 's':
-            res, extra, newprefix = self.get(), 2 if prefix.startswith('#') else 0, prefix[1:] if prefix.startswith('#') else prefix
-            integer = "{:{:s}0{:d}x}".format(res, '#' if extra else '', extra + 2 * self.size())
-            string = self.__byvalue__(res, None)
+            res = self.get()
+            value = ord(value) if isinstance(value, ordinal_types) and len(value) == 1 else value
+            extra, newprefix = 2 if prefix.startswith('#') else 0, prefix[1:] if prefix.startswith('#') else prefix
+            integer = "{:{:s}0{:d}x}".format(value, '#' if extra else '', extra + 2 * self.size())
+            string = self.__byvalue__(value, None)
             res = integer if string is None else string
             return "{:{:s}{:s}}".format(res, newprefix, spec)
 
         elif spec in 'don':
             res = self.get()
-            string, integer = self.__byvalue__(res, None), "{:{:s}{:s}}".format(res, prefix, spec)
+            value = ord(value) if isinstance(value, ordinal_types) and len(value) == 1 else value
+            string, integer = self.__byvalue__(value, None), "{:{:s}{:s}}".format(value, prefix, spec)
             return integer if string is None else "{:s}({:s})".format(string, integer)
 
         elif prefix in {'', '#', '#0'} and spec in 'xX':
-            res, extra = self.get(), 2 if prefix.startswith('#') else 0
-            integer = "{:{:s}{:d}{:s}}".format(res, prefix if prefix.endswith('0') else "{:s}0".format(prefix), extra + 2 * self.size(), spec)
-            string = self.__byvalue__(res, None)
+            res = self.get()
+            value = ord(value) if isinstance(value, ordinal_types) and len(value) == 1 else value
+            extra = 2 if prefix.startswith('#') else 0
+            integer = "{:{:s}{:d}{:s}}".format(value, prefix if prefix.endswith('0') else "{:s}0".format(prefix), extra + 2 * self.size(), spec)
+            string = self.__byvalue__(value, None)
             return integer if string is None else "{:s}({:s})".format(string, integer)
 
         elif spec in 'xX':
-            res, extra = self.get(), 2 if prefix.startswith('#') else 0
-            integer = "{:{:s}{:s}}".format(res, prefix, spec)
-            string = self.__byvalue__(res, None)
+            res = self.get()
+            value = ord(value) if isinstance(value, ordinal_types) and len(value) == 1 else value
+            extra = 2 if prefix.startswith('#') else 0
+            integer = "{:{:s}{:s}}".format(value, prefix, spec)
+            string = self.__byvalue__(value, None)
             return integer if string is None else "{:s}({:s})".format(string, integer)
 
         return super(enum, self).__format__(prefix + spec)
