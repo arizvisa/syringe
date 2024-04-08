@@ -676,7 +676,7 @@ if __name__ == '__main__':
             res = super(pfloat.type, self).__getvalue__()
             unsigned = pow(2, 8 * self.length)
             signed = res if res < unsigned // 2 else res - unsigned
-            return signed / pow(10, 4)
+            return signed / pow(10., 4)
         def set(self, float):
             res = math.trunc(float * pow(10, 4))
             unsigned = pow(2, 8 * self.length)
