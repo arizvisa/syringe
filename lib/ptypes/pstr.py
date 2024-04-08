@@ -343,7 +343,7 @@ class string(ptype.type):
         null, _ = self.encoding.encode('\0')
         esize = len(null)
 
-        if isinstance(value, string_types):
+        if isinstance(value, text_types):
             encoded, length = self.encoding.encode(value)
             size = len(encoded) if self.length is None else self.blocksize() if self.value is None else self.size()
         else:
