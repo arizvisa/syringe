@@ -916,7 +916,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_str_wide_set_nolength_str():
-        self = pstr.wstring().set('haithere')
+        self = pstr.wstring().set(u'haithere')
         if self.serialize() == b'h\0a\0i\0t\0h\0e\0r\0e\0' and self.blocksize() == 16 and self.size() == 16:
             raise Success
 
@@ -934,7 +934,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_str_wide_set_length_str():
-        self = pstr.wstring(length=5).set('haha')
+        self = pstr.wstring(length=5).set(u'haha')
         if self.serialize() == b'h\0a\0h\0a\0\0\0' and self.blocksize() == 10 and self.size() == 10:
             raise Success
 
