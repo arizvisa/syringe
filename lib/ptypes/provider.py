@@ -120,7 +120,7 @@ class backed(bounded):
         # Check if the desired number of bytes are available in the backing.
         offset, size = self.__offset, self.size()
         if size <= offset:
-            raise error.ConsumeError(self, offset, amount)
+            raise error.ConsumeError(self, offset, amount, size - (offset + amount))
 
         # Otherwise we need to clamp our read size to consume whatever is available.
         minimum = min(offset + amount, size)
@@ -718,7 +718,7 @@ class remote(bounded):
 
         # If we still don't have enough data, then raise an exception.
         if len(cache) < right:
-            raise error.ConsumeError(self, self.offset, amount)
+            raise error.ConsumeError(self, self.offset, amount, len(data))
 
         # Now we can return the data from our cache that we just populated.
         self.offset, buffer = right, cache[left : right]
@@ -864,7 +864,7 @@ class stream(base):
             self.preread(o - len(self.data))
             return self.consume(amount)
 
-        raise error.ConsumeError(self, self.offset, amount)
+        raise error.ConsumeError(self, self.offset, amount, 0)
 
     if False:
         def store(self, data):
@@ -1343,7 +1343,7 @@ class WindowsWithHandle(base):
         try:
             result, buffer = self.read_handle(handle, address, amount)
         except Exception as E:
-            raise error.ConsumeError(self, address, amount)
+            raise error.ConsumeError(self, address, amount, 0)
 
         if result != amount:
             raise error.ConsumeError(self, address, amount, result)
@@ -1830,7 +1830,7 @@ try:
 
             # Unable to read {:+d} bytes from address {:x}".format(amount, self.offset))
             except RuntimeError:
-                raise error.ConsumeError(self, self.offset, amount)
+                raise error.ConsumeError(self, self.offset, amount, 0)
             return builtins.bytes(result)
 
         def store(self, data):
@@ -1911,12 +1911,12 @@ try:
 
         def consume(self, amount):
             if amount < 0:
-                raise error.ConsumeError(self, self.address, amount)
+                raise error.ConsumeError(self, self.address, amount, 0)
             process, err = self.__process, __lldb__.SBError()
             if amount > 0:
                 data = process.ReadMemory(self.address, amount, err)
                 if err.Fail() or len(data) != amount:
-                    raise error.ConsumeError(self, self.address, amount)
+                    raise error.ConsumeError(self, self.address, amount, len(data))
                 self.address += len(data)
                 return builtins.bytes(data)
             return b''
@@ -1970,7 +1970,7 @@ try:
             except gdb.MemoryError:
                 mem = None
             if mem is None or mem.nbytes != amount:
-                raise error.ConsumeError(self, self.address, amount)
+                raise error.ConsumeError(self, self.address, amount, mem.nbytes)
             self.address += mem.nbytes
             return mem.tobytes()
 

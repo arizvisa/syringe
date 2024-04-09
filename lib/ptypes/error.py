@@ -91,7 +91,7 @@ class StoreError(ProviderError):
         return 'StoreError({!s}) : Error storing {:+#x} bytes to {:#x}.'.format(type(identity), amount, offset)
 class ConsumeError(ProviderError):
     """Error while attempting to consume some number of bytes"""
-    def __init__(self, identity, offset, desired, amount=None, **kwds):
+    def __init__(self, identity, offset, desired, amount, **kwds):
         super(ConsumeError, self).__init__(**kwds)
         self.consumed = identity, offset, desired, amount
     def __str__(self):
