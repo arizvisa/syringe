@@ -144,7 +144,7 @@ Log = config.logging.getLogger('.'.join([Config.log.name, 'pint']))
 
 # Setup some version-agnostic types that we can perform checks with
 integer_types, string_types, ordinal_types = bitmap.integer_types, utils.string_types, (utils.string_types, bytes)
-make_integers = (lambda integer: {integer, chr(integer) if integer & 0xff == integer else unichr(integer)}) if sys.version_info.major < 3 else (lambda integer: {integer, chr(integer)})
+make_integers = (lambda integer: {integer, chr(integer) if 0 <= integer < 0x100 else unichr(integer) if 0 <= integer < 0x110000 else integer}) if sys.version_info.major < 3 else (lambda integer: {integer, chr(integer)} if 0 <= integer < 0x110000 else {integer})
 
 __state__ = {}
 def setbyteorder(order):
