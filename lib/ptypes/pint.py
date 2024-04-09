@@ -537,9 +537,9 @@ class enum(type):
 
     def __getitem__(self, name):
         '''Return True if the enumeration matches the value of the constant specified by name.'''
-        if isinstance(name, string_types):
-            return self.__byname__(name, None) == self.get()
-        return self.get() == name
+        res = self.get()
+        integer = ord(res) if isinstance(res, ordinal_types) and len(res) == 1 else res
+        return integer == name if isinstance(name, integer_types) else integer == self.__byname__(name, None)
 
     @classmethod
     def enumerations(cls):
