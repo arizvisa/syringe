@@ -287,7 +287,7 @@ class type(__array_interface__):
 
     def alloc(self, fields=(), **attrs):
         result = super(type, self).alloc(**attrs)
-        if len(fields) and isinstance(fields[0], tuple):
+        if fields and isinstance(fields[0], tuple):
             for name, val in fields:
                 idx = result.__getindex__(name)
                 position = result.value[idx].getposition()
@@ -298,7 +298,10 @@ class type(__array_interface__):
                 else:
                     result.value[idx].alloc(val)    # generic.alloc will fallback to generic.set
                 continue
-        else:
+
+        # if we allocated the slots for the array's value correctly, then
+        # we just need to ensure the element in each slot is initialized.
+        elif len(fields) <= len(result.value):
             offset = result.getoffset()
             for idx, val in enumerate(fields):
                 name = "{:d}".format(idx)
@@ -313,6 +316,34 @@ class type(__array_interface__):
             # re-alloc elements that exist in the rest of the array
             for idx in range(len(fields), len(result.value)):
                 result.value[idx].a
+
+        # otherwise, there's a discrepancy between what was allocated and the fields
+        # we were given. so we need to add each element (field) to the array manually.
+        else:
+            offset, iterable = result.getoffset(), iter(fields)
+            for index, (value, field) in enumerate(zip(self.value, iterable)):
+                name = "{:d}".format(index)
+                if ptype.istype(field) or ptype.isresolveable(field):
+                    result.value[index] = result.new(field, __name__=name, offset=offset).a
+                elif isinstance(field, ptype.generic):
+                    result.value[index] = result.new(field, __name__=name, offset=offset)
+                else:
+                    result.value[index].alloc(field)    # this works since generic.alloc will fallback to object.set
+                offset += result.value[index].blocksize()
+
+            # now we can append the rest of the fields, one-by-one.
+            base, object = len(self.value), self._object_
+            for index, field in enumerate(iterable):
+                name = "{:d}".format(base + index)
+                if ptype.istype(field) or ptype.isresolveable(field):
+                    element = result.new(field, __name__=name, offset=offset).a
+                elif isinstance(field, ptype.generic):
+                    element = result.new(field, __name__=name, offset=offset)
+                else:
+                    element = result.new(object, __name__=name, offset=offset)
+                    element.alloc(field)                # this works since generic.alloc will fallback to object.set
+                self.value.append(element)
+                offset += element.blocksize()
 
         result.setoffset(self.getoffset(), recurse=True)
         return result
