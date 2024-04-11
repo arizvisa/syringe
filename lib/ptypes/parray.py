@@ -287,17 +287,50 @@ class type(__array_interface__):
 
     def alloc(self, fields=(), **attrs):
         result = super(type, self).alloc(**attrs)
-        if fields and isinstance(fields[0], tuple):
-            for name, val in fields:
-                idx = result.__getindex__(name)
-                position = result.value[idx].getposition()
-                if ptype.istype(val) or ptype.isresolveable(val):
-                    result.value[idx] = result.new(val, position=position).a
-                elif isinstance(val, ptype.generic):
-                    result.value[idx] = result.new(val, position=position)
+        if isinstance(fields, dict):
+            offset, ordered = result.getoffset(), any(isinstance(index, integer_types) for index in fields) and sorted(fields)
+            for index, original in enumerate(self.value):
+                if index in fields:
+                    field = fields.pop(index)
+                    if ptype.istype(field) or ptype.isresolveable(field):
+                        result.value[index] = result.new(field, offset=offset).a
+                    elif isinstance(field, ptype.generic):
+                        result.value[index] = result.new(field, offset=offset)
+                    else:
+                        result.value[index].alloc(field)    # generic.alloc will fallback to generic.set
+                    value = result.value[index]
                 else:
-                    result.value[idx].alloc(val)    # generic.alloc will fallback to generic.set
-                continue
+                    value = original
+                offset += value.blocksize()
+
+            # if there's any signed values, then remove them and and update the array with them.
+            # FIXME: it's probably better to translate all negative indexes and process them using
+            #        the first loop, or to cull negative indexes out of the dictionary altogether.
+            negatives = ((index + len(self.value), fields.pop(index)) for index in sorted(fields) if index < 0)
+            for index, field in negatives:
+                name, fieldoffset = "{:d}".format(index), result.value[index].getoffset()
+                if ptype.istype(field) or ptype.isresolveable(field):
+                    result.value[index] = result.new(field, offset=fieldoffset).a
+                elif isinstance(field, ptype.generic):
+                    result.value[index] = result.new(field, offset=fieldoffset)
+                else:
+                    result.value[index].alloc(field)    # generic.alloc will fallback to generic.set
+                value = result.value[index]
+                offset = max(offset, value.getoffset() + value.blocksize())
+
+            # now we need to append the rest of the fields, one-by-one....
+            object, extra = self._object_, sorted((len(result.value) + index if index < 0 else index) for index in fields)
+            for index in range(*[len(self.value), 1 + extra[-1] if extra else len(self.value)]):
+                name, field = "{:d}".format(index), fields.pop(index, None)
+                if ptype.istype(field) or ptype.isresolveable(field):
+                    element = result.new(field, __name__=name, offset=offset).a
+                elif isinstance(field, ptype.generic):
+                    element = result.new(field, __name__=name, offset=offset)
+                else:
+                    element = result.new(object, __name__=name, offset=offset)
+                    field and element.alloc(field)          # this works since generic.alloc will fallback to object.set
+                self.value.append(element)
+                offset += element.blocksize()
 
         # if we allocated the slots for the array's value correctly, then
         # we just need to ensure the element in each slot is initialized.
@@ -1095,7 +1128,7 @@ if __name__ == '__main__':
     def test_array_alloc_keyvalue_set():
         class argh(parray.type):
             _object_ = pint.int32_t
-        a = argh(length=4).alloc(((0,0x77777777),(3,-1)))
+        a = argh(length=4).alloc({0: 0x77777777, 3: -1})
         if a[0].int() == 0x77777777 and a[-1].int() == -1:
             raise Success
 
@@ -1116,7 +1149,7 @@ if __name__ == '__main__':
             _object_ = pint.uint32_t
 
         x = aigh().alloc(list(bytearray(b'PE\0\0')))
-        a = argh(length=4).alloc(((0,x),(-1,0x5a4d)))
+        a = argh(length=4).alloc({0: x, -1: 0x5a4d})
         if a[0].serialize() == b'PE\0\0' and a[-1].serialize() == b'MZ\0\0':
             raise Success
 
@@ -1279,7 +1312,7 @@ if __name__ == '__main__':
         class dynamic_t(ptype.block):
             def blocksize(self):
                 return 1 if self.getoffset() else 0
-        res = t().alloc([(2, dynamic_t)])
+        res = t().alloc({2: dynamic_t})
         if res.size() == 4:
             raise Success
 
