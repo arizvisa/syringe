@@ -242,10 +242,9 @@ class type(__structure_interface__):
         if not fields:
             return super(type, self).alloc()
 
-        # we need to iterate through all of the fields first
-        # in order to consolidate any aliases that were specified.
-        # this is a hack, and really we should first be sorting our
-        # fields that were provided by the fields in the structure.
+        # we need to transform the fields we were given into indices that we can use
+        # when adding them to the structure. we also need to do this in order to
+        # consolidate any aliases that were provided in the structure's definition.
         lowerednames = {name.lower() : index for index, name in enumerate(self.__keys__() or [])}
         newfields = {self.__fastindex__[name.lower()] if name in self.__fastindex__ else lowerednames[name.lower()] : fields.pop(name) for name in sorted(fields)}
 
@@ -254,16 +253,24 @@ class type(__structure_interface__):
         offset, self.value = self.getoffset(), []
         for index, (original, name) in enumerate(self._fields_ or []):
             field = newfields.pop(index, original)
-            if ptype.isresolveable(field) or ptype.istype(field):
-                element = self.new(field, __name__=name, offset=offset).a
-            elif ptype.isinstance(field):
-                element = self.new(field, __name__=name, offset=offset)
-            elif isinstance(field, dict):
-                element = self.new(original, __name__=name, offset=offset).alloc(**field)
-            else:
-                element = self.new(original, __name__=name, offset=offset)
-                element.alloc(field)         # generic.alloc falls back to calling object.set
+            field_is_type, field_is_instance = ptype.isresolveable(field) or ptype.istype(field), ptype.isinstance(field)
+
+            # figure out whether we need to instantiate a new field or
+            # just update the original. then add it to our current value.
+            element = self.new(field if field_is_type or field_is_instance else original, __name__=name, offset=offset)
             self.value.append(element)
+
+            # now we can actually allocate or update the new instance.
+            if field_is_type:
+                element.a
+            elif field_is_instance:
+                pass
+            elif isinstance(field, dict):
+                element.alloc(**field)
+            else:
+                element.alloc(field)         # generic.alloc falls back to calling object.set
+
+            # update the index and move the offset to the next field.
             self.__fastindex__[name.lower()] = index
             offset += element.blocksize()
 
