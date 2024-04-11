@@ -239,36 +239,36 @@ class type(__structure_interface__):
 
     def alloc(self, **fields):
         """Allocate the current instance. Attach any elements defined in **fields to container."""
-        result = super(type, self).alloc()
-        if fields:
-            # we need to iterate through all of the fields first
-            # in order to consolidate any aliases that were specified.
-            # this is a hack, and really we should first be sorting our
-            # fields that were provided by the fields in the structure.
-            names = [name for _, name in self._fields_ or []]
-            fields = {names[self.__getindex__(name)] : item for name, item in fields.items()}
+        if not fields:
+            return super(type, self).alloc()
 
-            # now we can iterate through our structure fields to allocate
-            # them using the fields given to us by the caller.
-            offset = result.getoffset()
-            for idx, (t, name) in enumerate(self._fields_ or []):
-                if name not in fields:
-                    if ptype.isresolveable(t):
-                        result.value[idx] = self.new(t, __name__=name, offset=offset).a
-                    offset += result.value[idx].blocksize()
-                    continue
-                item = fields[name]
-                if ptype.isresolveable(item) or ptype.istype(item):
-                    result.value[idx] = self.new(item, __name__=name, offset=offset).a
-                elif isinstance(item, ptype.generic):
-                    result.value[idx] = self.new(item, __name__=name, offset=offset)
-                elif isinstance(item, dict):
-                    result.value[idx].alloc(**item)
-                else:
-                    result.value[idx].alloc(item)   # generic.alloc falls back to calling object.set
-                offset += result.value[idx].blocksize()
-            self.setoffset(self.getoffset(), recurse=True)
-        return result
+        # we need to iterate through all of the fields first
+        # in order to consolidate any aliases that were specified.
+        # this is a hack, and really we should first be sorting our
+        # fields that were provided by the fields in the structure.
+        lowerednames = {name.lower() : index for index, name in enumerate(self.__keys__() or [])}
+        newfields = {self.__fastindex__[name.lower()] if name in self.__fastindex__ else lowerednames[name.lower()] : fields.pop(name) for name in sorted(fields)}
+
+        # now we can iterate through our structure fields to allocate
+        # them using the fields given to us by the caller.
+        offset, self.value = self.getoffset(), []
+        for index, (original, name) in enumerate(self._fields_ or []):
+            field = newfields.pop(index, original)
+            if ptype.isresolveable(field) or ptype.istype(field):
+                element = self.new(field, __name__=name, offset=offset).a
+            elif ptype.isinstance(field):
+                element = self.new(field, __name__=name, offset=offset)
+            elif isinstance(field, dict):
+                element = self.new(original, __name__=name, offset=offset).alloc(**field)
+            else:
+                element = self.new(original, __name__=name, offset=offset)
+                element.alloc(field)         # generic.alloc falls back to calling object.set
+            self.value.append(element)
+            self.__fastindex__[name.lower()] = index
+            offset += element.blocksize()
+
+        self.setoffset(self.getoffset(), recurse=True)
+        return self
 
     def __append_type(self, offset, cons, name, **attrs):
         lowername = name.lower()
@@ -893,6 +893,62 @@ if __name__ == '__main__':
         x = t().alloc(a=1, b=2, c=3)
         x.alias('a', 'fuck1', 'fuck2')
         if x.unalias('fuck1', 'fuck2') == 2:
+            raise Success
+
+    @TestCase
+    def test_structure_alloc_completely_without_load_1():
+        data = bytearray(range(4))
+
+        class t(pstruct.type):
+            def __b(self):
+                res = self['a'].li
+                return ptype.clone(ptype.block, blocksize=lambda self, sz=res.int(): sz)
+            _fields_ = [
+                (pint.uint8_t, 'a'),
+                (__b, 'b'),
+            ]
+
+        # t.a is alloc and set (4), t.b.blocksize is alloc (4), t.blocksize is 5
+        a = t().alloc(a=len(data))
+        a_ok = a.size() == 5 and a.blocksize() == a['a'].size() + a['a'].int()
+
+        # t.a is alloc (0), t.b.blocksize is alloc and set (0), t.blocksize is 1
+        b = t().alloc(b=data)
+        b_ok = b.size() == 5 and b.blocksize() == b['a'].size() + b['a'].int() + (b['b'].size() - len(data))
+
+        # t.a is alloc and set (4), t.b.blocksize is alloc and set (4), t.blocksize is 5
+        c = t().alloc(a=len(data), b=data)
+        c_ok = c.size() == 5 and c.blocksize() == c['a'].size() + c['a'].int()
+
+        if all(ok for ok in [a_ok, b_ok, c_ok]):
+            raise Success
+
+    @TestCase
+    def test_structure_alloc_completely_without_load_2():
+        data = bytearray(range(4))
+
+        class t(pstruct.type):
+            def __b(self):
+                res = self['a'].li
+                return ptype.clone(ptype.block, blocksize=lambda self, sz=res.int(): sz)
+            _fields_ = [
+                (pint.uint8_t, 'a'),
+                (__b, 'b'),
+            ]
+
+        # t.a is typed (4), t.b.blocksize is alloc (4), t.blocksize is 5
+        a = t().alloc(a=pint.uint8_t().set(len(data)))
+        a_ok = a.size() == 5 and a.blocksize() == a['a'].size() + a['a'].int()
+
+        # t.a is alloc (0), t.b.blocksize is typed (4), t.blocksize is 5
+        b = t().alloc(b=ptype.block().set(data))
+        b_ok = b.size() == 5 and b.blocksize() == b['a'].size() + b['a'].int() + b['b'].size()
+
+        # t.a is typed (4), t.b.blocksize is typed (4), t.blocksize is 5
+        c = t().alloc(a=pint.uint8_t().set(len(data)), b=ptype.block().set(data))
+        c_ok = c.size() == 5 and c.blocksize() == c['a'].size() + c['a'].int()
+
+        if all(ok for ok in [a_ok, b_ok, c_ok]):
             raise Success
 
 if __name__ == '__main__':
