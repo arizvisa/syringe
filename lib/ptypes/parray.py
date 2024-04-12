@@ -586,9 +586,19 @@ class infinite(uninitialized):
         with utils.assign(self, **attrs):
             current, offset, self.value = 0, self.getoffset(), []
 
+            # set any conditions that may be necessary for terminating this array. if there
+            # is a length, we use that. if the provider is bounded, then we use that too.
             forever = itertools.count() if self.length is None else range(self.length)
             Fwhile = functools.partial(operator.ge, self.source.size() - self.getoffset()) if isinstance(self.source, provider.bounded) else lambda current: True
 
+            # grab the blocksize and use it if we were assigned one that is different
+            # from the default. this can allow one to constrain this type of array.
+            custom_specified_blocksize = not self.__blocksize_originalQ__()
+            blocksize = self.blocksize()
+
+            # in this array type, we always include the last partially-read element.
+            # this is different if a blocksize was specified, as the blocksize is
+            # used to explicitly constraint the size of the array being read.
             try:
                 for index in forever:
                     if not Fwhile(current):
@@ -623,6 +633,11 @@ class infinite(uninitialized):
                     offset += size
                     current += size
 
+                    # if we have a custom blocksize, then check that we haven't surpassed it.
+                    if custom_specified_blocksize and current >= blocksize:
+                        break
+                    continue
+
             except (Exception, error.LoadError):
                 if self.parent is not None:
                     if len(self.value):
@@ -649,10 +664,21 @@ class infinite(uninitialized):
         with utils.assign(self, **attr):
             current, offset, self.value = 0, self.getoffset(), []
 
+            # this array type will consume its input indefinitely...unless a length
+            # was explicitly assigned or the stream is bounded. so, we set some
+            # conditions so that we can stop loading the array when we hit them.
             length_unlimited = self.length is None
             forever = itertools.count() if self.length is None else range(self.length)
             Fwhile = functools.partial(operator.ge, self.source.size() - self.getoffset()) if isinstance(self.source, provider.bounded) else lambda current: True
 
+            # if a blocksize was specified, then we need to check that too.
+            # the blocksize will _always_ constraint the load size of a type.
+            custom_specified_blocksize = not self.__blocksize_originalQ__()
+            blocksize = self.blocksize()
+
+            # when loading from a stream, we consume everything that we're able
+            # to until our conditions are met. if the provider raises an error,
+            # then we add our partial element and can terminate our reading.
             try:
                 for index in forever:
                     if not Fwhile(current):
@@ -686,6 +712,11 @@ class infinite(uninitialized):
                     # next iteration
                     offset += size
                     current += size
+
+                    # if a custom blocksize was specified, then stop reading when we encounter it.
+                    if custom_specified_blocksize and current >= blocksize:
+                        break
+                    continue
 
             except error.LoadError:
                 if self.parent is not None:
