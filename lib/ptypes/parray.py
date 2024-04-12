@@ -286,100 +286,78 @@ class type(__array_interface__):
         return result
 
     def alloc(self, fields=(), **attrs):
-        result = super(type, self).alloc(**attrs)
-        if isinstance(fields, dict):
-            offset, ordered = result.getoffset(), any(isinstance(index, integer_types) for index in fields) and sorted(fields)
-            for index, original in enumerate(self.value):
-                if index in fields:
-                    field = fields.pop(index)
-                    if ptype.istype(field) or ptype.isresolveable(field):
-                        result.value[index] = result.new(field, offset=offset).a
-                    elif isinstance(field, ptype.generic):
-                        result.value[index] = result.new(field, offset=offset)
-                    else:
-                        result.value[index].alloc(field)    # generic.alloc will fallback to generic.set
-                    value = result.value[index]
+        iterable = ((index, field) for index, field in fields.items()) if isinstance(fields, dict) else ((index, field) for index, field in enumerate(fields))
+        fields = {index : field for index, field in iterable}
+
+        # now we can start allocating things. the process here is to first use the
+        # length (if available) to initialize the array. during this process, we use
+        # any fields we were given as the element. without a length, this gets skipped.
+        self.value = []
+        with utils.assign(self, **attrs):
+            offset, object, length = self.getoffset(), self._object_, getattr(self, 'length', 0) or 0
+            for index in range(length):
+                field = fields.pop(index, object)
+                field_is_type, field_is_instance = ptype.isresolveable(field) or ptype.istype(field), ptype.isinstance(field)
+
+                # figure out whether we need to instantiate a new field or
+                # just update the original and then append it to our current value.
+                element = self.new(field if field_is_type or field_is_instance else object, __name__=str(index), offset=offset)
+                self.value.append(element)
+
+                # use the type to determine whether we're adding or updating an element.
+                if field_is_type:
+                    value = element.a
+                elif field_is_instance:
+                    value = element
                 else:
-                    value = original
+                    value = element.alloc(field)     # generic.alloc will fallback to generic.set
+
                 offset += value.blocksize()
 
-            # if there's any signed values, then remove them and and update the array with them.
+            # if there's any signed fields, that we were given, then remove them and translate them
+            # to the number of elements in the array. we use these to replace any previously-allocated
+            # elements. this has a side-effect in that if the size of the additional element is
+            # different, then the offsets of the elements that follow it will be incorrect.
             # FIXME: it's probably better to translate all negative indexes and process them using
             #        the first loop, or to cull negative indexes out of the dictionary altogether.
             negatives = ((index + len(self.value), fields.pop(index)) for index in sorted(fields) if index < 0)
             for index, field in negatives:
-                name, fieldoffset = "{:d}".format(index), result.value[index].getoffset()
+                name, fieldoffset = "{:d}".format(index), self.value[index].getoffset()
                 if ptype.istype(field) or ptype.isresolveable(field):
-                    result.value[index] = result.new(field, offset=fieldoffset).a
+                    self.value[index] = self.new(field, offset=fieldoffset).a
                 elif isinstance(field, ptype.generic):
-                    result.value[index] = result.new(field, offset=fieldoffset)
+                    self.value[index] = self.new(field, offset=fieldoffset)
                 else:
-                    result.value[index].alloc(field)    # generic.alloc will fallback to generic.set
-                value = result.value[index]
+                    self.value[index].alloc(field)    # generic.alloc will fall back to generic.set
+                value = self.value[index]
                 offset = max(offset, value.getoffset() + value.blocksize())
 
-            # now we need to append the rest of the fields, one-by-one....
-            object, extra = self._object_, sorted((len(result.value) + index if index < 0 else index) for index in fields)
+            # the final step takes whatever indices we have left, and treats them as additional
+            # elements that get added one-by-one. these get appended to whatever work was completed
+            # by the previous loops. if the leftover indices are not sequential (like our fields
+            # was a dictionary), then we fill up any elements in-between with the original type.
+            extra = sorted((len(self.value) + index if index < 0 else index) for index in fields)
             for index in range(*[len(self.value), 1 + extra[-1] if extra else len(self.value)]):
-                name, field = "{:d}".format(index), fields.pop(index, None)
-                if ptype.istype(field) or ptype.isresolveable(field):
-                    element = result.new(field, __name__=name, offset=offset).a
-                elif isinstance(field, ptype.generic):
-                    element = result.new(field, __name__=name, offset=offset)
-                else:
-                    element = result.new(object, __name__=name, offset=offset)
-                    field and element.alloc(field)          # this works since generic.alloc will fallback to object.set
+                field = fields.pop(index, object)
+                field_is_type, field_is_instance = ptype.isresolveable(field) or ptype.istype(field), ptype.isinstance(field)
+
+                # now we can instantiate the next element from a new field
+                # or by updating the old one, and then add it to our list.
+                element = self.new(field if field_is_type or field_is_instance else object, __name__=str(index), offset=offset)
                 self.value.append(element)
+
+                # check the type of our field to figure out how to allocate it.
+                if field_is_type:
+                    value = element.a
+                elif field_is_instance:
+                    value = element
+                else:
+                    value = element.alloc(field)     # generic.alloc will fall back to generic.set
                 offset += element.blocksize()
 
-        # if we allocated the slots for the array's value correctly, then
-        # we just need to ensure the element in each slot is initialized.
-        elif len(fields) <= len(result.value):
-            offset = result.getoffset()
-            for idx, val in enumerate(fields):
-                name = "{:d}".format(idx)
-                if ptype.istype(val) or ptype.isresolveable(val):
-                    result.value[idx] = result.new(val, __name__=name, offset=offset).a
-                elif isinstance(val, ptype.generic):
-                    result.value[idx] = result.new(val, __name__=name, offset=offset)
-                else:
-                    result.value[idx].alloc(val)    # this works since generic.alloc will fallback to object.set
-                offset += result.value[idx].blocksize()
-
-            # re-alloc elements that exist in the rest of the array
-            for idx in range(len(fields), len(result.value)):
-                result.value[idx].a
-
-        # otherwise, there's a discrepancy between what was allocated and the fields
-        # we were given. so we need to add each element (field) to the array manually.
-        else:
-            offset, iterable = result.getoffset(), iter(fields)
-            for index, (value, field) in enumerate(zip(self.value, iterable)):
-                name = "{:d}".format(index)
-                if ptype.istype(field) or ptype.isresolveable(field):
-                    result.value[index] = result.new(field, __name__=name, offset=offset).a
-                elif isinstance(field, ptype.generic):
-                    result.value[index] = result.new(field, __name__=name, offset=offset)
-                else:
-                    result.value[index].alloc(field)    # this works since generic.alloc will fallback to object.set
-                offset += result.value[index].blocksize()
-
-            # now we can append the rest of the fields, one-by-one.
-            base, object = len(self.value), self._object_
-            for index, field in enumerate(iterable):
-                name = "{:d}".format(base + index)
-                if ptype.istype(field) or ptype.isresolveable(field):
-                    element = result.new(field, __name__=name, offset=offset).a
-                elif isinstance(field, ptype.generic):
-                    element = result.new(field, __name__=name, offset=offset)
-                else:
-                    element = result.new(object, __name__=name, offset=offset)
-                    element.alloc(field)                # this works since generic.alloc will fallback to object.set
-                self.value.append(element)
-                offset += element.blocksize()
-
-        result.setoffset(self.getoffset(), recurse=True)
-        return result
+        # now we just need to update the offsets and return ourselves.
+        self.setoffset(self.getoffset(), recurse=True)
+        return self
 
     def load(self, **attrs):
         try:
@@ -1445,6 +1423,101 @@ if __name__ == '__main__':
                 return [2 * x for x in super(argh, self).get()]
         res = argh().set(result)
         if res.size() == len(result) and tuple(res[::-1].get()) == tuple(2 * x for x in result[::-1]):
+            raise Success
+
+    @TestCase
+    def test_array_alloc_with_offset_1():
+        # XXX: this might occur with ptype.block or really any type that
+        #      has a custom blocksize. i can only repro w/ arrays, though.
+        class myblock(ptype.block):
+            def blocksize(self):
+                offset = self.getoffset()
+                return abs((offset % 8) - 8) % 8
+
+        class mystruct(pstruct.type):
+            def alloc(self, *a, **fields):
+                fields.setdefault('b', *a) if a else fields
+                return super(mystruct, self).alloc(**fields)
+        mystruct._fields_ = [(myblock, 'a'), (pint.uint32_t, 'b')]
+
+        class argh(parray.type): pass
+        argh._object_ = mystruct
+        argh.length = 4
+
+        expected = argh().load(source=provider.empty())
+        offsets = [item.getoffset() for item in expected]
+        res = argh().alloc([pint.uint8_t] + [0 for offset in offsets][1:])
+        if all(item.getoffset() == offset for item, offset in zip(res[2:], offsets[2:])):
+            raise Success
+
+    @TestCase
+    def test_array_alloc_with_offset_2():
+        class myblock(ptype.block):
+            def blocksize(self):
+                offset = self.getoffset()
+                return abs((offset % 8) - 8) % 8
+
+        class mystruct(pstruct.type):
+            def alloc(self, *a, **fields):
+                fields.setdefault('b', *a) if a else fields
+                return super(mystruct, self).alloc(**fields)
+        mystruct._fields_ = [(myblock, 'a'), (pint.uint32_t, 'b')]
+
+        class argh(parray.terminated):
+            def isTerminator(self, value):
+                return len(self.value) > 4
+        argh._object_ = mystruct
+
+        expected = argh().load(source=provider.empty())
+        offsets = [item.getoffset() for item in expected]
+        res = argh().alloc([pint.uint8_t] + [0 for offset in offsets][1:])
+        if all(item.getoffset() == offset for item, offset in zip(res[2:], offsets[2:])):
+            raise Success
+
+    @TestCase
+    def test_array_alloc_with_offset_3():
+        class myblock(ptype.block):
+            def blocksize(self):
+                offset = self.getoffset()
+                return abs((offset % 8) - 8) % 8
+
+        class mystruct(pstruct.type):
+            def alloc(self, *a, **fields):
+                fields.setdefault('b', *a) if a else fields
+                return super(mystruct, self).alloc(**fields)
+        mystruct._fields_ = [(myblock, 'a'), (pint.uint32_t, 'b')]
+
+        class argh(parray.block):
+            def blocksize(self):
+                return 8 * 4
+        argh._object_ = mystruct
+
+        expected = argh().a
+        offsets = [item.getoffset() for item in expected]
+        res = argh().alloc([pint.uint8_t] + [0 for offset in offsets][1:])
+        if all(item.getoffset() == offset for item, offset in zip(res[2:], offsets[2:])):
+            raise Success
+
+    @TestCase
+    def test_array_alloc_with_offset_4():
+        class myblock(ptype.block):
+            def blocksize(self):
+                offset = self.getoffset()
+                return abs((offset % 8) - 8) % 8
+
+        class mystruct(pstruct.type):
+            def alloc(self, *a, **fields):
+                fields.setdefault('b', *a) if a else fields
+                return super(mystruct, self).alloc(**fields)
+        mystruct._fields_ = [(myblock, 'a'), (pint.uint32_t, 'b')]
+
+        class argh(parray.infinite): pass
+        argh._object_ = mystruct
+
+        expected = argh().load(source=ptypes.prov.bytes(b'\0'*0x20))
+        offsets = [item.getoffset() for item in expected]
+        res = argh().alloc([pint.uint8_t] + [0 for offset in offsets][1:])
+        if all(item.getoffset() == offset for item, offset in zip(res[2:], offsets[2:])):
             raise Success
 
 if __name__ == '__main__':
