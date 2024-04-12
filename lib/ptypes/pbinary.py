@@ -2317,6 +2317,12 @@ class flags(struct):
             [fields.setdefault(flag, -1) for flag in items]
         return super(flags, self).alloc(**fields)
 
+    def set(self, iterable=(), **fields):
+        if iterable:
+            bits, items = self.blockbits(), {fld for fld in iterable}
+            [fields.setdefault(flag, -1) for flag in items]
+        return super(flags, self).set(**fields)
+
 ## binary type conversion/generation
 def new(pb, **attrs):
     '''Create a new instance of /pb/ applying the attributes specified by /attrs/'''
@@ -4210,6 +4216,38 @@ if __name__ == '__main__':
         x = blah(offset=0)
         I = x.__calculate__((13, 0))
         if next(I) == (13, 0) and I.send(8) == (12, 0):
+            raise Success
+
+    @TestCase
+    def test_pbinary_flags_alloc_bits_92():
+        class p(pbinary.flags):
+            _fields_ = [
+                (1,'set0'),
+                (1,'notset1'),
+                (1,'set1'),
+                (1,'notset2'),
+                (1,'set2'),
+            ]
+
+        a = p()
+        a.alloc({k for k in a.keys() if k.startswith('set')})
+        if all(a[k] for k in a.keys() if k.startswith('set')) and all(not(a[k]) for k in a.keys() if k.startswith('notset')):
+            raise Success
+
+    @TestCase
+    def test_pbinary_flags_set_bits_93():
+        class p(pbinary.flags):
+            _fields_ = [
+                (1,'set0'),
+                (1,'notset1'),
+                (1,'set1'),
+                (1,'notset2'),
+                (1,'set2'),
+            ]
+
+        a = p()
+        a.set({k for k in a.keys() if k.startswith('set')})
+        if all(a[k] for k in a.keys() if k.startswith('set')) and all(not(a[k]) for k in a.keys() if k.startswith('notset')):
             raise Success
 
 if __name__ == '__main__':
