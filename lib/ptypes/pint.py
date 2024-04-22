@@ -198,7 +198,7 @@ def bigendian(integral, **attrs):
         if hasattr(integral, '__module__'):
             newintegral.__module__ = integral.__module__
 
-        newintegral.__name__ = integral.__name__
+        newintegral.__name__ = newintegral.__qualname__ = integral.__name__
         be.setdefault(newintegral, integral)
         return ptype.clone(newintegral, **attrs) if attrs else newintegral
 
@@ -222,7 +222,7 @@ def littleendian(integral, **attrs):
         if hasattr(integral, '__module__'):
             newintegral.__module__ = integral.__module__
 
-        newintegral.__name__ = integral.__name__
+        newintegral.__name__ = newintegral.__qualname__ = integral.__name__
         be.setdefault(newintegral, integral)
         return ptype.clone(newintegral, **attrs) if attrs else newintegral
 
@@ -266,7 +266,7 @@ class type(ptype.type):
             #Log.warning("{:s}.classname : {:s} : Using the default typename as the byteorder attribute is using an unknown value {!r}.".format(__name__, typename, self.byteorder))
             return typename
         else:
-            format = config.defaults.pint.littleendian_name.format if order is config.byteorder.bigendian else config.defaults.pint.littleendian_name.format
+            format = config.defaults.pint.bigendian_name.format if order is config.byteorder.bigendian else config.defaults.pint.littleendian_name.format
         return format(typename, **(utils.attributes(self) if config.defaults.display.mangle_with_attributes else {}))
 
     def flip(self):
