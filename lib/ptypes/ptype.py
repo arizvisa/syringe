@@ -557,7 +557,7 @@ class __interface__(object):
     @classmethod
     def typename(cls):
         """Return the name of the ptype"""
-        module, qualname = getattr(cls, '__module__', ''), getattr(cls, '__qualname__', cls.__name__)
+        module, qualname = getattr(cls, '__module__', ''), getattr(cls, '__qualname__', cls.__name__) or cls.__name__
         if module:
             if Config.display.show_module_name:
                 return '.'.join([module, qualname])
