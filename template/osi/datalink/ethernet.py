@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-from ..__base__ import stackable
+from .__base__ import stackable
 
 pint.setbyteorder(ptypes.config.byteorder.bigendian)
 

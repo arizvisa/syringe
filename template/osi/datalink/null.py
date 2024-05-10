@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-from ..__base__ import stackable
+from .__base__ import stackable
 
 layers = {
     2 : 0x0800

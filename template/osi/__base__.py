@@ -1,6 +1,6 @@
 from ptypes import ptype
 
-class stackable:
+class stackable(object):
     def nextlayer(self):
         '''returns a tuple of (type,remaining)'''
         raise NotImplementedError
