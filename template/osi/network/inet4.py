@@ -290,9 +290,9 @@ class ip4_hdr(pstruct.type, stackable):
         ]
 
     def __ip4_opts(self):
-        res, fields = self['ip_len'].li, ['ip_h', 'ip_tos', 'ip_len', 'ip_id', 'ip_fragoff', 'ip_ttl', 'ip_protocol', 'ip_sum', 'ip_src', 'ip_dst']
+        res, fields = self['ip_h'].li, ['ip_h', 'ip_tos', 'ip_len', 'ip_id', 'ip_fragoff', 'ip_ttl', 'ip_protocol', 'ip_sum', 'ip_src', 'ip_dst']
         size = sum(self[fld].li.size() for fld in fields)
-        optsize = max(0, 4 * res.int() - size)
+        optsize = max(0, 4 * res['hlen'] - size)
         backing = dyn.block(optsize)
         return dyn.clone(ip4_opts, _value_=backing)
 
@@ -311,6 +311,7 @@ class ip4_hdr(pstruct.type, stackable):
         (in_addr, 'ip_dst'),
 
         (__ip4_opts, 'ip_opt'),
+        (dyn.padding(4), 'padding(ip_opt)'),
     ]
 
     def nextlayer_id(self):
