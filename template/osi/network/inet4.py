@@ -2,7 +2,14 @@ import ptypes, builtins, functools
 from ptypes import *
 
 import ptypes.bitmap as bitmap
-from .__base__ import layer,datalink,stackable
+
+from . import layer, stackable, terminal, datalink
+
+#class layer(layer):
+#    cache = {}
+#
+#class terminal(terminal):
+#    pass
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
@@ -328,6 +335,13 @@ class ip4_hdr(pstruct.type, stackable):
         bytes = self.copy().set(ip_sum=0).serialize()
         return self._checksum(bytes)
 
+    def layer(self):
+        layer, id, remaining = super(ip4_hdr, self).layer()
+        header, fields = self['ip_h'].li, ['ip_h', 'ip_tos', 'ip_len', 'ip_id', 'ip_fragoff', 'ip_ttl', 'ip_protocol', 'ip_sum', 'ip_src', 'ip_dst', 'ip_opt', 'padding(ip_opt)']
+        assert(4 * header['hlen'] == sum(self[fld].li.size() for fld in fields))
+        return layer, self['ip_protocol'].li.int(), max(0, self['ip_len'].li.int() - 4 * header['hlen'])
+
+    # XXX: discard these things
     def nextlayer_id(self):
         return self['ip_protocol'].li.int()
     def nextlayer_size(self):

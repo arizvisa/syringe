@@ -1,8 +1,20 @@
 import ptypes, logging
 from ptypes import parray, dyn
 
-from .__base__ import layer
+from .. import layer, stackable, terminal, network
 
+class layer(layer):
+    cache = {}
+
+class stackable(stackable):
+    _layer_ = layer
+
+class terminal(terminal):
+    _layer_ = layer
+
+from . import udp, tcp
+
+# XXX: the rest of this is trash, discard it
 if False:
     class stack(parray.terminated):
         _object_ = lambda s: s.protocol
@@ -34,8 +46,5 @@ if False:
 
         def nextlayer(self):
             return dyn.block(self.payload)
-
         def nextlayersize(self):
             return self.payload
-
-from . import udp,tcp

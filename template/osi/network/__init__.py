@@ -1,7 +1,18 @@
 import ptypes, logging
 from ptypes import parray, dyn
 
-from .__base__ import layer
+from .. import layer, stackable, terminal, datalink
+
+class layer(layer):
+    cache = {}
+
+class stackable(stackable):
+    _layer_ = layer
+
+class terminal(terminal):
+    _layer_ = layer
+
+from . import arp, inet4, inet6
 
 if False:
     class stack(parray.terminated):
@@ -37,5 +48,3 @@ if False:
 
         def nextlayersize(self):
             return self.payload
-
-from . import arp,inet4,inet6

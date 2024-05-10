@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-from .__base__ import layer, stackable, network
+from . import layer, stackable, terminal, network
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
@@ -53,6 +53,7 @@ class header(pstruct.type, stackable):
     def th_flags(self):
         return self['th_off/th_flags']['th_flags']
 
+    # XXX: discard this trash
     def nextlayer_size(self):
         raise NotImplementedError
 

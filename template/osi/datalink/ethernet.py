@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-from .__base__ import stackable
+from . import layer, stackable, terminal
 
 pint.setbyteorder(ptypes.config.byteorder.bigendian)
 
@@ -31,5 +31,10 @@ class header(pstruct.type, stackable):
         (u_short, 'type'),
     ]
 
+    def layer(self):
+        layer, unimplemented, remaining = super(header, self).layer()
+        return layer, self['type'].int(), None
+
+    ### XXX: discard the rest
     def nextlayer_id(self):
         return self['type'].int()

@@ -1,14 +1,21 @@
 #http://fxr.watson.org/fxr/source/include/linux/ipv6.h?v=linux-2.6
 # used linux this time because fbsd's headers don't make immediate sense..
-
 # http://www.ietf.org/rfc/rfc2460.txt
+
+# FIXME: this was broken during the layer/stackable refactor.
 
 import ptypes
 from ptypes import *
 from ptypes import bitmap
 
 import functools
-from .__base__ import layer, datalink, stackable
+
+from . import layer, stackable, terminal, datalink
+
+class ip6layer(layer):
+    cache = {}
+class ip6stackable(stackable):
+    _layer_ = ip6layer
 
 pint.setbyteorder(ptypes.config.byteorder.bigendian)
 
@@ -58,6 +65,14 @@ class ip6_hdr(pstruct.type, stackable):
         (in6_addr, 'daddr'),
     ]
 
+    def layer(self):
+        layer, id, remaining = super(ip6_hdr, self).layer()
+        res = self['ip6_nxt'].li
+        if res == 0:
+            return layer, ip6_exthdr_hop, self['ip6_plen'].int()
+        return layer, res.int(), self['ip6_plen'].int()
+
+    # XXX: discard the rest
     def nextlayer_id(self):
         return self['ip6_nxt'].int()
 
@@ -78,7 +93,7 @@ class layer_ip6(ip6_hdr):
 class ip6_opt(pstruct.type):
     def __ip6_len(self):
         type = self['ip6o_type'].li.int()
-        return (u_int8_t,pint.int_t)[type == 0]   # for Pad0
+        return [u_int8_t, pint.int_t][type == 0]   # for Pad0
 
     def __ip6o_payload(self):
         t, size = self['ip6o_type'].li.int(), self['ip6o_len'].li.int()
@@ -90,7 +105,7 @@ class ip6_opt(pstruct.type):
         (__ip6o_payload, 'ip6o_payload'),
     ]
 
-class ip6_exthdr(pstruct.type, stackable):
+class ip6_exthdr(pstruct.type, ip6stackable):
     type = None
 
     def __ip6_payload(self):
@@ -105,12 +120,18 @@ class ip6_exthdr(pstruct.type, stackable):
         (__ip6_payload, 'ip6_payload'),
     ]
 
+    def layer(self):
+        layer, id, remaining = super(ip6_hdr, self).layer()
+        protocol = self['ip6_nxt'].li
+        return layer, protocol.int(), 8 + self['ip6_len'].li.int()
+
+    def blocksize(self):
+        return 8 + self['ip6_len'].li.int()
+
+    # XXX: discard this
     def nextlayer_id(self):
         protocol = self['ip6_nxt'].int()
         return protocol
-
-    def blocksize(self):
-        return 8+self['ip6_len'].li.int()
 
 ### options
 if True:
@@ -174,7 +195,7 @@ if True:
             (__ip6_payload, 'ip6_payload'),
         ]
 
-#    @layer.define
+#    @ip6layer.define
     class ip6_rthdr(pstruct.type):
         type = 43
         _fields_ = [
@@ -182,7 +203,7 @@ if True:
             (u_int8_t, 'ip6r_segleft'),
         ]
 
-    #@layer.define
+    #@ip6layer.define
     class ip6_rthdr0(pstruct.type):
         # FIXME: what type is this? it's not in the rfc, and i couldn't find it in iana's protocol ref
         _fields_ = [
@@ -193,7 +214,7 @@ if True:
 
         # XXX followed by up to 127 struct in6_addr
 
-#    @layer.define
+#    @ip6layer.define
     class ip6_frag(pstruct.type):
         type = 44
         _fields_ = [
@@ -201,18 +222,18 @@ if True:
             (u_int32_t, 'ip6f_ident'),
         ]
 
-#    @layer.define
+#    @ip6layer.define
     class ip6_nomoreheaders(ptype.type):
         type = 59
 
     ####
-#    @layer.define
+#    @ip6layer.define
     class ip6_dest(parray.block):
         type = 60
         _object_ = ip6_opt
 
 ## regular ipv6 protocols
-@layer.define
+@ip6layer.define
 class icmp6_hdr(pstruct.type):
     type = 58
     _fields_ = [

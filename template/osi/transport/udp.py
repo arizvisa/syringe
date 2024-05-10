@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-from .__base__ import layer, stackable, network
+from . import layer, stackable, terminal, network
 
 pint.setbyteorder(ptypes.config.byteorder.bigendian)
 
@@ -19,5 +19,11 @@ class header(pstruct.type, stackable):
         (u_short, 'checksum'),
     ]
 
+    def layer(self):
+        layer, id, remaining = super(header, self).layer()
+        res = self['length'].li
+        return layer, id, max(0, res.int() - sum(self[fld].li.size() for fld in ['source port', 'dest port', 'length', 'checksum']))
+
+    # XXX: discard this
     def nextlayer_size(self):
         return self['length'].int() - self.blocksize()
