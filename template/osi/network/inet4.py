@@ -2,7 +2,6 @@ import ptypes, builtins, functools
 from ptypes import *
 
 import ptypes.bitmap as bitmap
-
 from . import layer, stackable, terminal, datalink
 
 #class layer(layer):
@@ -340,14 +339,6 @@ class ip4_hdr(pstruct.type, stackable):
         header, fields = self['ip_h'].li, ['ip_h', 'ip_tos', 'ip_len', 'ip_id', 'ip_fragoff', 'ip_ttl', 'ip_protocol', 'ip_sum', 'ip_src', 'ip_dst', 'ip_opt', 'padding(ip_opt)']
         assert(4 * header['hlen'] == sum(self[fld].li.size() for fld in fields))
         return layer, self['ip_protocol'].li.int(), max(0, self['ip_len'].li.int() - 4 * header['hlen'])
-
-    # XXX: discard these things
-    def nextlayer_id(self):
-        return self['ip_protocol'].li.int()
-    def nextlayer_size(self):
-        header = self['ip_h'].li
-        headersize = 4 * header['hlen']
-        return max(0, self['ip_len'].li.int() - headersize)
 
 @datalink.layer.define
 class datalink_ip4(ip4_hdr):

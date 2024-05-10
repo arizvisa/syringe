@@ -34,7 +34,3 @@ class header(pstruct.type, stackable):
     def layer(self):
         layer, unimplemented, remaining = super(header, self).layer()
         return layer, self['type'].int(), None
-
-    ### XXX: discard the rest
-    def nextlayer_id(self):
-        return self['type'].int()

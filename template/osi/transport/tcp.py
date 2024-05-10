@@ -52,8 +52,3 @@ class header(pstruct.type, stackable):
 
     def th_flags(self):
         return self['th_off/th_flags']['th_flags']
-
-    # XXX: discard this trash
-    def nextlayer_size(self):
-        raise NotImplementedError
-

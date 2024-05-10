@@ -1,5 +1,5 @@
 import ptypes
-from ptypes import ptype, parray, pstruct
+from ptypes import ptype, parray, pstruct, dynamic
 
 # FIXME: this packet structure doesn't properly incorporate all the layers
 #        in a portable fashion
@@ -19,47 +19,6 @@ class terminal(stackable):
     pass
 
 from . import datalink, network, transport
-from ptypes import dyn
-
-class layers(parray.terminated):
-    protocol = ptype.block
-    leftover = None
-    def __nextlayer(self):
-        if len(self) == 0:
-            return self.protocol
-
-        last = self.value[-1].l
-        try:
-            t,sz=last.nextlayer()
-            if t is None and self.leftover is not None:
-                return dyn.block(self.leftover)
-
-            if self.leftover is not None:
-                self.leftover -= last.size()
-                return t
-
-            if t is None and self.leftover is None:
-                self.leftover = 0
-                return dyn.block(0)
-
-            self.leftover = sz
-            return t
-
-        except (AttributeError,NotImplementedError):
-            pass
-
-        self.leftover = self.blocksize() - last.size() if self.leftover is None else self.leftover - last.size()
-        return dyn.block(self.leftover)
-
-    def isTerminator(self, value):
-        if self.leftover is None:
-            return False
-        assert self.leftover >= 0, 'More than one layer contained within payload: %s'% '\n'.join(self.backtrace())
-        if self.leftover == 0:
-            return True
-        return False
-
-    _object_ = __nextlayer
 
 class layers(parray.terminated):
     protocol = ptype.block
@@ -101,14 +60,11 @@ class layers(parray.terminated):
         if ptypes.istype(identity):
             return identity
         elif layer is None:
-            return dyn.block(remaining or 0 if self.leftover is None else self.leftover)
+            return dynamic.block(remaining or 0 if self.leftover is None else self.leftover)
         elif layer.has(identity):
             return layer.lookup(identity)
         print('empty', remaining, self.leftover)
-        return dyn.block(self.leftover or 0)
-
-#def protocol(layer):
-#    return ptype.clone(layers, protocol=layer)
+        return dynamic.block(self.leftover or 0)
 
 default = packet = ptype.clone(layers, protocol=datalink.ethernet.header)
 

@@ -4,12 +4,10 @@
 
 # FIXME: this was broken during the layer/stackable refactor.
 
-import ptypes
+import ptypes, functools
 from ptypes import *
-from ptypes import bitmap
 
-import functools
-
+import ptypes.bitmap as bitmap
 from . import layer, stackable, terminal, datalink
 
 class ip6layer(layer):
@@ -72,20 +70,6 @@ class ip6_hdr(pstruct.type, stackable):
             return layer, ip6_exthdr_hop, self['ip6_plen'].int()
         return layer, res.int(), self['ip6_plen'].int()
 
-    # XXX: discard the rest
-    def nextlayer_id(self):
-        return self['ip6_nxt'].int()
-
-    def nextlayer(self):
-        protocol = self.nextlayer_id()
-        sz = self['ip6_plen'].int()
-
-        if protocol == 0:
-            result = ip6_exthdr_hop
-        else:
-            result = layer.withdefault(protocol, type=protocol)
-        return result,sz
-
 @layer.define
 class layer_ip6(ip6_hdr):
     type = 41
@@ -127,11 +111,6 @@ class ip6_exthdr(pstruct.type, ip6stackable):
 
     def blocksize(self):
         return 8 + self['ip6_len'].li.int()
-
-    # XXX: discard this
-    def nextlayer_id(self):
-        protocol = self['ip6_nxt'].int()
-        return protocol
 
 ### options
 if True:
@@ -179,6 +158,8 @@ if True:
         ]
 
 ### extension-headers
+# FIXME: some of these option headers have dynamically calculated fields,
+#        but are missing the calculation in the definition for the field.
 if True:
     class ip6_hbh(parray.block):
         '''hop-to-hop option array'''
@@ -195,7 +176,7 @@ if True:
             (__ip6_payload, 'ip6_payload'),
         ]
 
-#    @ip6layer.define
+    @ip6layer.define
     class ip6_rthdr(pstruct.type):
         type = 43
         _fields_ = [
@@ -204,17 +185,18 @@ if True:
         ]
 
     #@ip6layer.define
-    class ip6_rthdr0(pstruct.type):
-        # FIXME: what type is this? it's not in the rfc, and i couldn't find it in iana's protocol ref
-        _fields_ = [
-            (u_int8_t, 'ip6r0_type'),
-            (u_int8_t, 'ip6r0_segleft'),
-            (u_int32_t, 'ip6r0_reserved'),
-        ]
+    #class ip6_rthdr0(pstruct.type):
+    #    # XXX: this header is not in the rfc because it has been deprecated
+    #    type = 43
+    #    _fields_ = [
+    #        (u_int8_t, 'ip6r0_type'),
+    #        (u_int8_t, 'ip6r0_segleft'),
+    #        (u_int32_t, 'ip6r0_reserved'),
+    #    ]
 
-        # XXX followed by up to 127 struct in6_addr
+    #    # XXX followed by up to 127 struct in6_addr
 
-#    @ip6layer.define
+    @ip6layer.define
     class ip6_frag(pstruct.type):
         type = 44
         _fields_ = [
@@ -222,12 +204,12 @@ if True:
             (u_int32_t, 'ip6f_ident'),
         ]
 
-#    @ip6layer.define
+    @ip6layer.define
     class ip6_nomoreheaders(ptype.type):
         type = 59
 
     ####
-#    @ip6layer.define
+    @ip6layer.define
     class ip6_dest(parray.block):
         type = 60
         _object_ = ip6_opt
@@ -242,4 +224,3 @@ class icmp6_hdr(pstruct.type):
         (u_int16_t, 'icmp6_cksum'),
         (dyn.block(4), 'icmp6_data')
     ]
-
