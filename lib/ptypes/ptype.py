@@ -2230,6 +2230,7 @@ class wrapper_t(type):
         return
 
     __object__ = None
+
     # setters/getters for the object's backing instance
     @property
     def object(self):
@@ -2244,13 +2245,6 @@ class wrapper_t(type):
             name = "wrapped<{:s}>".format(res.typename() if istype(res) else getattr(res, '__qualname__', res.__name__))
             self.__object__ = self.new(res, __name__=name, offset=0, source=provider.proxy(self))
 
-        # Check if wrapper_t.__object__ is a different type than self._value_ but not a callable or a property
-        elif not builtins.isinstance(cls._value_, (types.FunctionType, types.MethodType, property)) and self._value_ and not builtins.isinstance(self.__object__, self._value_):
-            t, res = self._value_, self.__object__
-            Log.warning("wrapper_t.object : {:s} : Casting object with incompatible type {:s} to wrapper_t._value_ ({:s}).".format(self.instance(), res.instance(), t.typename()))
-            name = "wrapped<{:s}>".format(t.typename() if istype(res) else getattr(t, '__qualname__', t.__name__))
-            self.__object__ = res.cast(t, __name__=name, offset=0, source=provider.proxy(self))
-
         # Otherwise, we can simply return it
         return self.__object__
 
@@ -2258,12 +2252,13 @@ class wrapper_t(type):
     def object(self, instance):
         name = "wrapped<{:s}>".format(instance.name())
 
-        # re-assign the object the user specified
-        self.__object__ = res = instance.copy(__name__=name, offset=0, source=provider.proxy(self), parent=self)
+        # make a copy of the object the user specified
+        # and take ownership of it prior to assignment.
+        self.__object__ = object = instance.copy(__name__=name, offset=0, source=provider.proxy(self), parent=self)
 
         # if the backing type wasn't created yet, then create it
-        if self.__value__ is None and res.initializedQ():
-            block = res.serialize()
+        if self.__value__ is None and object.initializedQ():
+            block = object.serialize()
             try:
                 self.__deserialize_block__(block)
             except (StopIteration, error.ProviderError):
@@ -2271,7 +2266,7 @@ class wrapper_t(type):
             return
 
         # update our value with the type that we assigned
-        self.value = res.serialize()
+        self.__value__ = object.serialize()
 
     o = object
 
@@ -2301,9 +2296,10 @@ class wrapper_t(type):
         return res
 
     def __deserialize_block__(self, block):
+        assert(block is not None)
         self.__value__ = block
         try:
-            self.object.load(offset=0, source=provider.proxy(self)) if block is not None else None
+            self.object.load(offset=0, source=provider.proxy(self))
 
         # If we got a LoadError or similar, then we need to recast the
         # exception as a ConsumeError since this method is used to
@@ -2359,6 +2355,10 @@ class wrapper_t(type):
 
     def __format__(self, spec):
         return self.object.__format__(spec)
+
+    def alloc(self, *values, **attrs):
+        self.__object__ = None
+        return super(wrapper_t, self).alloc(*values, **attrs)
 
 class encoded_t(wrapper_t):
     """This type represents an element that can be decoded/encoded to/from another element.
@@ -3566,15 +3566,26 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_wrapper_object_assign():
-        class wt(ptype.wrapper_t):
-            _value_ = pint.uint32_t
-        class bt(ptype.block):
-            length = 4
+    def test_wrapper_object_assign_1():
+        class wrapped(ptype.wrapper_t):
+            class _value_(ptype.block):
+                length = 4
 
-        x = wt().a
-        x.object = bt().set(b'DCBA')
-        if hasattr(x.object, 'int') and x.object.int() == 0x41424344:
+        o = wrapped()
+        o.object = pint.uint32_t().set(0x41424344)
+        if o.initializedQ() and o.value == o.serialize() == b'\x44\x43\x42\x41' and hasattr(o.object, 'int') and o.object.int() == 0x41424344:
+            raise Success
+
+    @TestCase
+    def test_wrapper_object_assign_2():
+        class wrapped(ptype.wrapper_t):
+            class _value_(ptype.block):
+                length = 4
+
+        o = wrapped()
+        o.object = pint.uint32_t().set(0x41424344)
+        o.a
+        if o.initializedQ() and o.value == o.serialize() == b'\x00\x00\x00\x00' and not hasattr(o.object, 'int') and o.object.serialize() == b'\x00\x00\x00\x00':
             raise Success
 
     @TestCase
