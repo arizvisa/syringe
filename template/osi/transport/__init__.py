@@ -38,4 +38,4 @@ if False:
         def nextlayersize(self):
             return self.payload
 
-from . import arp,inet4,inet6
+from . import udp,tcp

@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-from .__base__ import layer, stackable
+from .__base__ import layer, stackable, network
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
@@ -14,7 +14,7 @@ class tcp_seq(pint.uint32_t): pass
 class flags(pbinary.flags):
     _fields_ = [(1,f) for f in ('URG','ACK','PSH','RST','SYN','FIN')]
 
-@layer.define
+@network.layer.define
 class header(pstruct.type, stackable):
     type = 0x06
     class _offset_and_flags(pbinary.struct):

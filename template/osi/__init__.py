@@ -3,7 +3,7 @@ from ptypes import ptype, parray, pstruct
 # FIXME: this packet structure doesn't properly incorporate all the layers
 #        in a portable fashion
 
-from . import datalink, network
+from . import datalink, network, transport
 from ptypes import dyn
 
 class layers(parray.terminated):
