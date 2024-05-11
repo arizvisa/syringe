@@ -1,14 +1,8 @@
-import ptypes, builtins, functools
+import ptypes, builtins, functools, logging
 from ptypes import *
 
 import ptypes.bitmap as bitmap
 from . import layer, stackable, terminal, datalink
-
-#class layer(layer):
-#    cache = {}
-#
-#class terminal(terminal):
-#    pass
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
@@ -21,7 +15,7 @@ class in_addr(u_long):
         res = self.int()
         integer = bitmap.new(res, 32)
         octets = bitmap.split(integer, 8)
-        return '{:#x} {:d}.{:d}.{:d}.{:d}'.format(*map(bitmap.int, [integer] + octets))
+        return '{:#x} : {:d}.{:d}.{:d}.{:d}'.format(*map(bitmap.int, [integer] + octets))
 
     def set(self, integer):
         if isinstance(integer, str):
@@ -278,16 +272,24 @@ class ip4_opts(ptype.encoded_t):
 class ip4_hdr(pstruct.type, stackable):
     type = 4
 
-    class __ip_h(pbinary.struct):
+    class _ip_h(pbinary.struct):
         _fields_ = [(4,'ver'),(4,'hlen')]
 
-    class __ip_tos(pbinary.struct):
+    class _ip_tos(pbinary.struct):
+        class _ecn(pbinary.enum):
+            _width_, _values_ = 2, [
+                ('NotECT',  0b00),
+                ('ECT0',    0b01),
+                ('ECT1',    0b10),
+                ('CE',      0b11),
+            ]
+
         _fields_ = [
             (6, 'dscp'),
-            (2, 'ecn'),
+            (_ecn, 'ecn'),
         ]
 
-    class __ip_fragoff(pbinary.flags):
+    class _ip_fragoff(pbinary.flags):
         _fields_ = [
             (1, 'reserved'),
             (1, 'donotfragment'),
@@ -304,11 +306,11 @@ class ip4_hdr(pstruct.type, stackable):
 
     _fields_ = [
 #        (u_char, 'ip_h'),
-        (__ip_h, 'ip_h'),
-        (__ip_tos, 'ip_tos'),
+        (_ip_h, 'ip_h'),
+        (_ip_tos, 'ip_tos'),
         (u_short, 'ip_len'),
         (u_short, 'ip_id'),
-        (u_short, 'ip_fragoff'),
+        (_ip_fragoff, 'ip_fragoff'),
         (u_char, 'ip_ttl'),
         (u_char, 'ip_protocol'),
         (u_short, 'ip_sum'),
@@ -337,7 +339,15 @@ class ip4_hdr(pstruct.type, stackable):
     def layer(self):
         layer, id, remaining = super(ip4_hdr, self).layer()
         header, fields = self['ip_h'].li, ['ip_h', 'ip_tos', 'ip_len', 'ip_id', 'ip_fragoff', 'ip_ttl', 'ip_protocol', 'ip_sum', 'ip_src', 'ip_dst', 'ip_opt', 'padding(ip_opt)']
-        assert(4 * header['hlen'] == sum(self[fld].li.size() for fld in fields))
+
+        # Check if the header length matches the actual size we decoded.
+        if 4 * header['hlen'] == sum(self[fld].li.size() for fld in fields):
+            return layer, self['ip_protocol'].li.int(), max(0, self['ip_len'].li.int() - 4 * header['hlen'])
+
+        # Otherwise, log a warning before returning the next layer.
+        hlen, optsize = 4 * header['hlen'], sum(self[fld].size() for fld in ['ip_opt', 'padding(ip_opt)'])
+        hsize = sum(self[fld].size() for fld in fields) - optsize
+        logging.warning("{:s} : Error decoding the IP4 header. The size specified in the header ({:d}) does not match the size ({:d}) of the header with its options ({:d}).".format(self.instance(), hlen, hsize, optsize))
         return layer, self['ip_protocol'].li.int(), max(0, self['ip_len'].li.int() - 4 * header['hlen'])
 
 @datalink.layer.define
