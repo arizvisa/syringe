@@ -277,7 +277,7 @@ class ip4_hdr(pstruct.type, stackable):
 
     class _ip_tos(pbinary.struct):
         class _ecn(pbinary.enum):
-            _width_, _values_ = 2, [
+            length, _values_ = 2, [
                 ('NotECT',  0b00),
                 ('ECT0',    0b01),
                 ('ECT1',    0b10),
