@@ -93,8 +93,9 @@ class layers(parray.terminated):
 
         # If we know there's some number of octets, then assign it to "available".
         # Then we can check if the previous layer gave us a type to actually return.
-        available = expected or 0
+        available = expected or remaining or 0
         if ptypes.istype(identity):
+            # FIXME: we should check if this is a dynamically-sizable type.
             return identity
 
         # If it didn't give us a definition to use when searching for the id, then
