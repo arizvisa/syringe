@@ -296,7 +296,7 @@ class File(pstruct.type, base.ElfXX_File):
         # keep track of the segments that have been used because we use
         # it as part of a small trick to figure out the boundary to check.
         def flatten(tree, index, headers):
-            offset, used = 0, {item for item in []}
+            offset, used, header = 0, {item for item in []}, ptype.undefined
             for point in tree:
                 items = index[point]
 
