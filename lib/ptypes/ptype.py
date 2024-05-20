@@ -1515,16 +1515,17 @@ class container(base):
                 Log.warning("container.commit : {:s} : Unable to complete contiguous store : write at {{{:x}:{:+x}}} : {!s}".format(self.instance(), self.getoffset(), self.size(), E))
 
         # commit all elements of container individually
+        offset = self.getoffset()
         with utils.assign(self, **attrs):
-            current, ofs, sz = 0, self.getoffset(), self.size()
+            current, newoffset, size = 0, self.getoffset(), self.size()
             try:
                 for item in self.value:
-                    item.commit(source=self.source)
+                    item.commit(source=self.source) if offset == newoffset else item.commit(source=self.source, offset=item.getoffset() - offset + newoffset)
                     current += item.size()
-                    if current > sz: break
+                    if current > size: break
                 pass
             except error.CommitError as E:
-                Log.fatal("container.commit : {:s} : Unable to complete non-contiguous store : write stopped at {{{:x}:{:+x}}} : {!r}".format(self.instance(), ofs+current, self.blocksize()-current, E))
+                Log.fatal("container.commit : {:s} : Unable to complete non-contiguous store : write stopped at {{{:x}:{:+x}}} : {!r}".format(self.instance(), newoffset+current, self.blocksize()-current, E))
         return self
 
     def copy(self, **attrs):
