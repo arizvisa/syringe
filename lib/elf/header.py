@@ -414,6 +414,20 @@ class ShdrEntries(XhdrEntries):
         return self.by_field('sh_type', Fpredicate)
     by = by_type
 
+    def has_field(self, field, predicate):
+        iterable = (True for item in self if predicate(item[field]))
+        return next(iterable, False)
+
+    def has_name(self, name):
+        Fcompose = lambda *Fa: functools.reduce(lambda F1, F2: lambda *a: F1(F2(*a)), builtins.reversed(Fa))
+        Fpredicate = Fcompose(operator.methodcaller('str'), functools.partial(operator.eq, name))
+        return self.has_field('sh_name', Fpredicate)
+
+    def has_type(self, type):
+        Fpredicate = operator.itemgetter(type)
+        return self.has_field('sh_type', Fpredicate)
+    has = has_type
+
 class PhdrEntries(XhdrEntries):
     def by_offset(self, ofs):
         if isinstance(self.source, ptypes.provider.memorybase):
@@ -482,6 +496,15 @@ class PhdrEntries(XhdrEntries):
         Fpredicate = operator.itemgetter(type)
         return self.by_field('p_type', Fpredicate)
     by = by_type
+
+    def has_field(self, field, predicate):
+        iterable = (True for item in self if predicate(item[field]))
+        return next(iterable, False)
+
+    def has_type(self, type):
+        Fpredicate = operator.itemgetter(type)
+        return self.has_field('p_type', Fpredicate)
+    has = has_type
 
 ### 32-bit
 class Elf32_Ehdr(pstruct.type, ElfXX_Ehdr):
