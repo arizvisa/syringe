@@ -13,6 +13,10 @@ if __name__ == '__main__':
     ph = ph.l if e['e_phoff'].int() else ph
     sh = sh.l if e['e_shoff'].int() else sh
 
+    if not ph.has('DYNAMIC'):
+        print("Interrupting parse due to a missing {:s} segment.".format('DYNAMIC'))
+        sys.exit(1)
+
     d = next(item['p_vaddr'].d for item in ph if item['p_type']['DYNAMIC'])
     d=d.l
 
