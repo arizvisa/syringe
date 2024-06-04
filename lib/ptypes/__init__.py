@@ -7,6 +7,9 @@ __all__ = 'ptype','parray','pstruct','pbinary','pint','pfloat','pstr','dynamic',
 from . import config
 Config = config.defaults
 
+# define some tuples so that we can avoid depending on the "six" module.
+string_types, text_types, integer_types = utils.string_types, utils.text_types, bitmap.integer_types
+
 ## globally changing the ptype provider
 def setsource(provider):
     '''Sets the default ptype provider to the one specified'''
