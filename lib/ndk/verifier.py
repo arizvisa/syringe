@@ -1,4 +1,4 @@
-import ptypes
+import ptypes, functools
 from ptypes import *
 
 from .datatypes import *
@@ -23,9 +23,15 @@ class RTL_VERIFIER_DLL_UNLOAD_CALLBACK(PVOID): pass
 class RTL_VERIFIER_NTDLLHEAPFREE_CALLBACK(PVOID): pass
 
 class RTL_VERIFIER_PROVIDER_DESCRIPTOR(pstruct.type):
+    class _ProviderDlls(parray.terminated):
+        _object_ = RTL_VERIFIER_DLL_DESCRIPTOR
+        def isTerminator(self, item):
+            bytes = item.serialize()
+            return functools.reduce(operator.or_, bytearray(bytes), 0) == 0
     _fields_ = [
         (DWORD, 'Length'),
-        (PRTL_VERIFIER_DLL_DESCRIPTOR, 'ProviderDlls'),
+        #(PRTL_VERIFIER_DLL_DESCRIPTOR, 'ProviderDlls'),
+        (P(_ProviderDlls), 'ProviderDlls'),
         (RTL_VERIFIER_DLL_LOAD_CALLBACK, 'ProviderDllLoadCallback'),
         (RTL_VERIFIER_DLL_UNLOAD_CALLBACK, 'ProviderDllUnloadCallback'),
         (PWSTR, 'VerifierImage'),
@@ -36,4 +42,9 @@ class RTL_VERIFIER_PROVIDER_DESCRIPTOR(pstruct.type):
         (PVOID, 'RtlpDebugPageHeapDestroy'),
         (RTL_VERIFIER_NTDLLHEAPFREE_CALLBACK, 'ProviderNtdllHeapFreeCallback'),
     ]
+    def alloc(self, **fields):
+        res = super(RTL_VERIFIER_PROVIDER_DESCRIPTOR, self).alloc(**fields):
+        if 'Length' not in res:
+            res['Length'].set(sum(res[fld].size() for fld in res))
+        return res
 
