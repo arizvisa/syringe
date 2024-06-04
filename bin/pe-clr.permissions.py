@@ -1,4 +1,5 @@
-import logging, time, six
+from __future__ import print_function
+import logging, time
 #logging.root.setLevel(logging.INFO)
 
 import pecoff, ptypes
@@ -24,13 +25,13 @@ def log(stdout):
     while True:
         message = (yield)
         ts = time.time()
-        six.print_("{:.3f} : {:s}".format(ts - start, message), file=stdout)
+        print("{:.3f} : {:s}".format(ts - start, message), file=stdout)
     return
 
 def strify(value):
-    if isinstance(value, six.integer_types):
+    if isinstance(value, ptypes.integer_types):
         return "{:d}".format(value)
-    elif isinstance(value, six.string_types):
+    elif isinstance(value, ptypes.string_types):
         return "{:s}".format(value)
     return "{!r}".format(value)
 
@@ -39,7 +40,7 @@ if __name__ == '__main__':
     import ptypes, pecoff
 
     if len(sys.argv) != 2:
-        six.print_("Usage: {:s} file".format(sys.argv[0] if len(sys.argv) else 'test'), file=sys.stderr)
+        print("Usage: {:s} file".format(sys.argv[0] if len(sys.argv) else 'test'), file=sys.stderr)
         sys.exit(1)
 
     filename = sys.argv[1]
@@ -87,10 +88,10 @@ if __name__ == '__main__':
         res = strings.at(strings.getoffset() + m['Name'].int(), recurse=False)
         if m['Mvid'].int():
             g = guids.Get(m['Mvid'].int())
-            six.print_('{:s} {:s}'.format(res.str(), g.str()), file=sys.stdout)
+            print('{:s} {:s}'.format(res.str(), g.str()), file=sys.stdout)
             modules.append((res.str(), g))
         else:
-            six.print_('{:s}'.format(res.str()), file=sys.stdout)
+            print('{:s}'.format(res.str()), file=sys.stdout)
 
     # collect assemblies
     L.send("Enumerating {:d} assemblies.".format(len(tables['Assembly'])))
@@ -114,4 +115,4 @@ if __name__ == '__main__':
             attributes.append(res)
         res = {}
         map(res.update, attributes)
-        six.print_('\t{:s} : {:s} : {:s}'.format(assembly[mi], ma, ', '.join('{:s}={:s}'.format(k, strify(v)) for k, v in res.items())), file=sys.stdout)
+        print('\t{:s} : {:s} : {:s}'.format(assembly[mi], ma, ', '.join('{:s}={:s}'.format(k, strify(v)) for k, v in res.items())), file=sys.stdout)

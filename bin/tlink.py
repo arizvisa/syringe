@@ -1,4 +1,4 @@
-import functools, itertools, types, builtins, operator, six
+import functools, itertools, types, builtins, operator
 import ptypes, pecoff
 import ptypes.bitmap as bitmap
 
@@ -350,7 +350,7 @@ class Linker(object):
         sections = [ item for item in object['sections'] ]
         if section not in sections:
             raise ValueError
-        iterable = (symbol for symbol in six.itervalues(symbols) if symbol.SectionIndex() is not None and section is sections[symbol.SectionIndex()] )
+        iterable = (symbol for _, symbol in symbols.items() if symbol.SectionIndex() is not None and section is sections[symbol.SectionIndex()] )
         self.__process_symbols(section, iterable)
         self.__process_relocations(section, sections, symbols)
 

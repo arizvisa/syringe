@@ -1,6 +1,7 @@
+from __future__ import print_function
 import sys, os
 import collections, json
-import functools, operator, itertools, six
+import functools, operator, itertools
 import ptypes, pecoff
 import logging
 Log = logging.getLogger()
@@ -126,8 +127,8 @@ def dump_exports(pe, jsname, outfile):
     try:
         et = dd['Address'].d.l
     except Exception:
-        six.print_("const {:s} = {{".format(jsname), file=outfile)
-        six.print_("};", file=outfile)
+        print("const {:s} = {{".format(jsname), file=outfile)
+        print("};", file=outfile)
         return jsname
 
     # collect all exports
@@ -137,10 +138,10 @@ def dump_exports(pe, jsname, outfile):
 
     # output it in javascript
     jsname = jsname or 'ExportOffsets'
-    six.print_("const {:s} = {{".format(jsname), file=outfile)
+    print("const {:s} = {{".format(jsname), file=outfile)
     for name, ea in res:
-        six.print_("  '{:s}': {:d},".format(name, ea), file=outfile)
-    six.print_("};", file=outfile)
+        print("  '{:s}': {:d},".format(name, ea), file=outfile)
+    print("};", file=outfile)
     return jsname
 
 def dump_imports(pe, jsname, outfile):
@@ -148,8 +149,8 @@ def dump_imports(pe, jsname, outfile):
     try:
         it = dd['Address'].d.l
     except Exception:
-        six.print_("const {:s} = {{".format(jsname), file=outfile)
-        six.print_("};", file=outfile)
+        print("const {:s} = {{".format(jsname), file=outfile)
+        print("};", file=outfile)
         return jsname
 
     # collect all the imports
@@ -163,13 +164,13 @@ def dump_imports(pe, jsname, outfile):
 
     # output a javascripty version of the dict
     jsname = jsname or 'ImportOffsets'
-    six.print_("const {:s} = {{".format(jsname), file=outfile)
+    print("const {:s} = {{".format(jsname), file=outfile)
     for m in res:
-        six.print_("  '{:s}': [".format(m.lower()), file=outfile)
+        print("  '{:s}': [".format(m.lower()), file=outfile)
         for hint, name, address in res[m]:
-            six.print_("    [{:d}, '{:s}', '{:s}'],".format(address, m, name), file=outfile)
-        six.print_("  ],", file=outfile)
-    six.print_("};", file=outfile)
+            print("    [{:d}, '{:s}', '{:s}'],".format(address, m, name), file=outfile)
+        print("  ],", file=outfile)
+    print("};", file=outfile)
     return jsname
 
 Args = argparse.ArgumentParser(description='Dump the imports and exports for binaries into the specified output file (or stdout).')
@@ -215,10 +216,10 @@ if __name__ == '__main__':
         continue
 
     latest = sorted(result.keys())[-1]
-    six.print_("module.exports['Name'] = {:s};".format(result[latest]['Name']), file=args.outfile)
+    print("module.exports['Name'] = {:s};".format(result[latest]['Name']), file=args.outfile)
 
     for version, structs in sorted(result.items(), key=operator.itemgetter(0)):
-        six.print_("module.exports['{:s}'] = {{ {:s} }};".format(version, ', '.join(("{:s}: {:s}".format(k, v) for k, v in structs.items()))), file=args.outfile)
+        print("module.exports['{:s}'] = {{ {:s} }};".format(version, ', '.join(("{:s}: {:s}".format(k, v) for k, v in structs.items()))), file=args.outfile)
 
-    six.print_("module.exports[null] = module.exports['{:s}'];".format(latest), file=args.outfile)
+    print("module.exports[null] = module.exports['{:s}'];".format(latest), file=args.outfile)
     sys.exit(0)

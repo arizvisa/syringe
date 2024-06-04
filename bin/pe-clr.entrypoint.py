@@ -1,8 +1,8 @@
-import ptypes,pecoff
+from __future__ import print_function
+import ptypes, pecoff
 
 if __name__ == '__main__':
-    import sys, six
-    import os.path
+    import sys, os.path
 
     if len(sys.argv) != 2:
         raise ValueError('Please provided the path to the PE file.')
@@ -12,7 +12,7 @@ if __name__ == '__main__':
 
     ptypes.setsource(ptypes.prov.file(sys.argv[1], mode='r'))
     z=pecoff.Executable.File()
-    six.print_('Filename: {:s}\n'.format(z.source.file.name), file=sys.stdout)
+    print('Filename: {:s}\n'.format(z.source.file.name), file=sys.stdout)
 
     z=z.l
     p = z['next']['header']
@@ -24,9 +24,9 @@ if __name__ == '__main__':
 
     root = dnm['StreamHeaders'].Get('#~')['Offset'].d
     root = root.l
-    six.print_('Loading strings...', file=sys.stderr)
+    print('Loading strings...', file=sys.stderr)
     names = dnm['StreamHeaders'].Get('#Strings')['Offset'].d.l
-    six.print_('Loading blobs...', file=sys.stderr)
+    print('Loading blobs...', file=sys.stderr)
     blobs = dnm['StreamHeaders'].Get('#Blob')['Offset'].d.l
 
     class pieces(ptypes.pbinary.struct):
@@ -37,16 +37,16 @@ if __name__ == '__main__':
 
     e = dn['EntryPoint'].cast(pieces)
     if e['table'] != pecoff.portable.clr.TMethodDef.type:
-        six.print_('No CLR entrypoint found!', file=sys.stderr)
+        print('No CLR entrypoint found!', file=sys.stderr)
         sys.exit(1)
 
     emethod = root['Tables'][e['table']][e['index']]
-    six.print_('Method:\n{!r}\n'.format(emethod), file=sys.stdout)
+    print('Method:\n{!r}\n'.format(emethod), file=sys.stdout)
 
-    six.print_('MethodDef:', file=sys.stdout)
+    print('MethodDef:', file=sys.stdout)
     res = names.Get(emethod['Name'].int())
     sig = blobs.Get(emethod['Signature'].int()).cast(ptypes.pint.uint32_t)
-    six.print_('{:#x} : {:s} : Signature={:#x}\n'.format(dn['EntryPoint'].int(), res.str(), sig.int()), file=sys.stdout)
+    print('{:#x} : {:s} : Signature={:#x}\n'.format(dn['EntryPoint'].int(), res.str(), sig.int()), file=sys.stdout)
 
     sys.exit(0)
 
@@ -58,13 +58,13 @@ if __name__ == '__main__':
     #42 GenericParam
     #44 GenericParamConstraint
 
-    #six.print_(root['tables'][24][0])
+    #print(root['tables'][24][0])
     #for msa in root['tables'][24]:
     #    if msa['Method'].int() == 0xda:
-    #        six.print_(msa)
+    #        print(msa)
     #
-    #six.print_(root['tables'][43])
-    #six.print_(root['tables'][8][0xde])
-    #six.print_(root['tables'][8][0xdf])
-    #six.print_(root['tables'][8][0xe0])
-    #six.print_(root['tables'][8][0xe1])
+    #print(root['tables'][43])
+    #print(root['tables'][8][0xde])
+    #print(root['tables'][8][0xdf])
+    #print(root['tables'][8][0xe0])
+    #print(root['tables'][8][0xe1])

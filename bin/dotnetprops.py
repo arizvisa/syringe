@@ -1,7 +1,6 @@
-import six, logging, time
-#logging.root.setLevel(logging.INFO)
+from __future__ import print_function
 
-import pecoff, ptypes
+import logging, time, pecoff, ptypes
 from ptypes import pstruct, dyn
 from pecoff.portable import clr
 
@@ -24,7 +23,7 @@ def log(stdout):
     while True:
         message = (yield)
         ts = time.time()
-        six.print_("{:.3f} : {:s}".format(ts - start, message), file=stdout)
+        print("{:.3f} : {:s}".format(ts - start, message), file=stdout)
     return
 
 if __name__ == '__main__':
@@ -32,7 +31,7 @@ if __name__ == '__main__':
     import ptypes, pecoff
 
     if len(sys.argv) != 2:
-        six.print_("Usage: {:s} file".format(sys.argv[0] if len(sys.argv) else 'test'), file=sys.stderr)
+        print("Usage: {:s} file".format(sys.argv[0] if len(sys.argv) else 'test'), file=sys.stderr)
         sys.exit(1)
     filename = sys.argv[1]
     L = log(sys.stderr); next(L)
@@ -110,10 +109,10 @@ if __name__ == '__main__':
 
         properties.append((assembly[mi], ma, res))
         mn, mid = next((mn, mid) for mn, mid in modules if mn.startswith(assembly[mi]))
-        six.print_('{:s}\t{:s}{:s}\t{:s}\t{:s}:{:s}'.format(filename, mn, mid or '', assembly[mi], ma, ','.join('{:s}={:d}'.format(k, v) for k, v in res.items())), file=sys.stdout)
+        print('{:s}\t{:s}{:s}\t{:s}\t{:s}:{:s}'.format(filename, mn, mid or '', assembly[mi], ma, ','.join('{:s}={:d}'.format(k, v) for k, v in res.items())), file=sys.stdout)
 
     else:
         if not properties:
             for mn, mid in modules:
-                six.print_('{:s}\t{:s}{:s}'.format(filename, mn, mid or ''), file=sys.stdout)
+                print('{:s}\t{:s}{:s}'.format(filename, mn, mid or ''), file=sys.stdout)
     sys.exit(0)

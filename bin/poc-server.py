@@ -1,7 +1,7 @@
 import functools, operator, os, types, sys, itertools
-import datetime, cgi, time
-import six, mimetypes
+import datetime, cgi, time, mimetypes
 WIN32 = True if sys.platform == 'win32' else False
+integer_types, string_types = map(tuple, map(set, [map(type, [sys.maxsize, 1 + sys.maxsize]), map(type, ['', u''])]))
 
 try:
     # Python3
@@ -47,7 +47,7 @@ def listdirectory(baseuri, path):
     return l
 
 def find(path='.'+os.sep, depth=None, root='.'+os.sep):
-    if isinstance(depth, six.integer_types):
+    if isinstance(depth, integer_types):
         if depth < 0:
             return
         depth -= 1
@@ -221,10 +221,10 @@ def gen_certificate(private, **params):
     import cryptography.hazmat.backends as chb
     import cryptography.hazmat.primitives as chp
 
-    params['issuer_name'] = X.Name([X.NameAttribute(X.oid.NameOID.COMMON_NAME, params['issuer_name'])]) if isinstance(params['issuer_name'], six.string_types) else params['issuer_name']
+    params['issuer_name'] = X.Name([X.NameAttribute(X.oid.NameOID.COMMON_NAME, params['issuer_name'])]) if isinstance(params['issuer_name'], string_types) else params['issuer_name']
     print("generating {:s}certificate issued by {:s} for {:s} ({:s}).".format('self-signed ' if params['issuer_name'] == params['subject_name'] else '', params['issuer_name'].rfc4514_string(), params['subject_name'].rfc4514_string(), ', '.join(map("{!s}".format, an))))
     try:
-        x509 = functools.reduce(lambda agg, attribute_value: (lambda attribute, value: getattr(agg, attribute)(int(value) if isinstance(value, six.string_types) and value.isdigit() else value))(*attribute_value), params.items(), X.CertificateBuilder())
+        x509 = functools.reduce(lambda agg, attribute_value: (lambda attribute, value: getattr(agg, attribute)(int(value) if isinstance(value, string_types) and value.isdigit() else value))(*attribute_value), params.items(), X.CertificateBuilder())
 
     except AttributeError:
         available = {attribute for attribute in dir(X.CertificateBuilder) if not attribute.startswith('_')} | {'hashAlgorithm'}

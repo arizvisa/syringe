@@ -1,6 +1,7 @@
-import itertools, logging, argparse, os, platform
+from __future__ import print_function
+
+import itertools, logging, argparse, os, platform, ctypes
 import ptypes, pecoff, ndk
-import six, ctypes
 
 class PROCESS_(ptypes.pbinary.flags):
     _fields_ = [
@@ -64,7 +65,7 @@ def kernel32_CloseHandle(hObject):
     k32 = ctypes.WinDLL('kernel32.dll')
     k32.CloseHandle.argtypes = [ctypes.c_size_t]
     k32.CloseHandle.restype = ctypes.c_bool
-    res = k32.CloseHandle(hObject if isinstance(hObject, six.integer_types) else hObject.int())
+    res = k32.CloseHandle(hObject if isinstance(hObject, ptypes.integer_types) else hObject.int())
     if not res:
         error = k32.GetLastError()
         raise RuntimeError("Unable to close handle ({:#x}): error {:#x}".format(hObject.int(), error))
@@ -83,10 +84,10 @@ def kernel32_OpenProcessToken(ProcessHandle, DesiredAccess, TokenHandle):
 
     k32.OpenProcessToken.argtypes = [ctypes.c_size_t, ctypes.c_uint32, tokenHandle_t]
     k32.OpenProcessToken.restype = ctypes.c_bool
-    res = k32.OpenProcessToken(ProcessHandle if isinstance(ProcessHandle, six.integer_types) else ProcessHandle.int(), DesiredAccess.int(), tokenHandle)
+    res = k32.OpenProcessToken(ProcessHandle if isinstance(ProcessHandle, ptypes.integer_types) else ProcessHandle.int(), DesiredAccess.int(), tokenHandle)
     if not res:
         error = k32.GetLastError()
-        raise RuntimeError("Unable to open up process token for handle ({:#x}) with desired access ({:#x}): error {:d}".format(ProcessHandle if isinstance(ProcessHandle, six.integer_types) else ProcessHandle.int(), DesiredAccess.int(), error))
+        raise RuntimeError("Unable to open up process token for handle ({:#x}) with desired access ({:#x}): error {:d}".format(ProcessHandle if isinstance(ProcessHandle, ptypes.integer_types) else ProcessHandle.int(), DesiredAccess.int(), error))
 
     view = memoryview(tokenHandle.contents)
     return TokenHandle.load(source=ptypes.prov.bytes(view.tobytes()))
@@ -155,9 +156,9 @@ def advapi32_AdjustTokenPrivileges(TokenHandle, DisableAllPrivileges, NewState, 
 
     a32.AdjustTokenPrivileges.argtypes = [ctypes.c_size_t, ctypes.c_bool, newState_t, ctypes.c_uint32, oldState_t]
     a32.AdjustTokenPrivileges.restype = ctypes.c_bool
-    res = a32.AdjustTokenPrivileges(TokenHandle if isinstance(TokenHandle, six.integer_types) else TokenHandle.int(), DisableAllPrivileges, newState, bufferLength, previousState, returnLength)
+    res = a32.AdjustTokenPrivileges(TokenHandle if isinstance(TokenHandle, ptypes.integer_types) else TokenHandle.int(), DisableAllPrivileges, newState, bufferLength, previousState, returnLength)
     if not res:
-        raise RuntimeError("Unable to adjust token privileges for handle ({:#x}): error {:d}".format(TokenHandle if isinstance(TokenHandle, six.integer_types) else TokenHandle.int(), k32.GetLastError()))
+        raise RuntimeError("Unable to adjust token privileges for handle ({:#x}): error {:d}".format(TokenHandle if isinstance(TokenHandle, ptypes.integer_types) else TokenHandle.int(), k32.GetLastError()))
 
     if previousState:
         view = memoryview(previousState)
@@ -197,7 +198,7 @@ def ntdll_NtQueryInformationProcess(ProcessHandle, ProcessInformationClass, Proc
 
     nt.NtQueryInformationProcess.argtypes = [ctypes.c_size_t, ctypes.c_uint32, pointer_processinformation_t, ctypes.c_ulong, returnLength_t]
     nt.NtQueryInformationProcess.restype = ctypes.c_uint32
-    res = nt.NtQueryInformationProcess(ProcessHandle if isinstance(ProcessHandle, six.integer_types) else ProcessHandle.int(), ProcessInformationClass, processinformation, ctypes.sizeof(fake_processinformation), returnLength)
+    res = nt.NtQueryInformationProcess(ProcessHandle if isinstance(ProcessHandle, ptypes.integer_types) else ProcessHandle.int(), ProcessInformationClass, processinformation, ctypes.sizeof(fake_processinformation), returnLength)
     if returnLength:
         view = memoryview(returnLength)
         ReturnLength.load(source=ptypes.prov.bytes(view.tobytes()))
@@ -350,9 +351,9 @@ if __name__ == '__main__':
 
         name = fullname if opts.full else shortname
         rows.append([name] + result)
-        six.print_('.', end='')
+        print('.', end='')
 
-    six.print_('loaded {:d} modules!'.format(len(rows) - 1))
+    print('loaded {:d} modules!'.format(len(rows) - 1))
     unpack = lambda name, base, address, *flags: (name, base, address, flags)
     header = rows.pop(0)
     nibbles = max(item[1][1] for item in rows)
