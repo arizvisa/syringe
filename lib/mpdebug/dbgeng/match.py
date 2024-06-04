@@ -14,7 +14,7 @@ class base(object):
     def __cmp__(self, value):
         return (0, -1)[ not bool(self.compare(value)) ]
 
-import six, re
+import re
 class regex(base):
     '''Given a regular expression, return an object that when compared to a matching string will return equivalency'''
     regex = None
