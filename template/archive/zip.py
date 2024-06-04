@@ -1,11 +1,9 @@
-import logging
-
 # TODO: https://www.hanshq.net/zip.html
+from __future__ import print_function
 
-import six, ptypes
+import logging, sys, ptypes, datetime, time
 from ptypes import *
-
-import datetime, time
+integer_types, string_types = ptypes.integer_types, ptypes.string_types
 
 ## General structures
 class MSTime(pbinary.struct):
@@ -551,7 +549,7 @@ class Directory(parray.terminated):
     def isTerminator(self, value):
         if isinstance(value['record'], EndOfCentralDirectory):
             return True
-        return isinstance(self.length, six.integer_types) and len(self.value) >= self.length
+        return isinstance(self.length, integer_types) and len(self.value) >= self.length
 
     def member(self, offset):
         for item in self:
@@ -568,9 +566,9 @@ class File(Directory):
         return isinstance(value['record'], EndOfCentralDirectory)
 
 if __name__ == '__main__':
-    import sys, os, os.path
-    import zlib, logging, argparse
+    import sys, os, os.path, zlib, logging, argparse
     import ptypes, archive.zip
+
     if sys.platform == 'win32': import msvcrt
     logging.root.setLevel(logging.INFO)
 
@@ -591,12 +589,12 @@ if __name__ == '__main__':
     arg_info_gr.add_argument('-j', '--compressed', action='store_true', help='extract data from archive in its compressed form', dest='compress', default=False)
 
     if len(sys.argv) <= 1:
-        six.print_(arg_p.format_usage(), file=sys.stdout)
+        print(arg_p.format_usage(), file=sys.stdout)
         sys.exit(0)
 
     args = arg_p.parse_args(sys.argv[1:])
     if args.mode == 'help':
-        six.print_(arg_p.format_help(), file=sys.stdout)
+        print(arg_p.format_help(), file=sys.stdout)
         sys.exit(0)
 
     # fix up arguments
@@ -715,7 +713,7 @@ if __name__ == '__main__':
 
     # help
     else:
-        six.print_(arg_p.format_help(), file=sys.stdout)
+        print(arg_p.format_help(), file=sys.stdout)
         sys.exit(1)
 
     # for each record...
@@ -742,7 +740,7 @@ if __name__ == '__main__':
         res['path'], res['name'] = os.path.split(res['file name'] if 'file name' in res.keys() else rec.name())
 
         # write to a generated filename
-        if isinstance(target, six.string_types):
+        if isinstance(target, string_types):
             outname = target.format(**res)
 
             dirpath, name = os.path.split(outname)
@@ -768,6 +766,6 @@ if __name__ == '__main__':
         # fall-back to writing to already open target
         else:
             logging.debug('{:s}ing {:d} bytes from record({:d}) to stream: {:s}'.format(args.mode.title(), len(data), int(rec.name()), target.name))
-            getattr(target, 'buffer', target).write(data) if args.mode in {'extract'} else six.print_(data, file=target)
+            getattr(target, 'buffer', target).write(data) if args.mode in {'extract'} else print(data, file=target)
         continue
     sys.exit(0)

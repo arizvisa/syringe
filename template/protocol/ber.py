@@ -1,6 +1,7 @@
-import sys, logging, math, six, codecs, operator, builtins, itertools, functools
+import sys, logging, math, codecs, operator, builtins, itertools, functools
 import ptypes, ptypes.bitmap as bitmap, ptypes.utils as utils
 from ptypes import *
+integer_types, string_types = ptypes.integer_types, ptypes.string_types
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
@@ -21,7 +22,7 @@ class IdentifierLong(pbinary.terminatedarray):
 
     def set(self, *integer, **fields):
         '''Apply the specified integer to the structure'''
-        if len(integer) == 1 and isinstance(integer[0], six.integer_types):
+        if len(integer) == 1 and isinstance(integer[0], integer_types):
             integer, = integer
 
             # calculate the number of 7-bit pieces for our integer
@@ -57,7 +58,7 @@ class Length(pbinary.struct):
 
     def set(self, *integer, **fields):
         '''Apply the specified length to the structure'''
-        if len(integer) == 1 and isinstance(integer[0], six.integer_types):
+        if len(integer) == 1 and isinstance(integer[0], integer_types):
             integer, = integer
 
             # if our integer can be fit within 7 bits, then just assign it to 'count'
@@ -97,7 +98,7 @@ class Tag(pbinary.struct):
 
     def set(self, *integer, **fields):
         '''Apply the tag number to the structure'''
-        if len(integer) == 1 and isinstance(integer[0], six.integer_types):
+        if len(integer) == 1 and isinstance(integer[0], integer_types):
             integer, = integer
             return self.alloc(TagShort=integer) if integer < pow(2,5) - 1 else self.alloc(TagShort=pow(2,5) - 1).set(TagLong=integer)
         return super(Tag, self).set(*integer, **fields)
@@ -123,7 +124,7 @@ class Constructed(parray.block):
     @classmethod
     def typename(cls):
         if hasattr(cls, 'type'):
-            klass, tag = (Context.Class, cls.type) if isinstance(cls.type, six.integer_types) else cls.type
+            klass, tag = (Context.Class, cls.type) if isinstance(cls.type, integer_types) else cls.type
             return "{:s}<{:d},{:d}>".format(cls.__name__, getattr(klass, 'Class', klass), tag)
         return super(Constructed, cls).typename()
 
@@ -166,7 +167,7 @@ class Constructed(parray.block):
 
     def classname(self):
         if hasattr(self, 'type'):
-            klass, tag = (Context.Class, self.type) if isinstance(self.type, six.integer_types) else self.type
+            klass, tag = (Context.Class, self.type) if isinstance(self.type, integer_types) else self.type
             protocol = self.parent.Protocol if self.parent else Protocol
 
             # Use the protocol to look up the Class and Tag for the type
@@ -198,7 +199,7 @@ class Constructed(parray.block):
                 raise ValueError("Error with {:s} due to its definition for field \"{:s}\" using a type ({!s}) that is missing a \"{:s}\" attribute.".format('.'.join([cls.__module__, cls.__name__]), name, item, 'type'))
 
             # Now that we have the ptype, we can rip its klasstag...
-            klass, tag = (Context.Class, item.type) if isinstance(item.type, six.integer_types) else item.type
+            klass, tag = (Context.Class, item.type) if isinstance(item.type, integer_types) else item.type
             klasstag = getattr(klass, 'Class', klass), tag
 
             # ...and append it to our table for later retrieval.
@@ -225,7 +226,7 @@ class Constructed(parray.block):
 
         # If we're looking for a particular field name, then we need to
         # fetch the lookup table from our current fields.
-        if isinstance(key, six.string_types):
+        if isinstance(key, string_types):
             cls = self.__class__
             table, _ = self.__get_lookup_table__()
 
@@ -274,7 +275,7 @@ class Constructed(parray.block):
         raise KeyError(key)
 
     def __getitem__(self, index):
-        if isinstance(index, six.string_types):
+        if isinstance(index, string_types):
             return self.field(index)
         return super(Constructed, self).__getitem__(index)
 
@@ -445,7 +446,7 @@ class Block(parray.block):
 class String(parray.block):
     _object_ = pstr.char_t
     def str(self):
-        encoding = codecs.lookup(self._object_.encoding) if isinstance(self._object_.encoding, six.string_types) else self._object_.encoding
+        encoding = codecs.lookup(self._object_.encoding) if isinstance(self._object_.encoding, string_types) else self._object_.encoding
         res, _ = encoding.decode(self.serialize())
         return res
     def isTerminator(self, value):
@@ -465,7 +466,7 @@ class OID(ptype.type):
         # Convert our _values_ into (name, tuple) since that's now the standard format.
         values = []
         for name, oid in getattr(self, '_values_', []):
-            packed = tuple((int(item, 10) for item in oid.split('.')) if isinstance(oid, six.string_types) else oid)
+            packed = tuple((int(item, 10) for item in oid.split('.')) if isinstance(oid, string_types) else oid)
             values.append((name, packed))
         self._values_[:] = values
 
@@ -507,7 +508,7 @@ class OID(ptype.type):
 
         # If we received a string, then we'll try to look it up before
         # converting it to a tuple and trying again.
-        if isinstance(value, six.string_types):
+        if isinstance(value, string_types):
             string = value
 
             # If our string begins with an alpha character (a keystring from rfc3383),
@@ -569,7 +570,7 @@ class OID(ptype.type):
             return self.get() == value
 
         # If it's not a string, then we have no clue what to do here.
-        elif not isinstance(value, six.string_types):
+        elif not isinstance(value, string_types):
             raise KeyError(value)
 
         # If it's a name, then we need to search our values to match the tuple.
@@ -760,7 +761,7 @@ class Element(pstruct.type):
         # Warn the user if the terminator does not check out.
         item = result.value[-1] if len(result.value) else None
         if not Fsentinel(item):
-            logging.warning("{:s}.alloc : Element {:s} with an indefinite length does not have an array instance that ends with an EOC element ({!s})".format('.'.join([cls.__module__, cls.__name__]), self.instance(), item if isinstance(item, six.integer_types) else item.summary()))
+            logging.warning("{:s}.alloc : Element {:s} with an indefinite length does not have an array instance that ends with an EOC element ({!s})".format('.'.join([cls.__module__, cls.__name__]), self.instance(), item if isinstance(item, integer_types) else item.summary()))
         return result
 
     def __alloc_value_construct(self, result, size):
@@ -791,7 +792,7 @@ class Element(pstruct.type):
         # one from the Universal/Primitive class using whatever its Tag is in .type
         value = fields.get('Value', fields.get('value', None))
         if hasattr(value, 'type'):
-            klass, tag = (Context.Class, value.type) if isinstance(value.type, six.integer_types) else value.type
+            klass, tag = (Context.Class, value.type) if isinstance(value.type, integer_types) else value.type
             constructedQ = 1 if (ptypes.istype(value) and issubclass(value, Constructed)) or isinstance(value, Constructed) else 0
             type = Type().alloc(Class=getattr(klass, 'Class', klass), Constructed=constructedQ)
             fields.setdefault('Type', type.set(Tag=tag))
@@ -825,7 +826,7 @@ class ProtocolClass(ptype.definition):
 
     @classmethod
     def __set__(cls, type, object, **kwargs):
-        if isinstance(type, six.integer_types):
+        if isinstance(type, integer_types):
             object.type = cls.Class, type
             return super(ProtocolClass, cls).__set__(type, object)
         return super(ProtocolClass, cls).__set__(type, object)

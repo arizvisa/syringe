@@ -1,7 +1,8 @@
 # http://www.freebsd.org/cgi/man.cgi?query=tar&sektion=5&manpath=FreeBSD+8-current
-import ptypes
+from __future__ import print_function
+
+import sys, operator, ptypes
 from ptypes import *
-import sys, operator, six
 
 BLOCKSIZE = pow(2, 9)
 PAGESIZE = pow(2, 12)
@@ -65,7 +66,7 @@ class linkflag(pint.enum, linkflag_t):
         ('FIFOTYPE', b'6'),  # FIFO special (archiving a FIFO file archives its existence, not contents)
         ('CONTTYPE', b'7'),  # reserve
     ]
-    _values_ = [(_, six.byte2int(by)) for _, by in _values_]
+    _values_ = [(_, bytearray(by)[0]) for _, by in _values_]
 
 class common_t(pstruct.type):
     _fields_ = [
@@ -387,10 +388,10 @@ class header_visor_member(header_ustar_member):
     magic = 'visor'
 
 if __name__ == '__main__':
-    import six
     import sys, os, os.path, logging, argparse, fnmatch
     import ptypes, archive.tar
     if sys.platform == 'win32': import msvcrt
+    string_types = ptypes.string_types
 
     arg_p = argparse.ArgumentParser(prog=sys.argv[0] if len(sys.argv) > 0 else 'tar.py', description="List or extract information out of a .tar file", add_help=False)
     arg_p.add_argument('FILE', nargs='*', action='append', type=str, help='list of globs to filter members to extract')
@@ -404,12 +405,12 @@ if __name__ == '__main__':
     arg_device_gr.add_argument('-o', '--output', action='store', type=str, metavar="FORMATSPEC", help="extract members by applying attributes to specified FORMATSPEC (or DEVICE)", dest='target', default='-')
 
     if len(sys.argv) <= 1:
-        six.print_(arg_p.format_usage(), file=sys.stdout)
+        print(arg_p.format_usage(), file=sys.stdout)
         sys.exit(0)
 
     args = arg_p.parse_args(sys.argv[1:])
     if args.mode == 'help':
-        six.print_(arg_p.format_help(), file=sys.stdout)
+        print(arg_p.format_help(), file=sys.stdout)
         sys.exit(0)
 
     # fix up arguments
@@ -475,7 +476,7 @@ if __name__ == '__main__':
 
     # help
     else:
-        six.print_(arg_p.format_help(), file=sys.stdout)
+        print(arg_p.format_help(), file=sys.stdout)
         sys.exit(1)
 
     # for each member...
@@ -501,7 +502,7 @@ if __name__ == '__main__':
         res['path'], res['name'] = os.path.split(member.filename().replace('/', os.sep))
 
         # write to a generated filename
-        if isinstance(target, six.string_types):
+        if isinstance(target, string_types):
             outname = target.format(**res)
 
             dirpath, name = os.path.split(outname)
@@ -522,10 +523,10 @@ if __name__ == '__main__':
                 logging.info("Creating file for member : {:d} : {:s}".format(int(member.name()), res))
 
             with open(res, 'wb') as out:
-                out.write(data) if args.mode in {'extract'} else six.print_(data, file=out)
+                out.write(data) if args.mode in {'extract'} else print(data, file=out)
             continue
 
         # fall-back to writing to already open target
-        target.write(data) if args.mode in {'extract'} else six.print_(data, file=target)
+        target.write(data) if args.mode in {'extract'} else print(data, file=target)
 
     sys.exit(0)

@@ -1,4 +1,4 @@
-import ptypes, six, operator, itertools, functools
+import ptypes, operator, itertools, functools
 
 from ptypes import *
 from . import intofdata, dataofint, __izip_longest__
@@ -42,9 +42,9 @@ class ByteStuffer(ptype.encoded_t):
     def encode(self, object, **attrs):
         res, iterable = b'', iter(bytearray(object.serialize()))
         for by in iterable:
-            res += six.int2byte(by)
+            res += bytes(bytearray([by]))
             if by == 0xff:
-                res += six.int2byte(0)
+                res += bytes(bytearray([0]))
             continue
         return ptype.block().set(res)
 
@@ -57,11 +57,11 @@ class ByteStuffer(ptype.encoded_t):
                 if m == 0xff:
                     n = next(iterable)
                     if n == 0:
-                        state += six.int2byte(0xff)
+                        state += bytes(bytearray([0xff]))
                         continue
-                    state += six.int2byte(m) + six.int2byte(n)
+                    state += bytes(bytearray([m, n]))
                 else:
-                    state += six.int2byte(m)
+                    state += bytes(bytearray([m]))
                 continue
 
         except StopIteration:
@@ -176,10 +176,10 @@ class Stream(ptype.encoded_t):
                 if m == 0xff:
                     n = next(iterable)
                     result.append(state)
-                    result.append(six.int2byte(m) + six.int2byte(n))
+                    result.append(bytes(bytearray([m, n])))
                     state = b''
                     continue
-                state += six.int2byte(m)
+                state += bytes(bytearray([m]))
 
         except StopIteration:
             result.append(state)

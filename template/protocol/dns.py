@@ -1,5 +1,6 @@
-import six, ptypes, osi.network.inet4, osi.network.inet6
+import ptypes, osi.network.inet4, osi.network.inet6
 from ptypes import *
+integer_types, string_types = ptypes.integer_types, ptypes.string_types
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
@@ -49,14 +50,14 @@ class Name(pstruct.type):
         return self.summary()
 
     def set(self, value):
-        if isinstance(value, six.integer_types):
+        if isinstance(value, integer_types):
             res = pint.uint16_t().set(0xc000 | value)
             return self.load(source=ptypes.prov.bytes(res.serialize()))
         elif isinstance(value, bytes) and len(value) < 0x40:
             return self.alloc(length=len(value), string=value)
-        elif isinstance(value, six.string_types) and len(value) < 0x40:
+        elif isinstance(value, string_types) and len(value) < 0x40:
             return self.alloc(length=len(value), string=value.encode('ascii'))
-        elif isinstance(value, six.string_types) and len(value) < 0xc0:
+        elif isinstance(value, string_types) and len(value) < 0xc0:
             raise ValueError(value)
         raise ValueError(value)
 
@@ -95,7 +96,7 @@ class Label(parray.terminated):
 
     def alloc(self, items):
         name = items
-        if isinstance(name, six.string_types):
+        if isinstance(name, string_types):
             items = name.split('.') if name.endswith('.') else (name + '.').split('.')
             return super(Label, self).alloc(items)
         return super(Label, self).alloc(items)

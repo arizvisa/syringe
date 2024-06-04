@@ -1,8 +1,9 @@
 '''
 Multipoint Application Sharing protocol (T.128)
 '''
-import sys, six, ptypes, protocol.gcc as gcc
+import sys, ptypes, protocol.gcc as gcc
 from ptypes import *
+integer_types, string_types = ptypes.integer_types, ptypes.string_types
 
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 
@@ -354,7 +355,7 @@ class OrderCapabilitySet(pstruct.type):
 
         def __getindex__(self, index):
             undefined = 'undefinedOrder'
-            return self.__indexByName__.get(index, int(index[len(undefined):]) if isinstance(index, six.string_types) and index.startswith(undefined) else index)
+            return self.__indexByName__.get(index, int(index[len(undefined):]) if isinstance(index, string_types) and index.startswith(undefined) else index)
 
         def summary(self):
             res = [ index for index, item in enumerate(self) if item.int() > 0 ]

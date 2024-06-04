@@ -6,7 +6,7 @@ from protocol.mas import CapabilitySetType, PDUType, PDUType2, Integer8, Integer
 from protocol.intsafe import GUID
 from ptypes import *
 
-import functools, itertools, types, builtins, operator, six
+import functools, itertools, types, builtins, operator
 import logging
 
 fcompose = lambda *f: functools.reduce(lambda f1, f2: lambda *a: f1(f2(*a)), builtins.reversed(f))
