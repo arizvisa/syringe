@@ -594,7 +594,7 @@ class enum(type):
         prefix, spec = spec[:-1], spec[-1:]
         if not prefix and spec in 's':
             res = self.get()
-            value = ord(value) if isinstance(value, ordinal_types) and len(value) == 1 else value
+            value = ord(res) if isinstance(res, ordinal_types) and len(res) == 1 else res
             integer = "{:#0{:d}x}".format(value, 2 + 2 * self.size())
             string = self.__byvalue__(value, None)
             summary = integer if string is None else "{:s}({:s})".format(string, integer)
@@ -602,7 +602,7 @@ class enum(type):
 
         elif spec in 's':
             res = self.get()
-            value = ord(value) if isinstance(value, ordinal_types) and len(value) == 1 else value
+            value = ord(res) if isinstance(res, ordinal_types) and len(res) == 1 else res
             extra, newprefix = 2 if prefix.startswith('#') else 0, prefix[1:] if prefix.startswith('#') else prefix
             integer = "{:{:s}0{:d}x}".format(value, '#' if extra else '', extra + 2 * self.size())
             string = self.__byvalue__(value, None)
@@ -611,13 +611,14 @@ class enum(type):
 
         elif spec in 'don':
             res = self.get()
-            value = ord(value) if isinstance(value, ordinal_types) and len(value) == 1 else value
-            string, integer = self.__byvalue__(value, None), "{:{:s}{:s}}".format(value, prefix, spec)
-            return integer if string is None else "{:s}({:s})".format(string, integer)
+            value = ord(res) if isinstance(res, ordinal_types) and len(res) == 1 else res
+            string, integer = self.__byvalue__(value, None), "{:{:s}}".format(value, spec)
+            formatted = integer if string is None else "{:s}({:s})".format(string, integer)
+            return "{:{:s}s}".format(formatted, prefix)
 
         elif prefix in {'', '#', '#0'} and spec in 'xX':
             res = self.get()
-            value = ord(value) if isinstance(value, ordinal_types) and len(value) == 1 else value
+            value = ord(res) if isinstance(res, ordinal_types) and len(res) == 1 else res
             extra = 2 if prefix.startswith('#') else 0
             integer = "{:{:s}{:d}{:s}}".format(value, prefix if prefix.endswith('0') else "{:s}0".format(prefix), extra + 2 * self.size(), spec)
             string = self.__byvalue__(value, None)
@@ -625,11 +626,13 @@ class enum(type):
 
         elif spec in 'xX':
             res = self.get()
-            value = ord(value) if isinstance(value, ordinal_types) and len(value) == 1 else value
-            extra = 2 if prefix.startswith('#') else 0
-            integer = "{:{:s}{:s}}".format(value, prefix, spec)
+            value = ord(res) if isinstance(res, ordinal_types) and len(res) == 1 else res
+            alt = prefix.find('#')
+            extra, prefix = (0, prefix) if alt < 0 else (2, prefix[:alt] + prefix[alt + 1:])
+            integer = "{:{:s}0{:d}{:s}}".format(value, '' if alt < 0 else '#', extra + 2 * self.size(), spec)
             string = self.__byvalue__(value, None)
-            return integer if string is None else "{:s}({:s})".format(string, integer)
+            formatted = integer if string is None else "{:s}({:s})".format(string, integer)
+            return "{:{:s}s}".format(formatted, prefix)
 
         return super(enum, self).__format__(prefix + spec)
 
@@ -897,6 +900,146 @@ if __name__ == '__main__':
     def test_integer_byte_format_6():
         res, formatter = pint.uint8_t().set(0xaa), "{:<#10x}".format
         if formatter(res).rstrip() == '0xaa' and len(formatter(res)) == 10:
+            raise Success
+
+    @TestCase
+    def test_enum_byte_format_1():
+        class e(pint.enum, pint.uint8_t):
+            _values_ = [
+                ('default', 0xaa),
+            ]
+        res, formatter = e().set('default'), "{:s}".format
+        if formatter(res) == 'default(0xaa)':
+            raise Success
+
+    @TestCase
+    def test_enum_byte_format_2():
+        class e(pint.enum, pint.uint8_t):
+            _values_ = [
+                ('default', 0xaa),
+            ]
+        res, formatter = e().set('default'), "{:>10s}".format
+        if formatter(res).lstrip() == 'default' and len(formatter(res)) == 10:
+            raise Success
+
+    @TestCase
+    def test_enum_byte_format_3():
+        class e(pint.enum, pint.uint8_t):
+            _values_ = [
+                ('default', 0xaa),
+            ]
+        res, formatter = e().set('default'), "{:#<10s}".format
+        if formatter(res).rstrip() == 'default' and len(formatter(res)) == 10:
+            raise Success
+
+    @TestCase
+    def test_enum_byte_format_4():
+        class e(pint.enum, pint.uint8_t):
+            _values_ = [
+                ('default', 0xaa),
+            ]
+        res, formatter = e().set('default'), "{:o}".format
+        if formatter(res) == 'default(252)':
+            raise Success
+
+    @TestCase
+    def test_enum_byte_format_5():
+        class e(pint.enum, pint.uint8_t):
+            _values_ = [
+                ('default', 0xaa),
+            ]
+        res, formatter = e().set('default'), "{:o}".format
+        if formatter(res) == 'default(252)':
+            raise Success
+
+    @TestCase
+    def test_enum_byte_format_6():
+        class e(pint.enum, pint.uint8_t):
+            _values_ = [
+                ('default', 0x0a),
+            ]
+        res, formatter = e().set('default'), "{:X}".format
+        if formatter(res) == 'default(0A)':
+            raise Success
+
+    @TestCase
+    def test_enum_byte_format_7():
+        class e(pint.enum, pint.uint8_t):
+            _values_ = [
+                ('default', 0x0a),
+            ]
+        res, formatter = e().set('default'), "{:#0X}".format
+        if formatter(res) == 'default(0X0A)':
+            raise Success
+
+    @TestCase
+    def test_enum_byte_format_8():
+        class e(pint.enum, pint.uint8_t):
+            _values_ = [
+                ('default', 0x0a),
+            ]
+        res, formatter = e().set('default'), "{:#>20X}".format
+        if formatter(res).lstrip() == 'default(0X0A)' and len(formatter(res)) == 20:
+            raise Success
+
+    @TestCase
+    def test_enum_byte_format_9():
+        class e(pint.enum, pint.uint8_t):
+            _values_ = [
+                ('default', 0x0a),
+            ]
+        res, formatter = e().set(0x44), "{:d}".format
+        if formatter(res) == '68':
+            raise Success
+
+    @TestCase
+    def test_enum_byte_format_10():
+        class e(pint.enum, pint.uint8_t):
+            _values_ = [
+                ('default', 0x0a),
+            ]
+        res, formatter = e().set(0x44), "{:x}".format
+        if formatter(res) == '44':
+            raise Success
+
+    @TestCase
+    def test_enum_byte_format_11():
+        class e(pint.enum, pint.uint8_t):
+            _values_ = [
+                ('default', 0x0a),
+            ]
+        res, formatter = e().set(0x44), "{:#x}".format
+        if formatter(res) == '0x44':
+            raise Success
+
+    @TestCase
+    def test_enum_byte_format_12():
+        class e(pint.enum, pint.uint8_t):
+            _values_ = [
+                ('default', 0x0a),
+            ]
+        res, formatter = e().set(0x44), "{:80x}".format
+        if formatter(res).strip() == '44' and len(formatter(res)) == 80:
+            raise Success
+
+    @TestCase
+    def test_enum_byte_format_13():
+        class e(pint.enum, pint.uint8_t):
+            _values_ = [
+                ('default', 0xaa),
+            ]
+        res, formatter = e().set(0xaa), "{:>80o}".format
+        if formatter(res).lstrip() == 'default(252)' and len(formatter(res)) == 80:
+            raise Success
+
+    @TestCase
+    def test_enum_byte_format_14():
+        class e(pint.enum, pint.uint8_t):
+            _values_ = [
+                ('default', 0x0a),
+            ]
+        res, formatter = e().set(0x44), "{:<80o}".format
+        if formatter(res).rstrip() == '104' and len(formatter(res)) == 80:
             raise Success
 
 if __name__ == '__main__':
