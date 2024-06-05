@@ -863,6 +863,42 @@ if __name__ == '__main__':
         if x.int() == integer and x.serialize() == flipped.serialize() == input:
             raise Success
 
+    @TestCase
+    def test_integer_byte_format_1():
+        res, formatter = pint.uint8_t().set(0xaa), "{:5d}".format
+        if formatter(res) == '  170':
+            raise Success
+
+    @TestCase
+    def test_integer_byte_format_2():
+        res, formatter = pint.uint8_t().set(0xaa), "{:o}".format
+        if formatter(res) == '252':
+            raise Success
+
+    @TestCase
+    def test_integer_byte_format_3():
+        res, formatter = pint.uint8_t().set(0xaa), "{:#X}".format
+        if formatter(res) == '0XAA':
+            raise Success
+
+    @TestCase
+    def test_integer_byte_format_4():
+        res, formatter = pint.uint8_t().set(0xaa), "{:x}".format
+        if formatter(res) == 'aa':
+            raise Success
+
+    @TestCase
+    def test_integer_byte_format_5():
+        res, formatter = pint.uint8_t().set(0xaa), "{:>10X}".format
+        if formatter(res).lstrip() == 'AA' and len(formatter(res)) == 10:
+            raise Success
+
+    @TestCase
+    def test_integer_byte_format_6():
+        res, formatter = pint.uint8_t().set(0xaa), "{:<#10x}".format
+        if formatter(res).rstrip() == '0xaa' and len(formatter(res)) == 10:
+            raise Success
+
 if __name__ == '__main__':
     import logging
     ptypes.config.defaults.log.setLevel(logging.DEBUG)
