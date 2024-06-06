@@ -10,18 +10,54 @@ class u_char(pint.uint8_t): pass
 class u_short(pint.uint16_t): pass
 class u_long(pint.uint32_t): pass
 
-class in_addr(u_long):
+class in_addr(pint.enum, u_long):
+    _values_ = [
+        ('ALL-SYSTEMS', 0xE0000001),
+        ('ALL-ROUTERS', 0xE0000002),
+        ('DVRMP', 0xE0000004),
+        ('ALL-OSPF', 0xE0000005),
+        ('ALL-OSPF-DR', 0xE0000006),
+        ('ALL-RIPv2', 0xE0000009),
+        ('EIGRP', 0xE000000A),
+        ('PIM', 0xE000000D),
+        ('VRRP', 0xE0000012),
+        ('IPAllL1ISs', 0xE0000013),
+        ('IPAllL2ISs', 0xE0000014),
+        ('IPAllIntermediate', 0xE0000015),
+        ('IGMPv3', 0xE0000016),
+        ('HSRPv2', 0xE0000066),
+        ('MDAP', 0xE0000067),
+        ('PTPv2-Peer', 0xE000006B),
+        ('AllJoyn', 0xE0000071),
+        ('MDNS', 0xE00000FB),
+        ('LLMNR', 0xE00000FC),
+        ('Teredo-Discovery', 0xE00000FD),
+        ('NTP-Client', 0xE0000101),
+        ('SLPv1-General', 0xE0000116),
+        ('SLPv1-Agent', 0xE0000123),
+        ('AUTO-RP-ANNOUNCE', 0xE0000127),
+        ('AUTO-RP-DISCOVERY', 0xE0000128),
+        ('H.323', 0xE0000129),
+        ('PTPv2', 0xE0000181),
+        ('SSDP', 0xEFFFFFFA),
+        ('SLPv2', 0xEFFFFFFA),
+    ]
+
     def summary(self):
         res = self.int()
         integer = bitmap.new(res, 32)
         octets = bitmap.split(integer, 8)
+        if self.has(res):
+            return '{:#s}({:#x}) : {:d}.{:d}.{:d}.{:d}'.format(self, *map(bitmap.int, [integer] + octets))
         return '{:#x} : {:d}.{:d}.{:d}.{:d}'.format(*map(bitmap.int, [integer] + octets))
 
     def set(self, integer):
-        if isinstance(integer, str):
+        if isinstance(integer, str) and self.has(integer):
+            return self.__setvalue__(integer)
+        elif isinstance(integer, str):
             octets = integer.split('.', 3)
             return self.set([builtins.int(item) for item in integer.split('.')])
-        elif isinstance(integer, list):
+        elif isinstance(integer, (tuple, list)):
             octets = bitmap.join([bitmap.new(item, 8) for item in integer])
             integer = bitmap.push(octets, bitmap.new(0, 32 - bitmap.size(octets)))
             return self.set(bitmap.int(integer))
