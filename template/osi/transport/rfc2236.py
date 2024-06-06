@@ -1,4 +1,4 @@
-import ptypes
+import ptypes, functools
 from ptypes import *
 
 from . import layer, stackable, terminal, network
@@ -10,16 +10,16 @@ from ..network import inet4
 class u_char(pint.uint8_t): pass
 class u_short(pint.uint16_t): pass
 class u_long(pint.uint32_t): pass
+class in_addr(inet4.in_addr): pass
 
-class in_addr(pint.enum, inet4.in_addr):
-    _values_ = [
-        ('ALL-SYSTEMS', 0xE0000001),
-        ('ALL-ROUTERS', 0xE0000002),
-    ]
-    def set(self, integer):
-        if isinstance(integer, str) and self.has(integer):
-            return self.__setvalue__(integer)
-        return super(pint.enum, self).set(integer)
+def checksum(bytes):
+    array = bytearray(bytes)
+    iterable = map(functools.partial(functools.reduce, lambda agg, item: 0x100 * agg + item), zip(*[iter(array)] * 2))
+    shorts = [item for item in iterable]
+    seed = sum(shorts)
+    shifted, _ = divmod(seed, pow(2, 16))
+    checksum = shifted + (seed & 0XFFFF)
+    return 0xFFFF & ~checksum
 
 class IGMP_(pint.enum, u_char):
     _values_ = [
@@ -45,6 +45,14 @@ class igmp(pstruct.type, stackable):
     def seconds(self):
         res = self['igmp_code']
         return res.int() * 0.1
+
+    def alloc(self, **fields):
+        res = super(igmp, self).alloc(**fields)
+        if 'igmp_cksum' not in fields:
+            data = res.set(igmp_cksum=0).serialize()
+            res['igmp_cksum'].set(checksum(bytearray(data)))
+        return res
+
     def layer(self):
         layer, id, remaining = super(header, self).layer()
         res = self['length'].li
