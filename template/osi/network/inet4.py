@@ -10,6 +10,7 @@ class u_char(pint.uint8_t): pass
 class u_short(pint.uint16_t): pass
 class u_long(pint.uint32_t): pass
 
+@ptypes.pint.bigendian
 class in_addr(pint.enum, u_long):
     _values_ = [
         ('ALL-SYSTEMS', 0xE0000001),
@@ -42,6 +43,16 @@ class in_addr(pint.enum, u_long):
         ('SSDP', 0xEFFFFFFA),
         ('SLPv2', 0xEFFFFFFA),
     ]
+
+    def __format__(self, spec):
+        hash = spec.find('#')
+        if spec.endswith('A'):
+            spec = spec[:-1] if hash < 0 else spec[:hash] + spec[1 + hash:-1]
+            octets = bytearray(self.serialize())
+            dotted = "{:d}.{:d}.{:d}.{:d}".format(*octets)
+            res = "{:#s}({:s})".format(self, dotted) if hash >= 0 and self.has(self.int()) else dotted
+            return "{:{:s}s}".format(res, spec)
+        return super(in_addr, self).__format__(spec)
 
     def summary(self):
         res = self.int()
