@@ -52,13 +52,13 @@ class v2(v1):
 
 class v3_report_mode(pint.enum, u_char):
     _values_ = [
-        ('DO_NOTHING', 0),              # don't send a record
-        ('MODE_IS_INCLUDE', 1),         # MODE_IN
-        ('MODE_IS_EXCLUDE', 2),         # MODE_EX
-        ('CHANGE_TO_INCLUDE_MODE', 3),  # TO_IN
-        ('CHANGE_TO_EXCLUDE_MODE', 4),  # TO_EX
-        ('ALLOW_NEW_SOURCES', 5),       # ALLOW_NEW
-        ('BLOCK_OLD_SOURCES', 6),       # BLOCK_OLD
+        ('NOTHING', 0),     # don't send a record
+        ('MODE_IN', 1),     # MODE_IS_INCLUDE
+        ('MODE_EX', 2),     # MODE_IS_EXCLUDE
+        ('TO_IN', 3),       # CHANGE_TO_INCLUDE_MODE
+        ('TO_EX', 4),       # CHANGE_TO_EXCLUDE_MODE
+        ('ALLOW_NEW', 5),   # ALLOW_NEW_SOURCES
+        ('BLOCK_OLD', 6),   # BLOCK_OLD_SOURCES
     ]
 
 class v3_grouprec(pstruct.type):
@@ -68,7 +68,11 @@ class v3_grouprec(pstruct.type):
 
     def __ig_auxdata(self):
         res = self['ig_datalen'].li
-        return dyn.block(res.int()) if res.int() else ptype.block
+        return dyn.block(4 * res.int()) if res.int() else ptype.block
+
+    def __ig_alignaux(self):
+        res, size = self['ig_datalen'].li, self['ig_auxdata'].li.size()
+        return dyn.block(max(0, 4 * res.int() - size))
 
     _fields_ = [
         (v3_report_mode, 'ig_type'),        # record type
@@ -77,6 +81,7 @@ class v3_grouprec(pstruct.type):
         (in_addr, 'ig_group'),              # group address being reported
         (__ig_sources, 'ig_sources'),       # source addresses
         (__ig_auxdata, 'ig_auxdata'),
+        (__ig_alignaux, 'ig_alignaux'),
     ]
 
     def summary(self):
@@ -93,7 +98,9 @@ class v3_grouprec(pstruct.type):
         if 'ig_numsrc' not in fields:
             res['ig_numsrc'].set(len(res['ig_sources']))
         if 'ig_datalen' not in fields:
-            res['ig_datalen'].set(res['ig_auxdata'].size())
+            sz = sum(res[fld].size() for fld in ['ig_auxdata', 'ig_alignaux'])
+            words, extra = divmod(sz, 4)
+            res['ig_datalen'].set(words)
         return res
 
 class v3_group_records(parray.type):
@@ -197,7 +204,6 @@ if __name__ == '__main__':
     import ptypes, osi.transport.igmp
     from osi.transport.igmp import igmp
 
-    importlib.reload(osi.transport.igmp)
     data = bytes.fromhex('2200fa150000000103000000e00000e8')
     x = igmp().load(source=ptypes.prov.bytes(data))
     print(x)
@@ -205,8 +211,8 @@ if __name__ == '__main__':
     print(x['igmp_group']['ir_groups'])
     print(x['igmp_group']['ir_groups'][0].summary())
     print(x['igmp_group']['ir_groups'][0]['ig_group'].set('EIGRP'))
-    print("{:#s}".format(x['igmp_group']['ir_groups']['ig_group']))
-    print("{:#A}".format(x['igmp_group']['ir_groups']['ig_group']))
+    print("{:#s}".format(x['igmp_group']['ir_groups'][0]['ig_group']))
+    print("{:#A}".format(x['igmp_group']['ir_groups'][0]['ig_group']))
 
     data = bytes.fromhex('2200eefb0000000104000000ea010101')
     x = igmp().load(source=ptypes.prov.bytes(data))
@@ -216,3 +222,8 @@ if __name__ == '__main__':
     print("{:A}".format(x['igmp_group']['ir_groups'][0]['ig_group'].set('ALL-ROUTERS')))
     print("{:#A}".format(x['igmp_group']['ir_groups'][0]['ig_group'].set('ALL-ROUTERS')))
     print(x)
+
+    groups = []
+    groups.append(osi.transport.igmp.v3_grouprec().alloc(ig_type='TO_IN', ig_group='234.1.1.1'))
+    x = igmp().alloc(igmp_type='v3_HOST_MEMBERSHIP_REPORT', igmp_group=osi.transport.igmp.v3_report().alloc(ir_groups=groups))
+    x['igmp_group']
