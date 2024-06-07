@@ -1,4 +1,4 @@
-import ptypes, functools
+import ptypes, functools, operator, sys
 from ptypes import *
 
 from . import layer, stackable, terminal, network
@@ -6,6 +6,8 @@ from . import layer, stackable, terminal, network
 pint.setbyteorder(ptypes.config.byteorder.bigendian)
 
 from ..network import inet4
+
+tohex = operator.methodcaller('encode', 'hex') if sys.version_info.major < 3 else operator.methodcaller('hex')
 
 class u_char(pint.uint8_t): pass
 class u_short(pint.uint16_t): pass
@@ -21,10 +23,13 @@ def checksum(bytes):
     checksum = shifted + (seed & 0XFFFF)
     return 0xFFFF & ~checksum
 
-class igmpv2(pstruct.type):
-    _fields_ = [
-        (in_addr, 'igmp_group'),                # group address being reported (zero for queries)
-    ]
+class igmp_sources(parray.type):
+    _object_ = in_addr
+    def summary(self):
+        return "[{:s}]".format(', '.join(map("{:s}".format, self)))
+
+class igmpv3_float(pfloat.float_t):
+    components = 1, 3, 4
 
 class igmp_type(pint.enum, u_char):
     _values_ = [
@@ -39,57 +44,90 @@ class igmp_type(pint.enum, u_char):
         ('v3_HOST_MEMBERSHIP_REPORT', 0x22),    # Ver. 3 membership report
     ]
 
-class igmpv3_grouprec(pstruct.type):
+class v1(in_addr):
+    ''' group address being reported (zero for queries) '''
+
+class v2(v1):
+    pass
+
+class v3_report_mode(pint.enum, u_char):
+    _values_ = [
+        ('DO_NOTHING', 0),              # don't send a record
+        ('MODE_IS_INCLUDE', 1),         # MODE_IN
+        ('MODE_IS_EXCLUDE', 2),         # MODE_EX
+        ('CHANGE_TO_INCLUDE_MODE', 3),  # TO_IN
+        ('CHANGE_TO_EXCLUDE_MODE', 4),  # TO_EX
+        ('ALLOW_NEW_SOURCES', 5),       # ALLOW_NEW
+        ('BLOCK_OLD_SOURCES', 6),       # BLOCK_OLD
+    ]
+
+class v3_grouprec(pstruct.type):
     def __ig_sources(self):
         res = self['ig_numsrc'].li
-        return dyn.array(in_addr, res.int())
+        return dyn.clone(igmp_sources, length=res.int())
+
+    def __ig_auxdata(self):
+        res = self['ig_datalen'].li
+        return dyn.block(res.int()) if res.int() else ptype.block
+
     _fields_ = [
-        (u_char, 'ig_type'),            # record type
-        (u_char, 'ig_datalen'),         # length of auxiliary data
-        (u_short, 'ig_numsrc'),         # number of sources
-        (in_addr, 'ig_group'),          # group address being reported
-        (__ig_sources, 'ig_sources'),   # source addresses
+        (v3_report_mode, 'ig_type'),        # record type
+        (u_char, 'ig_datalen'),             # length of auxiliary data
+        (u_short, 'ig_numsrc'),             # number of sources
+        (in_addr, 'ig_group'),              # group address being reported
+        (__ig_sources, 'ig_sources'),       # source addresses
+        (__ig_auxdata, 'ig_auxdata'),
     ]
+
+    def summary(self):
+        res = []
+        res.append("{:#s}".format(self['ig_type']))
+        res.append("{:#A}".format(self['ig_group']))
+        res.append("({:d}) {:s}".format(len(self['ig_sources']), self['ig_sources'].summary()))
+        if self['ig_auxdata'].size():
+            res.append("({:d}) {:s}".format(self['ig_auxdata'].size(), tohex(self['ig_auxdata'].serialize())))
+        return ' : '.join(res)
+
     def alloc(self, **fields):
-        res = super(igmp_grouprec, self).alloc(**fields)
+        res = super(v3_grouprec, self).alloc(**fields)
         if 'ig_numsrc' not in fields:
             res['ig_numsrc'].set(len(res['ig_sources']))
         if 'ig_datalen' not in fields:
-            pass    # FIXME
+            res['ig_datalen'].set(res['ig_auxdata'].size())
         return res
 
-class igmpv3_report_mode(pint.enum):
-    _values_ = [
-        ('IGMP_DO_NOTHING', 0),                 # don't send a record
-        ('IGMP_MODE_IS_INCLUDE', 1),            # MODE_IN
-        ('IGMP_MODE_IS_EXCLUDE', 2),            # MODE_EX
-        ('IGMP_CHANGE_TO_INCLUDE_MODE', 3),     # TO_IN
-        ('IGMP_CHANGE_TO_EXCLUDE_MODE', 4),     # TO_EX
-        ('IGMP_ALLOW_NEW_SOURCES', 5),          # ALLOW_NEW
-        ('IGMP_BLOCK_OLD_SOURCES', 6),          # BLOCK_OLD
-    ]
+class v3_group_records(parray.type):
+    _object_ = v3_grouprec
 
-class igmpv3_report(pstruct.type):
+    def details(self):
+        res = []
+        for record in self:
+            res.append("{}".format(record))
+        return "{:s}\n".format('\n'.join(res))
+
+class v3_report(pstruct.type):
+    type = 0x22
     def __ir_groups(self):
         res = self['ir_numgrps'].li
-        return dyn.array(igmp_grouprec, res.int())
+        return dyn.clone(v3_group_records, length=res.int())
+
     _fields_ = [
-        (u_char, 'ir_type'),            # IGMP_v3_HOST_MEMBERSHIP_REPORT
-        (u_char, 'ir_rsv1'),            # must be zero
-        (u_short, 'ir_cksum'),          # checksum
         (u_short, 'ir_rsv2'),           # must be zero
         (u_short, 'ir_numgrps'),        # number of group records
         (__ir_groups, 'ir_groups'),     # group records
+        (ptype.block, 'ir_endgroups'),  # just a placeholder
     ]
 
     def alloc(self, **fields):
-        res = super(igmp_report, self).alloc(**fields)
+        fields.setdefault('ir_rsv2', 0)
+        res = super(v3_report, self).alloc(**fields)
         if 'ir_numgrps' not in fields:
             res['ir_numgrps'].set(len(res['ir_groups']))
-        if 'ir_cksum' not in fields:
-            data = res.set(ir_cksum=0).serialize()
-            res['ir_cksum'].set(checksum(bytearray(data)))
         return res
+
+    def details(self):
+        res = ("{}".format(self[fld]) for fld in ['ir_rsv2', 'ir_numgrps', 'ir_groups'])
+        return "{:s} ->\n{:s}\n{}\n".format('\n'.join(res), '\n'.join(map("  {:s}".format, self['ir_groups'].details().rstrip().split('\n'))), self['ir_endgroups'])
 
 class IGMP_V3_(pint.enum):
     _fields_ = [
@@ -98,20 +136,18 @@ class IGMP_V3_(pint.enum):
         ('GROUP_SOURCE_QUERY', 3),
     ]
 
-class igmpv3_float(pfloat.float_t):
-    components = 1, 3, 4
-
-class igmpv3(pstruct.type, stackable):
+class v3_query(pstruct.type, stackable):
+    type = 0x11
     class _igmp_misc(pbinary.flags):
         _fields_ = [
-            (3, 'QRV'),
-            (1, 'S'),
-            (4, 'RESV'),
+            (3, 'QRV'),     # robustness
+            (1, 'S'),       # supress
+            (4, 'RESV'),    # reserved
         ]
 
     def __igmp_sources(self):
         res = self['igmp_numsrc'].li
-        return dyn.array(in_addr, res.int())
+        return dyn.clone(igmp_sources, length=res.int())
 
     _fields_ = [
         (_igmp_misc, 'igmp_misc'),          # reserved/suppress/robustness
@@ -124,34 +160,34 @@ class igmpv3(pstruct.type, stackable):
         res = super(igmpv3, self).alloc(**fields)
         if 'igmp_numsrc' not in fields:
             res['igmp_numsrc'].set(len(res['igmp_sources']))
-        if 'igmp_cksum' not in fields:
-            data = res.set(igmp_cksum=0).serialize()
-            res['igmp_cksum'].set(checksum(bytearray(data)))
         return res
 
 @network.layer.define
 class igmp(pstruct.type, stackable):
     type = 2
     def __igmp_group(self):
-        res = self['igmp_type'].li
-        return pint.uint_t if res.int() in {0x11, 0x22} else igmpv2
-    def __igmp_v3(self):
-        res = self['igmp_type'].li
-        return igmpv3 if res.int() in {0x11, 0x22} else ptype.undefined
+        res, code = (self[fld].li for fld in ['igmp_type', 'igmp_code'])
+
+        # distinguish between v2 and v1
+        if self.parent and getattr(self.parent, '_remaining', 12) < 12:
+            return v2 if code.int() else v1
+
+        # distinguish between v2 and v3
+        if res.int() in {0x11, 0x22}:
+            return v3_query if res.int() == 0x11 else v3_report
+        return v2
         
     _fields_ = [
         (igmp_type, 'igmp_type'),       # version & type of IGMP message
         (igmpv3_float, 'igmp_code'),    # subtype for routing msgs
         (u_short, 'igmp_cksum'),        # IP-style checksum
-        (__igmp_group, 'igmp_group'),   # group address being reported (zero for queries)
-        (__igmp_v3, 'igmp_v3'),
+        (__igmp_group, 'igmp_group'),   # igmp_group (v2), ig_sources (v3), or ir_groups (v3)
     ]
-    def seconds(self):
-        res = self['igmp_code']
-        return res.int() * 0.1
 
     def alloc(self, **fields):
         res = super(igmp, self).alloc(**fields)
+        if 'igmp_type' not in fields and hasattr(res['igmp_group'], 'type'):
+            res['igmp_type'].set(res['igmp_group'].type)
         if 'igmp_cksum' not in fields:
             data = res.set(igmp_cksum=0).serialize()
             res['igmp_cksum'].set(checksum(bytearray(data)))
@@ -161,12 +197,22 @@ if __name__ == '__main__':
     import ptypes, osi.transport.igmp
     from osi.transport.igmp import igmp
 
+    importlib.reload(osi.transport.igmp)
     data = bytes.fromhex('2200fa150000000103000000e00000e8')
     x = igmp().load(source=ptypes.prov.bytes(data))
     print(x)
-    print(x['igmp_v3'])
+    print(x['igmp_group'])
+    print(x['igmp_group']['ir_groups'])
+    print(x['igmp_group']['ir_groups'][0].summary())
+    print(x['igmp_group']['ir_groups'][0]['ig_group'].set('EIGRP'))
+    print("{:#s}".format(x['igmp_group']['ir_groups']['ig_group']))
+    print("{:#A}".format(x['igmp_group']['ir_groups']['ig_group']))
 
     data = bytes.fromhex('2200eefb0000000104000000ea010101')
     x = igmp().load(source=ptypes.prov.bytes(data))
     print(x)
-    print(x['igmp_v3'])
+    print(x['igmp_group'])
+    print(x['igmp_group']['ir_groups'][0])
+    print("{:A}".format(x['igmp_group']['ir_groups'][0]['ig_group'].set('ALL-ROUTERS')))
+    print("{:#A}".format(x['igmp_group']['ir_groups'][0]['ig_group'].set('ALL-ROUTERS')))
+    print(x)
