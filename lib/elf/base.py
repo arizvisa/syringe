@@ -119,13 +119,13 @@ class ULEB128(pbinary.terminatedarray):
 
     def int(self): return self.get()
     def get(self):
-        res = 0
-        for n in reversed(self):
-            res = (res << 7) | n['value']
+        res, septets = 0, [item for item in self][::-1]
+        for item in septets:
+            res = (res << 7) | item['value']
         return res
     def set(self, value):
         result, mask = [], pow(2, 7) - 1
-        while value > 0:
+        while value not in {-1, 0}:
             item = self.new(self.septet).set((1, value & mask))
             result.append(item)
             value //= pow(2, 7)
@@ -135,7 +135,23 @@ class ULEB128(pbinary.terminatedarray):
 
     def summary(self):
         res = self.int()
-        return "{:s} : {:d} : ({:#x}, {:d})".format(self.__element__(), res, res, 7*len(self))
+        return "{:s} : {:d} : ({:#x}, {:d})".format(self.__element__(), res, res, 7 * len(self))
+
+class SLEB128(ULEB128):
+    def get(self):
+        res = super(SLEB128, self).get()
+        for item in self.value[-1:]:
+            if item['value'] & 0x40:
+                res |= -pow(2, 7 * len(self))
+            continue
+        return res
+
+    def summary(self):
+        res = self.int()
+        return "{:s} : {:+d} : ({:+#x}, {:d})".format(self.__element__(), res, res, 7 * len(self))
+
+class LEB128(SLEB128):
+    pass
 
 ### elf32
 class Elf32_BaseOff(ElfXX_BaseOff):
