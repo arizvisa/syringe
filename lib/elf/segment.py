@@ -1,6 +1,6 @@
 import sys
 from .base import *
-from . import dynamic
+from . import dynamic, dwarf
 
 class PT_(pint.enum):
     _values_ = [
@@ -229,9 +229,12 @@ class ELFCLASSXX(object):
                 return Elf64_Phdr
             raise NotImplementedError(ei_class)
 
-    class PT_GNU_EH_FRAME(ptype.block):
+    class PT_GNU_EH_FRAME(dwarf.eh_frame_hdr):
         type = 0x6474e550
-        # TODO: this structure is part of the dwarf standard
+        # FIXME: this structure needs some interfaces so that the
+        #        dwarf module can determine the architecture (for
+        #        the address size), locate the .text segment, and
+        #        determine the base address.
 
     class PT_GNU_STACK(ptype.block):
         type = 0x6474e551
@@ -291,7 +294,7 @@ class ELFCLASS32(object):
 
     @PT_.define
     class PT_GNU_EH_FRAME(ELFCLASSXX.PT_GNU_EH_FRAME):
-        pass
+        pass    # FIXME: this needs an interface for the arch size
 
     @PT_.define
     class PT_GNU_STACK(ELFCLASSXX.PT_GNU_STACK):
@@ -352,7 +355,7 @@ class ELFCLASS64(object):
 
     @PT_.define
     class PT_GNU_EH_FRAME(ELFCLASSXX.PT_GNU_EH_FRAME):
-        pass
+        pass    # FIXME: this needs an interface for the arch size
 
     @PT_.define
     class PT_GNU_STACK(ELFCLASSXX.PT_GNU_STACK):
