@@ -1,610 +1,436 @@
-from ptypes import *
+import sys
+from .base import *
 
-class sbyte(pint.sint8_t): pass
-class ubyte(pint.uint8_t): pass
-class uhalf(pint.uint16_t): pass
-class uword(pint.uint32_t): pass
+class sbyte(signed_char): 'Small signed integer.'
+class ubyte(unsigned_char): 'Small unsigned integer.'
+class shalf(signed_short): 'Medium signed integer.'
+class uhalf(unsigned_short): 'Medium unsigned integer.'
+class sword(signed_int): 'Large signed integer.'
+class uword(unsigned_int): 'Large unsigned integer.'
+class xword(unsigned_long_long): 'Huge unsigned integer.'
+class sxword(signed_long_long): 'Huge signed integer.'
+class szstring(pstr.szstring): pass
 
-## page 176
+class DW_EH_PE_size(ptype.definition):
+    cache = {
+        #0x00: ElfXX_Addr,
+        0x01: ULEB128,
+        0x02: uhalf,
+        0x03: uword,
+        0x04: xword,
+        0x09: SLEB128,
+        0x0A: shalf,
+        0x0B: sword,
+        0x0C: sxword,
+    }
 
+class DW_EH_PE_ptr(ptype.opointer_t):
+    def summary(self):
+        if self.value is None:
+            return u"???"
+        F, offset = getattr(self, '_calculate_', lambda ea: ea), self.int()
+        ea = F(offset)
+        if ea == offset:
+            return u"*{:#x}".format(ea)
+        return u"({:#x}) *{:#x}".format(offset, ea)
 
-class LEB128(pbinary.terminatedarray):
-    def isTerminator(self, value):
-        return value['continue'].int() == 0
+class DW_EH_PE_pcrel(DW_EH_PE_ptr):
+    ''' Value is relative to the current program counter. '''
+    type = 1
+    def _calculate_(self, offset):
+        return self.getoffset() + offset
 
-class ULEB128(LEB128):
-    class _object_(pbinary.struct):
-        _fields_ = [(1,'continue'),(7,'integer')]
+class DW_EH_PE_textrel(DW_EH_PE_ptr):
+    ''' Value is relative to the beginning of the .text section. '''
+    type = 2
+    def _calculate_(self, offset):
+        # FIXME: get address of .text section
+        dottext = 0
+        #raise NotImplementedError
+        return dottext + offset
 
-class SLEB128(LEB128):
-    class _object_(pbinary.struct):
-        _fields_ = [(1,'continue'),(-7,'integer')]
-######################
-class debugging_information_entry(ptype.type):
+class DW_EH_PE_datarel(DW_EH_PE_ptr):
+    ''' Value is relative to the beginning of the .got or .eh_frame_hdr section. '''
+    type = 3
+    def _calculate_(self, offset):
+        # FIXME: get address of .eh_frame_hdr section
+        eh_frame_hdr = 0
+        #raise NotImplementedError
+        return eh_frame_hdr + offset
+
+class DW_EH_PE_funcrel(DW_EH_PE_ptr):
+    ''' Value is relative to the beginning of the function. '''
+    type = 4
+    def _calculate_(self, offset):
+        # FIXME: get address of function(?)
+        ea = 0
+        #raise NotImplementedError
+        return ea + offset
+
+class DW_EH_PE_aligned(DW_EH_PE_ptr):
+    ''' Value is aligned to an address unit sized boundary. '''
+    type = 5
+    def _calculate_(self, offset):
+        # FIXME: get size of address unit
+        asize = 0
+        #raise NotImplementedError
+        aligned, extra = divmod(offset, asize)
+        return offset + asize - extra if extra else offset
+
+class DW_EH_PE_(pbinary.struct):
+    class _high(pbinary.enum):
+        length, _values_ = 4, [
+            ('pcrel', 0x1),     # Value is relative to the current program counter.
+            ('textrel', 0x2),   # Value is relative to the beginning of the .text section.
+            ('datarel', 0x3),   # Value is relative to the beginning of the .got or .eh_frame_hdr section.
+            ('funcrel', 0x4),   # Value is relative to the beginning of the function.
+            ('aligned', 0x5),   # Value is aligned to an address unit sized boundary.
+            ('omit', 0xF),
+        ]
+
+    class _low(pbinary.enum):
+        length, _values_ = 4, [
+            ('absptr', 0x00),       # The Value is a literal pointer whose size is determined by the architecture.
+            ('uleb128', 0x01),      # Unsigned value is encoded using the Little Endian Base 128 (LEB128) as defined by DWARF Debugging Information Format, Version 4.
+            ('udata2', 0x02),       # A 2 bytes unsigned value.
+            ('udata4', 0x03),       # A 4 bytes unsigned value.
+            ('udata8', 0x04),       # An 8 bytes unsigned value.
+            ('sleb128', 0x09),      # Signed value is encoded using the Little Endian Base 128 (LEB128) as defined by DWARF Debugging Information Format, Version 4.
+            ('sdata2', 0x0A),       # A 2 bytes signed value.
+            ('sdata4', 0x0B),       # A 4 bytes signed value.
+            ('sdata8', 0x0C),       # An 8 bytes signed value.
+            ('omit', 0x0F),
+        ]
+
+    _fields_ = [
+        (_high, 'high'),
+        (_low, 'low'),
+    ]
+
+    def pointer_class(self):
+        hi = self.field('high')
+        if hi['pcrel']:
+            ptr_t = DW_EH_PE_pcrel
+        elif hi['textrel']:
+            ptr_t = DW_EH_PE_textrel
+        elif hi['datarel']:
+            ptr_t = DW_EH_PE_datarel
+        elif hi['funcrel']:
+            ptr_t = DW_EH_PE_funcrel
+        elif hi['aligned']:
+            ptr_t = DW_EH_PE_aligned
+        else:
+            raise NotImplementedError("{}".format(hi))
+
+        # FIXME: fetch the target architecture to determine this pointer size
+        if self.field('low')['absptr']:
+            return ptr_t
+        return ptr_t
+
+    def pointer_encoding(self):
+        return DW_EH_PE_size.lookup(self['low'])
+
+    def pointer_type(self):
+        pointer_t = self.pointer_class()
+        class address(pointer_t):
+            pass
+        address.__name__ = address.__qualname__ = pointer_t.__name__
+        address._value_ = self.pointer_encoding()
+        return address
+
+#class DW_CFA_(pint.enum):
+#    _values_ = [
+#        ('DW_CFA_nop', 0, 0, none, none),
+#        ('DW_CFA_set_loc', 0, 0x01, address, none),
+#        ('DW_CFA_advance_loc', 0x1, 0, delta, none),
+#        ('DW_CFA_offset', 0x2, 0, register, ULEB128),
+#        ('DW_CFA_restore', 0x3, 0, register, none),
+#        ('DW_CFA_advance_loc1', 0, 0x02, ubyte, delta),
+#        ('DW_CFA_advance_loc2', 0, 0x03, uhalf, delta),
+#        ('DW_CFA_advance_loc4', 0, 0x04, uword, delta),
+#        ('DW_CFA_offset_extended', 0, 0x05, ULEB128, register),
+#        ('DW_CFA_restore_extended', 0, 0x06, ULEB128, register),
+#        ('DW_CFA_undefined', 0, 0x07, ULEB128, register),
+#        ('DW_CFA_same_value', 0, 0x08, ULEB128, register),
+#        ('DW_CFA_register', 0, 0x09, ULEB128, register),
+#        ('DW_CFA_remember_state', 0, 0x0a, none, none),
+#        ('DW_CFA_restore_state', 0, 0x0b, none, none),
+#        ('DW_CFA_def_cfa', 0, 0x0c, ULEB128, register),
+#        ('DW_CFA_def_cfa_register', 0, 0x0d, ULEB128, register),
+#        ('DW_CFA_def_cfa_offset', 0, 0x0e, ULEB128, offset),
+#        ('DW_CFA_def_cfa_expression', 0, 0x0f, BLOCK, none),
+#        ('DW_CFA_expression', 0, 0x10, ULEB128, register),
+#        ('DW_CFA_offset_extended_sf', 0, 0x11, ULEB128, register),
+#        ('DW_CFA_def_cfa_sf', 0, 0x12, ULEB128, register),
+#        ('DW_CFA_def_cfa_offset_sf', 0, 0x13, SLEB128, offset),
+#        ('DW_CFA_val_offset', 0, 0x14, ULEB128, ULEB128),
+#        ('DW_CFA_val_offset_sf', 0, 0x15, ULEB128, SLEB128),
+#        ('DW_CFA_val_expression', 0, 0x16, ULEB128, BLOCK),
+#        ('DW_CFA_lo_user', 0, 0x1c, BLOCK, none),
+#        ('DW_CFA_hi_user', 0, 0x3f, ULEB128, BLOCK),
+#        ('DW_CFA_GNU_args_size', 0, 0x2e, ULEB128, none),              # The DW_CFA_GNU_args_size instruction takes an unsigned LEB128 operand representing an argument size. This instruction specifies the total of the size of the arguments which have been pushed onto the stack.
+#        ('DW_CFA_GNU_negative_offset_extended', 0, 0x2f, ULEB128, ULEB128),              # The DW_CFA_def_cfa_sf instruction takes two operands: an unsigned LEB128 value representing a register number and an unsigned LEB128 which represents the magnitude of the offset. This instruction is identical to DW_CFA_offset_extended_sf except that the operand is subtracted to produce the offset. This instructions is obsoleted by DW_CFA_offset_extended_sf.
+#    ]
+
+# https://refspecs.linuxfoundation.org/LSB_5.0.0/LSB-Core-generic/LSB-Core-generic/ehframechpt.html
+class augmentation_string(szstring):
+    def has_data(self):
+        res = self.serialize()
+        return res and res[:1] == b'z'
+
+    # FIXME: the fields described by this string are ordered
+    #        by the character's position in the string.
+    def has_language_specific(self):
+        res = self.serialize()
+        return res and res[:1] == b'z' and res.find(b'L') > 0
+    def has_personality_routine(self):
+        res = self.serialize()
+        return res and res[:1] == b'z' and res.find(b'P') > 0
+    def has_pointer_encoding(self):
+        res = self.serialize()
+        return res and res[:1] == b'z' and res.find(b'R') > 0
+
+class augmentation_data(pstruct.type):
+    def __data(self):
+        length = self['length'].li
+        try:
+            string = getattr(self, '_augmentation_string_', '')
+            result = self._augmentation_(string.object if isinstance(string, pbinary.partial) else string, length.int())
+        except NotImplementedError:
+            result = ptype.block
+        return result
+
+    def __padding(self):
+        length = self['length'].li.int()
+        data = self['data'].li
+        return dyn.block(max(0, length - data.size())) if length > data.size() else ptype.block
+
+    _fields_ = [
+        (ULEB128, 'length'),
+        (__data, 'data'),
+        (__padding, 'padding'),
+    ]
+
+    _augmentation_string_ = None
+    def _augmentation_(self, string, length):
+        raise NotImplementedError
+
+class cie_augmentation_data(augmentation_data):
+    def _augmentation_(self, string, length):
+        assert(isinstance(string, augmentation_string))
+        # FIXME: these fields are order-specific
+        if string.has_pointer_encoding():
+            return DW_EH_PE_
+        elif string.has_language_specific():
+            return DW_EH_PE_
+        elif string.has_personality_routine():
+            return DW_EH_PE_
+        raise NotImplementedError(string)
+
+    # FIXME: the 'data' field "should" be an array, which would mean that we would
+    #        search for the pointer encoding to return. however, it currently isn't
+    #        defined as such and so calling it like this is really a hack.
+    def pointer_encoding(self):
+        data = self['data'].object if isinstance(self['data'], pbinary.partial) else self['data']
+        if not isinstance(data, DW_EH_PE_):
+            raise NotImplementedError
+            return ptype.pointer_t
+        return self['data'].pointer_encoding()
+    def pointer_size(self):
+        return self['data'].pointer_size()
+    def pointer_type(self):
+        return self['data'].pointer_type()
+
+class Entry(pstruct.type):
+    def __padding(self):
+        res = self['length'].li
+        length = self['extended_length'].li if res.int() in {0xffffffff} else res
+        return dyn.block(max(0, length.int() - self['entry'].li.size()))
+
+    _fields_ = [
+        (uword, 'length'),
+        (lambda self: xword if self['length'].li.int() == 0xffffffff else pint.uint_t, 'extended_length'),
+        (lambda self: getattr(self, '_object_', ptype.block) if self['length'].li.int() else ptype.block, 'entry'),
+        (__padding, 'padding'),
+    ]
+
+    def pointer_encoding(self):
+        return self['entry'].pointer_encoding()
+    def pointer_size(self):
+        return self['entry'].pointer_size()
+    def pointer_type(self):
+        return self['entry'].pointer_type()
+
+class CIE_Entry(pstruct.type):
+    def __return_address_register(self):
+        res = self['version'].li
+        if res.int() == 1:
+            return ubyte
+        elif res.int() == 3:
+            return ULEB128
+        return pint.uint_t
+
+    def __augmentation_data(self):
+        res = self['augmentation'].li
+        if res.has_data():
+            return dyn.clone(cie_augmentation_data, _augmentation_string_=res)
+        return ptype.block
+
+    #def __padding(self):
+    #    res, fields = self['length'].li, ['extended_length', 'CIE_id', 'version', 'augmentation', 'code_alignment_factor', 'data_alignment_factor', 'return_address_register', 'augmentation_data', 'initial_instructions']
+    #    length = self['extended_length'].li if res.int() in {0xffffffff} else res
+    #    return dyn.block(max(0, length.int() - sum(self[fld].li.size() for fld in fields)))
+
+    _fields_ = [
+        #(uword, 'length'),
+        #(lambda self: xword if self['length'].li.int() == 0xffffffff else pint.uint_t, 'extended_length'),
+        (uword, 'CIE_id'),
+        (ubyte, 'version'),
+        (augmentation_string, 'augmentation'),
+        (ULEB128, 'code_alignment_factor'),
+        (LEB128, 'data_alignment_factor'),
+        (__return_address_register, 'return_address_register'),
+        (__augmentation_data, 'augmentation_data'),
+        (ptype.block, 'initial_instructions'),
+        #(__padding, 'padding'),
+    ]
+
+    @property
+    def pointer_encoding(self):
+        augmentation = self['augmentation_data']
+        if not isinstance(augmentation, augmentation_data):
+            raise NotImplementedError
+            return ptype.pointer_t
+        return augmentation.pointer_encoding() 
+    @property
+    def pointer_type(self):
+        augmentation = self['augmentation_data']
+        if not isinstance(augmentation, augmentation_data):
+            raise NotImplementedError
+            return ptype.pointer_t
+        return augmentation.pointer_type() 
+
+class CIE(Entry):
+    _object_ = CIE_Entry
+
+class CIE_pointer(DW_EH_PE_ptr):
+    _value_, _object_ = uword, CIE
+    def _calculate_(self, negative_offset):
+        return self.getoffset() - negative_offset
+
+class LSDA(ptype.block):
     pass
 
-# page 143
-class compilation_unit_header(debugging_information_entry):
+class fde_augmentation_data(augmentation_data):
+    def _augmentation_(self, string, length):
+        assert(isinstance(string, augmentation_string)), string
+        # FIXME: these fields are order-specific
+        if string.has_pointer_encoding():
+            return ptype.undefined
+
+        # FIXME: grabbing the CIE from here is pretty inefficient.
+        p = self.getparent(FDE_Entry)
+        cie = p['entry']['CIE_pointer'].d.li
+        pointer_t = cie.pointer_type
+        if string.has_language_specific():
+            return dyn.clone(pointer_t, _object_=LSDA)
+        elif string.has_personality_routine():
+            return dyn.clone(pointer_t, _object_=void)
+        raise NotImplementedError(string)
+    
+class FDE_Entry(pstruct.type):
+    def __address(self):
+        cie = self['CIE_pointer'].li and self['CIE_pointer'].d.li
+        return cie.pointer_type
+
+    def __address_size(self):
+        cie = self['CIE_pointer'].li and self['CIE_pointer'].d.li
+        return cie.pointer_encoding
+
+    def __augmentation_data(self):
+        cie = self['CIE_pointer'].li and self['CIE_pointer'].d.li
+        augmentation = cie['entry']['augmentation']
+        if augmentation.has_data():
+            return dyn.clone(fde_augmentation_data, _augmentation_string_=augmentation)
+        return ptype.block
+
+    #def __padding(self):
+    #    res, fields = self['length'].li, ['extended_length', 'CIE_pointer', 'pc_begin', 'pc_range', 'augmentation_data', 'CFI']
+    #    length = self['extended_length'].li if res.int() in {0xffffffff} else res
+    #    return dyn.block(max(0, length.int() - sum(self[fld].li.size() for fld in fields)))
+
     _fields_ = [
-        (pint.uint32_t or [pint.uint32_t, pint.uint64_t], 'unit_length'),
-        (uhalf, 'version')
-        (pint.uint32_t, 'debug_abbrev_offset'),
-        (ubyte, 'address_size'),
+        #(uword, 'length'),
+        #(lambda self: xword if self['length'].li.int() == 0xffffffff else pint.uint_t, 'extended_length'),
+        (CIE_pointer, 'CIE_pointer'),
+        (__address, 'pc_begin'),
+        (__address_size, 'pc_range'),
+        (__augmentation_data, 'augmentation_data'),
+        (ptype.block, 'CFI'),
+        #(__padding, 'padding'),
     ]
 
-class type_unit_header(debugging_information_entry):
+class FDE(Entry):
+    _object_ = FDE_Entry
+
+class fde_table_entry(pstruct.type):
+    def __encoded_pointer(self):
+        return self._object_
     _fields_ = [
-        (pint.uint32_t or [pint.uint32_t, pint.uint64_t], 'unit_length'),
-        (uhalf, 'version')
-        (pint.uint32_t, 'debug_abbrev_offset'),
-        (ubyte, 'address_size'),
-        (pint.uint64_t, 'type_signature'),
-        (pint.uint32_t or pint.uint64_t, 'type_offset'),
+        (__encoded_pointer, 'fst'),
+        (__encoded_pointer, 'snd'),
     ]
 
-###################################
-# DW_AT_address_class
-'''
-DW_ADDR_none = 0
-DW_ADDR_near16 = 1
-DW_ADDR_far16 = 2
-DW_ADDR_huge16 = 3
-DW_ADDR_near32 = 4
-DW_ADDR_far32 = 5
-'''
+class eh_frame_hdr(pstruct.type):
+    def __address(self):
+        res = self['eh_frame_ptr_enc'].li
+        pointer_t = res.pointer_type()
+        return dyn.clone(pointer_t, _object_=eh_frame)
 
-# call frame information
-'''
-# name, high 2 bits, low 6 bits, operand 1, operand 2
-DW_CFA_advance_loc = 0x1	delta
-DW_CFA_offset = 0x2	register	ULEB128 offset
-DW_CFA_restore = 0x3	register
-DW_CFA_nop = 0	0
-DW_CFA_set_loc = 0	0x01	address
-DW_CFA_advance_loc1 = 0	0x02	1-byte delta
-DW_CFA_advance_loc2 = 0	0x03	2-byte delta
-DW_CFA_advance_loc4 = 0	0x04	4-byte delta
-DW_CFA_offset_extended = 0	0x05	ULEB128 register	ULEB128 offset
-DW_CFA_restore_extended = 0	0x06	ULEB128 register
-DW_CFA_undefined = 0	0x07	ULEB128 register
-DW_CFA_same_value = 0	0x08	ULEB128 register
-DW_CFA_register = 0	0x09	ULEB128 register	ULEB128 register
-DW_CFA_remember_state = 0	0x0a
-DW_CFA_restore_state = 0	0x0b
-DW_CFA_def_cfa = 0	0x0c	ULEB128 register	ULEB128 offset
-DW_CFA_def_cfa_register = 0	0x0d	ULEB128 register
-DW_CFA_def_cfa_offset = 0	0x0e	ULEB128 offset
-DW_CFA_def_cfa_expression = 0	0x0f	BLOCK
-DW_CFA_expression = 0	0x10	ULEB128 register	BLOCK
-DW_CFA_offset_extended_sf = 0	0x11	ULEB128 register	SLEB128 offset
-DW_CFA_def_cfa_sf = 0	0x12	ULEB128 register	SLEB128 offset
-DW_CFA_def_cfa_offset_sf = 0	0x13	SLEB128 offset
-DW_CFA_val_offset = 0	0x14	ULEB128	ULEB128
-DW_CFA_val_offset_sf = 0	0x15	ULEB128	SLEB128
-DW_CFA_val_expression = 0	0x16	ULEB128	BLOCK
-DW_CFA_lo_user = 0	0x1c
-DW_CFA_hi_user = 0	0x3f
-'''
+    def __address_size(self):
+        res = self['fde_count_enc'].li
+        return res.pointer_encoding()
 
+    def __fde_table(self):        
+        res, count = (self[fld].li for fld in ['table_enc', 'fde_count'])
+        pointer_t = res.pointer_type
+        entry_t = dyn.clone(fde_table_entry, _object_=pointer_t)
+        return dyn.array(entry_t, count.int())
+    
+    _fields_ = [
+        (ubyte, 'version'),
+        (DW_EH_PE_, 'eh_frame_ptr_enc'),
+        (DW_EH_PE_, 'fde_count_enc'),
+        (DW_EH_PE_, 'table_enc'),
+        (__address, 'eh_frame_ptr'),    # encoded
+        (__address_size, 'fde_count'),  # encoded
+        (__fde_table, 'fde_table'),
+    ]
 
-# DW_MACINFO_vendor_ext
-'''
-DW_MACINFO_define = 0x01
-DW_MACINFO_undef = 0x02
-DW_MACINFO_start_file = 0x03
-DW_MACINFO_end_file = 0x04
-DW_MACINFO_vendor_ext = 0xff
-'''
-# 6.2.5.2 standard opcodes
-'''
-DW_LNS_copy = 0x01
-DW_LNS_advance_pc = 0x02
-DW_LNS_advance_line = 0x03
-DW_LNS_set_file = 0x04
-DW_LNS_set_column = 0x05
-DW_LNS_negate_stmt = 0x06
-DW_LNS_set_basic_block = 0x07
-DW_LNS_const_add_pc = 0x08
-DW_LNS_fixed_advance_pc = 0x09
-DW_LNS_set_prologue_end = 0x0a
-DW_LNS_set_epilogue_begin = 0x0b
-DW_LNS_set_isa = 0x0c
-'''
-
-#Figure 38. Line Number Extended Opcode Encodings
-'''
-DW_LNE_end_sequence = 0x01
-DW_LNE_set_address = 0x02
-DW_LNE_define_file = 0x03
-DW_LNE_set_discriminator ‡ = 0x04
-DW_LNE_lo_user = 0x80
-DW_LNE_hi_user = 0xff
-'''
-
-# DW_AT_discr_list
-'''
-DW_DSC_label = 0x00
-DW_DSC_range = 0x01
-'''
-
-# DW_AT_ordering
-'''
-DW_ORD_row_major = 0x00
-DW_ORD_col_major = 0x01
-'''
-
-# DW_AT_inline_attribute
-'''
-DW_INL_not_inlined = 0x00
-DW_INL_inlined = 0x01
-DW_INL_declared_not_inlined = 0x02
-DW_INL_declared_inlined = 0x03
-'''
-# DW_AT_calling_convention
-'''
-DW_CC_normal = 0x01
-DW_CC_program = 0x02
-DW_CC_nocall = 0x03
-DW_CC_lo_user = 0x40
-DW_CC_hi_user = 0xff
-'''
-
-
-# DW_AT_identifier_case
-'''
-DW_ID_case_sensitive = 0x00
-DW_ID_up_case = 0x01
-DW_ID_down_case = 0x02
-DW_ID_case_insensitive = 0x03
-'''
-
-
-# DW_AT_language
-'''
-DW_LANG_C89 = 0x0001	0
-DW_LANG_C = 0x0002	0
-DW_LANG_Ada83 † = 0x0003	1
-DW_LANG_C_plus_plus = 0x0004	0
-DW_LANG_Cobol74 † = 0x0005	1
-DW_LANG_Cobol85 † = 0x0006	1
-DW_LANG_Fortran77 = 0x0007	1
-DW_LANG_Fortran90 = 0x0008	1
-DW_LANG_Pascal83 = 0x0009	1
-DW_LANG_Modula2 = 0x000a	1
-DW_LANG_Java = 0x000b	0
-DW_LANG_C99 = 0x000c	0
-DW_LANG_Ada95 † = 0x000d	1
-DW_LANG_Fortran95 = 0x000e	1
-DW_LANG_PLI † = 0x000f	1
-DW_LANG_ObjC = 0x0010	0
-DW_LANG_ObjC_plus_plus = 0x0011	0
-DW_LANG_UPC = 0x0012	0
-DW_LANG_D = 0x0013	0
-DW_LANG_Python † = 0x0014	0
-DW_LANG_lo_user = 0x8000
-DW_LANG_hi_user = 0xffff
-'''
-# DW_AT_virtuality
-'''
-DW_VIRTUALITY_none = 0x00
-DW_VIRTUALITY_virtual = 0x01
-DW_VIRTUALITY_pure_virtual = 0x02
-'''
-
-# DW_AT_visibility
-'''
-DW_VIS_local = 0x01
-DW_VIS_exported = 0x02
-DW_VIS_qualified = 0x03
-'''
-
-# DW_AT_accessibility
-'''
-DW_ACCESS_public = 0x01
-DW_ACCESS_protected = 0x02
-DW_ACCESS_private = 0x03
-'''
-
-#DW_AT_endianity
-'''
-DW_END_default = 0x00
-DW_END_big = 0x01
-DW_END_little = 0x02
-DW_END_lo_user = 0x40
-DW_END_hi_user = 0xff
-'''
-
-#DW_at_decimal_sign
-DW_DS_unsigned 0x01
-DW_DS_leading_overpunch 0x02
-DW_DS_trailing_overpunch 0x03
-DW_DS_leading_separate 0x04
-DW_DS_trailing_separate 0x05
-
-
-#DW_AT_encoding
-'''
-DW_ATE_address = 0x01
-DW_ATE_boolean = 0x02
-DW_ATE_complex_float = 0x03
-DW_ATE_float = 0x04
-DW_ATE_signed = 0x05
-DW_ATE_signed_char = 0x06
-DW_ATE_unsigned = 0x07
-DW_ATE_unsigned_char = 0x08
-DW_ATE_imaginary_float = 0x09
-DW_ATE_packed_decimal = 0x0a
-DW_ATE_numeric_string = 0x0b
-DW_ATE_edited = 0x0c
-DW_ATE_signed_fixed = 0x0d
-DW_ATE_unsigned_fixed = 0x0e
-DW_ATE_decimal_float = 0x0f
-DW_ATE_UTF ‡  = 0x10
-DW_ATE_lo_user = 0x80
-DW_ATE_hi_user = 0xff
-'''
-
-
-## dwarf operation encodings
-'''
-DW_OP_addr = 0x03	1	constant address (size target specific)
-DW_OP_deref = 0x06	0
-DW_OP_const1u = 0x08	1	1-byte constant
-DW_OP_const1s = 0x09	1	1-byte constant
-DW_OP_const2u = 0x0a	1	2-byte constant
-DW_OP_const2s = 0x0b	1	2-byte constant
-DW_OP_const4u = 0x0c	1	4-byte constant
-DW_OP_const4s = 0x0d	1	4-byte constant
-DW_OP_const8u = 0x0e	1	8-byte constant
-DW_OP_const8s = 0x0f	1	8-byte constant
-DW_OP_constu = 0x10	1	ULEB128 constant
-DW_OP_consts = 0x11	1	SLEB128 constant
-DW_OP_dup = 0x12	0
-DW_OP_drop = 0x13	0
-DW_OP_over = 0x14	0
-DW_OP_pick = 0x15	1	1-byte stack index
-DW_OP_swap = 0x16	0
-DW_OP_rot = 0x17	0
-DW_OP_xderef = 0x18	0
-DW_OP_abs = 0x19	0
-DW_OP_and = 0x1a	0
-DW_OP_div = 0x1b	0
-DW_OP_minus = 0x1c	0
-DW_OP_mod = 0x1d	0
-DW_OP_mul = 0x1e	0
-DW_OP_neg = 0x1f	0
-DW_OP_not = 0x20	0
-DW_OP_or = 0x21	0
-DW_OP_plus = 0x22	0
-DW_OP_plus_uconst = 0x23	1	ULEB128 addend
-DW_OP_shl = 0x24	0
-DW_OP_shr = 0x25	0
-DW_OP_shra = 0x26	0
-DW_OP_xor = 0x27	0
-DW_OP_skip = 0x2f	1	signed 2-byte constant
-DW_OP_bra = 0x28	1	signed 2-byte constant
-DW_OP_eq = 0x29	0
-DW_OP_ge = 0x2a	0
-DW_OP_gt = 0x2b	0
-DW_OP_le = 0x2c	0
-DW_OP_lt = 0x2d	0
-DW_OP_ne = 0x2e	0
-DW_OP_lit0 0x30	0
-DW_OP_lit1 = 0x31	0
-DW_OP_lit2 = 0x32
-DW_OP_lit3 = 0x33
-DW_OP_lit4 = 0x34
-DW_OP_lit5 = 0x35
-DW_OP_lit6 = 0x36
-DW_OP_lit7 = 0x37
-DW_OP_lit8 = 0x38
-DW_OP_lit9 = 0x39
-DW_OP_lit10 = 0x3a
-DW_OP_lit11 = 0x3b
-DW_OP_lit12 = 0x3c
-DW_OP_lit13 = 0x3d
-DW_OP_lit14 = 0x3e
-DW_OP_lit15 = 0x3f
-DW_OP_lit16 = 0x40
-DW_OP_lit17 = 0x41
-DW_OP_lit18 = 0x42
-DW_OP_lit19 = 0x43
-DW_OP_lit20 = 0x44
-DW_OP_lit21 = 0x45
-DW_OP_lit22 = 0x46
-DW_OP_lit23 = 0x47
-DW_OP_lit24 = 0x48
-DW_OP_lit25 = 0x49
-DW_OP_lit26 = 0x4a
-DW_OP_lit27 = 0x4b
-DW_OP_lit28 = 0x4c
-DW_OP_lit29 = 0x4d
-DW_OP_lit30 = 0x4e
-DW_OP_lit31 = 0x4f	0
-DW_OP_reg0 = 0x50	0
-DW_OP_reg1 = 0x51
-DW_OP_reg2 = 0x52
-DW_OP_reg3 = 0x53
-DW_OP_reg4 = 0x54
-DW_OP_reg5 = 0x55
-DW_OP_reg6 = 0x56
-DW_OP_reg7 = 0x57
-DW_OP_reg8 = 0x58
-DW_OP_reg9 = 0x59
-DW_OP_reg10 = 0x5a
-DW_OP_reg11 = 0x5b
-DW_OP_reg12 = 0x5c
-DW_OP_reg13 = 0x5d
-DW_OP_reg14 = 0x5e
-DW_OP_reg15 = 0x5f
-DW_OP_reg16 = 0x60
-DW_OP_reg17 = 0x61
-DW_OP_reg18 = 0x62
-DW_OP_reg19 = 0x63
-DW_OP_reg20 = 0x64
-DW_OP_reg21 = 0x65
-DW_OP_reg22 = 0x66
-DW_OP_reg23 = 0x67
-DW_OP_reg24 = 0x68
-DW_OP_reg25 = 0x69
-DW_OP_reg26 = 0x6a
-DW_OP_reg27 = 0x6b
-DW_OP_reg28 = 0x6c
-DW_OP_reg29 = 0x6d
-DW_OP_reg30 = 0x6e
-DW_OP_reg31 = 0x6f
-DW_OP_breg0 = 0x70	1	SLEB128 offset
-DW_OP_breg1 = 0x71
-DW_OP_breg2 = 0x72
-DW_OP_breg3 = 0x73
-DW_OP_breg4 = 0x74
-DW_OP_breg5 = 0x75
-DW_OP_breg6 = 0x76
-DW_OP_breg7 = 0x77
-DW_OP_breg8 = 0x78
-DW_OP_breg9 = 0x79
-DW_OP_breg10 = 0x7a
-DW_OP_breg11 = 0x7b
-DW_OP_breg12 = 0x7c
-DW_OP_breg13 = 0x7d
-DW_OP_breg14 = 0x7e
-DW_OP_breg15 = 0x7f
-DW_OP_breg16 = 0x80
-DW_OP_breg17 = 0x81
-DW_OP_breg18 = 0x82
-DW_OP_breg19 = 0x83
-DW_OP_breg20 = 0x84
-DW_OP_breg21 = 0x85
-DW_OP_breg22 = 0x86
-DW_OP_breg23 = 0x87
-DW_OP_breg24 = 0x88
-DW_OP_breg25 = 0x89
-DW_OP_breg26 = 0x8a
-DW_OP_breg27 = 0x8b
-DW_OP_breg28 = 0x8c
-DW_OP_breg29 = 0x8d
-DW_OP_breg30 = 0x8e
-DW_OP_breg31 = 0x8f
-DW_OP_regx = 0x90	1	ULEB128 register
-DW_OP_fbreg = 0x91	1	SLEB128 offset
-DW_OP_bregx = 0x92	2	ULEB128 register followed by SLEB128 offset
-DW_OP_piece = 0x93	1	ULEB128 size of piece addressed
-DW_OP_deref_size = 0x94	1	1-byte size of data retrieved
-DW_OP_xderef_size = 0x95	1	1-byte size of data retrieved
-DW_OP_nop = 0x96	0
-DW_OP_push_object_address = 0x97	0
-DW_OP_call2 = 0x98	1	2-byte offset of DIE
-DW_OP_call4 = 0x99	1	4-byte offset of DIE
-DW_OP_call_ref = 0x9a	1	4- or 8-byte offset of DIE
-DW_OP_form_tls_address = 0x9b	0
-DW_OP_call_frame_cfa = 0x9c	0
-DW_OP_bit_piece = 0x9d	2	ULEB128 size followed by ULEB128 offset
-DW_OP_implicit_value ‡ = 0x9e	2	ULEB128 size followed by block of that size
-DW_OP_stack_value ‡ = 0x9f	0
-DW_OP_lo_user = 0xe0
-DW_OP_hi_user = 0xff
-'''
-
-# attribute form encodings
-'''
-DW_FORM_addr = 0x01
-DW_FORM_block2 = 0x03
-DW_FORM_block4 = 0x04
-DW_FORM_data2 = 0x05
-DW_FORM_data4 = 0x06
-DW_FORM_data8 = 0x07
-DW_FORM_string = 0x08
-DW_FORM_block = 0x09
-DW_FORM_block1 = 0x0a
-DW_FORM_data1 = 0x0b
-DW_FORM_flag = 0x0c
-DW_FORM_sdata = 0x0d
-DW_FORM_strp = 0x0e
-DW_FORM_udata = 0x0f
-DW_FORM_ref_addr = 0x10
-DW_FORM_ref1 = 0x11
-DW_FORM_ref2 = 0x12
-DW_FORM_ref4 = 0x13
-DW_FORM_ref8 = 0x14
-DW_FORM_ref_udata = 0x15
-DW_FORM_indirect = 0x16
-DW_FORM_sec_offset ‡ = 0x17
-DW_FORM_exprloc ‡ = 0x18
-DW_FORM_flag_present ‡ = 0x19
-DW_FORM_ref_sig8 ‡ = 0x20
-'''
-
-# child determination
-'''
-DW_CHILDREN_no = 0x00
-DW_CHILDREN_yes = 0x01
-'''
-
-
-# attribute names
-'''
-DW_AT_sibling = 0x01
-DW_AT_location = 0x02
-DW_AT_name = 0x03
-DW_AT_ordering = 0x09
-DW_AT_byte_size = 0x0b
-DW_AT_bit_offset = 0x0c
-DW_AT_bit_size = 0x0d
-DW_AT_stmt_list = 0x10
-DW_AT_low_pc = 0x11
-DW_AT_high_pc = 0x12
-DW_AT_language = 0x13
-DW_AT_discr = 0x15
-DW_AT_discr_value = 0x16
-DW_AT_visibility = 0x17
-DW_AT_import = 0x18
-DW_AT_string_length = 0x19
-DW_AT_common_reference = 0x1a
-DW_AT_comp_dir = 0x1b
-DW_AT_const_value = 0x1c
-DW_AT_containing_type = 0x1d
-DW_AT_default_value = 0x1e
-DW_AT_inline = 0x20
-DW_AT_is_optional = 0x21
-DW_AT_lower_bound = 0x22
-DW_AT_producer = 0x25
-DW_AT_prototyped = 0x27
-DW_AT_return_addr = 0x2a
-DW_AT_start_scope = 0x2c
-DW_AT_bit_stride = 0x2e
-DW_AT_upper_bound = 0x2f
-DW_AT_abstract_origin = 0x31
-DW_AT_accessibility = 0x32
-DW_AT_address_class = 0x33
-DW_AT_artificial = 0x34
-DW_AT_base_types = 0x35
-DW_AT_calling_convention = 0x36
-DW_AT_count = 0x37
-DW_AT_data_member_location = 0x38
-DW_AT_decl_column = 0x39
-DW_AT_decl_file = 0x3a
-DW_AT_decl_line = 0x3b
-DW_AT_declaration = 0x3c
-DW_AT_discr_list = 0x3d
-DW_AT_encoding = 0x3e
-DW_AT_external = 0x3f
-DW_AT_frame_base = 0x40
-DW_AT_friend = 0x41
-DW_AT_identifier_case = 0x42
-DW_AT_macro_info = 0x43
-DW_AT_namelist_item = 0x44
-DW_AT_priority = 0x45
-DW_AT_segment = 0x46
-DW_AT_specification = 0x47
-DW_AT_static_link = 0x48
-DW_AT_type = 0x49
-DW_AT_use_location = 0x4a
-DW_AT_variable_parameter = 0x4b
-DW_AT_virtuality = 0x4c
-DW_AT_vtable_elem_location = 0x4d
-DW_AT_allocated = 0x4e
-DW_AT_associated = 0x4f
-DW_AT_data_location = 0x50
-DW_AT_byte_stride = 0x51
-DW_AT_entry_pc = 0x52
-DW_AT_use_UTF8 = 0x53
-DW_AT_extension = 0x54
-DW_AT_ranges = 0x55
-DW_AT_trampoline = 0x56
-DW_AT_call_column = 0x57
-DW_AT_call_file = 0x58
-DW_AT_call_line = 0x59
-DW_AT_description = 0x5a
-DW_AT_binary_scale = 0x5b
-DW_AT_decimal_scale = 0x5c
-DW_AT_small = 0x5d
-DW_AT_decimal_sign = 0x5e
-DW_AT_digit_count = 0x5f
-DW_AT_picture_string = 0x60
-DW_AT_mutable = 0x61
-DW_AT_threads_scaled = 0x62
-DW_AT_explicit = 0x63
-DW_AT_object_pointer = 0x64
-DW_AT_endianity = 0x65
-DW_AT_elemental = 0x66
-DW_AT_pure = 0x67
-DW_AT_recursive = 0x68
-DW_AT_signature ‡ = 0x69
-DW_AT_main_subprogram ‡ = 0x6a
-DW_AT_data_bit_offset ‡ = 0x6b
-DW_AT_const_expr ‡ = 0x6c
-DW_AT_enum_class ‡ = 0x6d
-DW_AT_linkage_name ‡ = 0x6e
-DW_AT_lo_user = 0x2000
-DW_AT_hi_user = 0x3fff
-
-'''
-
-# tag names
-'''
-DW_TAG_array_type = 0x01
-DW_TAG_class_type = 0x02
-DW_TAG_entry_point = 0x03
-DW_TAG_enumeration_type = 0x04
-DW_TAG_formal_parameter = 0x05
-DW_TAG_imported_declaration = 0x08
-DW_TAG_label = 0x0a
-DW_TAG_lexical_block = 0x0b
-DW_TAG_member = 0x0d
-DW_TAG_pointer_type = 0x0f
-DW_TAG_reference_type = 0x10
-DW_TAG_compile_unit = 0x11
-DW_TAG_string_type = 0x12
-DW_TAG_structure_type = 0x13
-DW_TAG_subroutine_type = 0x15
-DW_TAG_typedef = 0x16
-DW_TAG_union_type = 0x17
-DW_TAG_unspecified_parameters = 0x18
-DW_TAG_variant = 0x19
-DW_TAG_common_block = 0x1a
-DW_TAG_common_inclusion = 0x1b
-DW_TAG_inheritance = 0x1c
-DW_TAG_inlined_subroutine = 0x1d
-DW_TAG_module = 0x1e
-DW_TAG_ptr_to_member_type = 0x1f
-DW_TAG_set_type = 0x20
-DW_TAG_subrange_type = 0x21
-DW_TAG_with_stmt = 0x22
-DW_TAG_access_declaration = 0x23
-DW_TAG_base_type = 0x24
-DW_TAG_catch_block = 0x25
-DW_TAG_const_type = 0x26
-DW_TAG_constant = 0x27
-DW_TAG_enumerator = 0x28
-DW_TAG_file_type = 0x29
-DW_TAG_friend = 0x2a
-DW_TAG_namelist = 0x2b
-DW_TAG_namelist_item = 0x2c
-DW_TAG_packed_type = 0x2d
-DW_TAG_subprogram = 0x2e
-DW_TAG_template_type_parameter = 0x2f
-DW_TAG_template_value_parameter = 0x30
-DW_TAG_thrown_type = 0x31
-DW_TAG_try_block = 0x32
-DW_TAG_variant_part = 0x33
-DW_TAG_variable = 0x34
-DW_TAG_volatile_type = 0x35
-DW_TAG_dwarf_procedure = 0x36
-DW_TAG_restrict_type = 0x37
-DW_TAG_interface_type = 0x38
-DW_TAG_namespace = 0x39
-DW_TAG_imported_module = 0x3a
-DW_TAG_unspecified_type = 0x3b
-DW_TAG_partial_unit = 0x3c
-DW_TAG_imported_unit = 0x3d
-DW_TAG_condition = 0x3f
-DW_TAG_shared_type = 0x40
-DW_TAG_type_unit ‡ = 0x41
-DW_TAG_rvalue_reference_type ‡ = 0x42
-DW_TAG_template_alias ‡ = 0x43
-DW_TAG_lo_user = 0x4080
-DW_TAG_hi_user = 0xffff
-'''
+class eh_frame(parray.terminated):
+    _object_ = lambda self: FDE if self.value else CIE
+    def isTerminator(self, value):
+        return not value['length'].int()
 
 if __name__ == '__main__':
-    import ptypes,dwarf
+    import sys, elf
+
+    source = ptypes.setsource(ptypes.prov.file(sys.argv[1], 'rb'))
+    z = elf.File(source=source)
+    z = z.l
+
+    phdrs = z['e_data']['e_phoff'].d
+    phdrs = phdrs.l
+
+    phdr = phdrs.by('GNU_EH_FRAME')
+    pdata = phdr['p_offset'].d.l
+
+    eh = pdata.new(eh_frame_hdr, offset=pdata.getoffset())
+    eh = eh.l
+    print(eh)
+
+    fp = eh['eh_frame_ptr'].d
+    fp = fp.l
+    print(fp)
+
+    sys.exit(0)

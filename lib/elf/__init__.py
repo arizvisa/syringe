@@ -1,7 +1,7 @@
 import logging, bisect, functools, itertools, operator, ptypes
 from ptypes import ptype, pint, pstruct, parray
 
-from . import base, segment, section
+from . import base, segment, section, dwarf, dwarf as exception
 
 ### header types
 EI_NIDENT = 16
