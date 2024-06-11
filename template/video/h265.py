@@ -27,7 +27,7 @@ class exp_golomb(pbinary.struct):
         def alloc(self, *args, **attributes):
             if not args:
                 return super(exp_golomb._leadingZeroBits, self).alloc(*args, **attributes)
-            
+
             # exp_golomb doesn't use its values typically, so
             # intead we use our parameter as the array length.
             [length] = args
@@ -106,7 +106,7 @@ class profile_tier_level_profile_present_flag(pbinary.struct):
                 ok = parent['general_profile_idc'] in values or any(parent['general_profile_compatibility_flag'][index] for index in values)
                 return true if ok else false
             return general_profile_idc_5_9_10_11
-            
+
         _fields_ = [
             (u(1), 'general_max_12bit_constraint_flag'),
             (u(1), 'general_max_10bit_constraint_flag'),
@@ -196,7 +196,7 @@ if __name__ == '__main__':
     import sys, random, h265
     #import importlib; importlib.reload(h265)
     def p2(string): print(string)
-    p = p2 if sys.version_info.major < 3 else eval('print') 
+    p = p2 if sys.version_info.major < 3 else eval('print')
     state = random.Random()
     p(state.randint(0, pow(2,5)))
 

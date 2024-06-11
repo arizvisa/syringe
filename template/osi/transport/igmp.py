@@ -183,7 +183,7 @@ class igmp(pstruct.type, stackable):
         if res.int() in {0x11, 0x22}:
             return v3_query if res.int() == 0x11 else v3_report
         return v2
-        
+
     _fields_ = [
         (igmp_type, 'igmp_type'),       # version & type of IGMP message
         (igmpv3_float, 'igmp_code'),    # subtype for routing msgs
