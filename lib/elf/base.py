@@ -115,7 +115,7 @@ class ULEB128(pbinary.terminatedarray):
         ]
     _object_ = septet
     def isTerminator(self, value):
-        return not bool(value['more'])
+        return False if value['more'] else True
 
     def int(self): return self.get()
     def get(self):

@@ -112,6 +112,12 @@ class layers(parray.terminated):
         # that consumes whatever is available. This should terminate the array.
         return dynamic.clone(data, length=available) if available else data
 
+    def haslayer(self, layer):
+        raise NotImplementedError
+
+    def getlayer(self, layer):
+        raise NotImplementedError
+
 default = packet = dynamic.clone(layers, protocol=datalink.ethernet.header)
 
 if __name__ == '__main__':
