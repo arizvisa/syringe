@@ -107,7 +107,7 @@ class ElfXX_Addr(ptype.pointer_t):
     '''Just a regular address.'''
     _object_ = void
 
-class ULEB128(pbinary.terminatedarray):
+class __ULEB128(pbinary.terminatedarray):
     class septet(pbinary.struct):
         _fields_ = [
             (1, 'more'),
@@ -137,9 +137,9 @@ class ULEB128(pbinary.terminatedarray):
         res = self.int()
         return "{:s} : {:d} : ({:#x}, {:d})".format(self.__element__(), res, res, 7 * len(self))
 
-class SLEB128(ULEB128):
+class __SLEB128(__ULEB128):
     def get(self):
-        res = super(SLEB128, self).get()
+        res = super(__SLEB128, self).get()
         for item in self.value[-1:]:
             if item['value'] & 0x40:
                 res |= -pow(2, 7 * len(self))
@@ -150,8 +150,11 @@ class SLEB128(ULEB128):
         res = self.int()
         return "{:s} : {:+d} : ({:+#x}, {:d})".format(self.__element__(), res, res, 7 * len(self))
 
-class LEB128(SLEB128):
-    pass
+@pbinary.bigendian
+class ULEB128(__ULEB128): pass
+@pbinary.bigendian
+class SLEB128(__SLEB128): pass
+class LEB128(SLEB128): pass
 
 ### elf32
 class Elf32_BaseOff(ElfXX_BaseOff):
