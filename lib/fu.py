@@ -1837,7 +1837,7 @@ def generate():
         for name in dir(item):
             if name not in {'__dict__', '__abstractmethods__', '__annotations__'}:
                 yield item, name, getattr(item, name)
-            continue 
+            continue
         continue
     return
 table = {instance : hash((item, name)) for item, name, instance in generate() if instance not in package.cache.registration.const}
@@ -2536,7 +2536,7 @@ if __name__ == '__main__':
         value = nt(1,2,3,4)
         a = fu.pack(value)
         b = fu.unpack(a)
-        res = b(1,2,3,4)        
+        res = b(1,2,3,4)
         if nt == res:
             raise Success
 

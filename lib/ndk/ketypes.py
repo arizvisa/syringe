@@ -463,7 +463,7 @@ class KPROCESS(pstruct.type, versioned):
                 (ULONG, 'Spare0'),
                 (ULONGLONG, 'DeepFreezeStartTime'),
             ])
-        
+
         f.extend([
             (KAFFINITY_EX, 'Affinity'),
             (LIST_ENTRY, 'ReadyListHead'),

@@ -240,7 +240,7 @@ class HWCAP2_ARM(pbinary.flags):
         (1, 'HWCAP2_PMULL'),
         (1, 'HWCAP2_AES'),
     ]
-    
+
 ### Auxiliary values
 class ElfXX_auxv_t(pstruct.type):
     pass

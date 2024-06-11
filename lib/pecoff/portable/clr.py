@@ -861,7 +861,7 @@ class TableIndex(Index, pint.uint_t):
             row = table[index]     # XXX: is this supposed to be an index - 1?
             return row.li
         raise IndexError(index)
-        
+
     d = property(fget=dereference)
 
     def summary(self):
