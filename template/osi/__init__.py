@@ -105,8 +105,8 @@ class layers(parray.terminated):
 
         # If we were given a layer definition, then we can use with the id that
         # was returned to figure out the next type in the array to return.
-        elif layer.has(identity):
-            return layer.lookup(identity)
+        elif layer.has(identity.int() if isinstance(identity, ptypes.pint.type) else identity):
+            return layer.lookup(identity.int() if isinstance(identity, ptypes.pint.type) else identity)
 
         # If we didn't get any fields that we know then just return a block
         # that consumes whatever is available. This should terminate the array.
@@ -117,6 +117,15 @@ class layers(parray.terminated):
 
     def getlayer(self, layer):
         raise NotImplementedError
+
+    def append(self, layer):
+        if not all([hasattr(layer, 'type'), self.value and isinstance(self.value[-1], stackable)]):
+            return super(layers, self).append(layer)
+        _, field, _ = self.value[-1].layer()
+        if not isinstance(field, ptypes.pint.type):
+            return super(layers, self).append(layer)
+        field.set(layer.type)
+        return super(layers, self).append(layer)
 
 default = packet = dynamic.clone(layers, protocol=datalink.ethernet.header)
 

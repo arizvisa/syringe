@@ -37,6 +37,16 @@ class lladdr(parray.type):
         octets = [ "{:02X}".format(octet.int()) for octet in self ]
         return "({:s}) {:s}".format(','.join([scope,cast]), '-'.join(octets))
 
+    def __setvalue__(self, *values, **attributes):
+        if len(values) > 1:
+            return super(lladdr, self).__setvalue__(*values, **attributes)
+        [hwaddr] = values if values else ['']
+        if not isinstance(hwaddr, ptypes.string_types):
+            return super(lladdr, self).__setvalue__(*values, **attributes)
+        octets = [int(octet, 16) for octet in hwaddr.split(':', max(0, self.length - 1))] if hwaddr else []
+        octets = [octet for octet in itertools.chain(octets, [0] * self.length)][:self.length]
+        return super(lladdr, self).__setvalue__(octets, **attributes)
+
     def set(self, *values, **fields):
         '''Allow setting the address as a list of bytes with any fields that are given.'''
         oui = {}
@@ -88,13 +98,23 @@ class lladdr(parray.type):
         res[0].set(**oui)
         return res
 
-class header(pstruct.type, stackable):
+class ethhdr(pstruct.type, stackable):
+    def __type(self):
+        from .. import network
+        # FIXME: these enumerations could be better organized.
+        class type(network.layer.enum, u_short):
+            pass
+        return type
+
     _fields_ = [
         (lladdr, 'dhost'),
         (lladdr, 'shost'),
-        (u_short, 'type'),
+        #(u_short, 'type'),
+        (__type, 'type'),
     ]
 
     def layer(self):
-        layer, unimplemented, remaining = super(header, self).layer()
-        return layer, self['type'].int(), None
+        layer, unimplemented, remaining = super(ethhdr, self).layer()
+        return layer, self['type'], None
+
+header = ethhdr

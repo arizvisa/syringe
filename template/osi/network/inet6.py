@@ -51,13 +51,23 @@ class u_int32_t(pint.uint32_t): pass
 class u_int16_t(pint.uint16_t): pass
 class u_int8_t(pint.uint8_t): pass
 
+@layer.define(type = 41)    # protocol number
 @datalink.layer.define
 class ip6_hdr(pstruct.type, stackable):
     type = 0x86dd
+
+    def __ip6_nxt(self):
+        from .. import transport
+        # FIXME: these enumerations could be better organized.
+        class ip6_nxt(transport.layer.enum, u_int8_t):
+            pass
+        return ip6_nxt
+
     _fields_ = [
         (u_int32_t, 'ip6_flow'),
         (u_int16_t, 'ip6_plen'),
-        (u_int8_t, 'ip6_nxt'),
+        #(u_int8_t, 'ip6_nxt'),
+        (__ip6_nxt, 'ip6_nxt'),
         (u_int8_t, 'ip6_hlim'),
         (in6_addr, 'saddr'),
         (in6_addr, 'daddr'),
@@ -69,10 +79,6 @@ class ip6_hdr(pstruct.type, stackable):
         if res == 0:
             return layer, ip6_exthdr_hop, self['ip6_plen'].int()
         return layer, res.int(), self['ip6_plen'].int()
-
-@layer.define
-class layer_ip6(ip6_hdr):
-    type = 41
 
 class ip6_opt(pstruct.type):
     def __ip6_len(self):
@@ -98,8 +104,16 @@ class ip6_exthdr(pstruct.type, ip6stackable):
         result = layer.withdefault(self.type, length=size)
         return dyn.clone(result, blocksize=lambda s:size)
 
+    def __ip6_nxt(self):
+        from .. import transport
+        # FIXME: these enumerations could be better organized.
+        class ip6_nxt(transport.layer.enum, u_int8_t):
+            pass
+        return ip6_nxt
+
     _fields_ = [
-        (u_int8_t, 'ip6_nxt'),
+        #(u_int8_t, 'ip6_nxt'),
+        (__ip6_nxt, 'ip6_nxt'),
         (u_int8_t, 'ip6_len'),
         (__ip6_payload, 'ip6_payload'),
     ]
@@ -107,7 +121,7 @@ class ip6_exthdr(pstruct.type, ip6stackable):
     def layer(self):
         layer, id, remaining = super(ip6_hdr, self).layer()
         protocol = self['ip6_nxt'].li
-        return layer, protocol.int(), 8 + self['ip6_len'].li.int()
+        return layer, protocol, 8 + self['ip6_len'].li.int()
 
     def blocksize(self):
         return 8 + self['ip6_len'].li.int()
@@ -170,8 +184,16 @@ if True:
             size = self.blocksize() - 2
             return dyn.clone(ip6_hbh, blocksize=lambda s:size)
 
+        def __ip6_nxt(self):
+            from .. import transport
+            # FIXME: these enumerations could be better organized.
+            class ip6_nxt(transport.layer.enum, u_int8_t):
+                pass
+            return ip6_nxt
+
         _fields_ = [
-            (u_int8_t, 'ip6_nxt'),
+            #(u_int8_t, 'ip6_nxt'),
+            (__ip6_nxt, 'ip6_nxt'),
             (u_int8_t, 'ip6_len'),
             (__ip6_payload, 'ip6_payload'),
         ]
@@ -224,3 +246,5 @@ class icmp6_hdr(pstruct.type):
         (u_int16_t, 'icmp6_cksum'),
         (dyn.block(4), 'icmp6_data')
     ]
+
+header = ip6_hdr

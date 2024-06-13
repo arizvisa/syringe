@@ -315,9 +315,10 @@ class ip4_opts(ptype.encoded_t):
         size = self.size()
         return dyn.clone(ip4_optarray, blocksize = lambda self, sz=size: sz)
 
-@layer.define
+@layer.define(type=4)   # protocol number
+@datalink.layer.define
 class ip4_hdr(pstruct.type, stackable):
-    type = 4
+    type = 0x0800
 
     class _ip_h(pbinary.struct):
         _fields_ = [(4,'ver'),(4,'hlen')]
@@ -351,6 +352,13 @@ class ip4_hdr(pstruct.type, stackable):
         backing = dyn.block(optsize)
         return dyn.clone(ip4_opts, _value_=backing)
 
+    def __ip_protocol(self):
+        from .. import transport
+        # FIXME: these enumerations could be better organized.
+        class ip_protocol(transport.layer.enum, u_char):
+            pass
+        return ip_protocol
+
     _fields_ = [
 #        (u_char, 'ip_h'),
         (_ip_h, 'ip_h'),
@@ -359,7 +367,8 @@ class ip4_hdr(pstruct.type, stackable):
         (u_short, 'ip_id'),
         (_ip_fragoff, 'ip_fragoff'),
         (u_char, 'ip_ttl'),
-        (u_char, 'ip_protocol'),
+        #(u_char, 'ip_protocol'),
+        (__ip_protocol, 'ip_protocol'),
         (u_short, 'ip_sum'),
 
         (in_addr, 'ip_src'),
@@ -395,8 +404,6 @@ class ip4_hdr(pstruct.type, stackable):
         hlen, optsize = 4 * header['hlen'], sum(self[fld].size() for fld in ['ip_opt', 'padding(ip_opt)'])
         hsize = sum(self[fld].size() for fld in fields) - optsize
         logging.warning("{:s} : Error decoding the IP4 header. The size specified in the header ({:d}) does not match the size ({:d}) of the header with its options ({:d}).".format(self.instance(), hlen, hsize, optsize))
-        return layer, self['ip_protocol'].li.int(), max(0, self['ip_len'].li.int() - 4 * header['hlen'])
+        return layer, self['ip_protocol'].li, max(0, self['ip_len'].li.int() - 4 * header['hlen'])
 
-@datalink.layer.define
-class datalink_ip4(ip4_hdr):
-    type = 0x0800
+header = ip4_hdr
