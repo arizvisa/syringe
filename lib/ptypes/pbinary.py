@@ -908,9 +908,10 @@ class container(type):
             raise error.InitializationError(self, 'container.__field__')
         return self.value[index]
 
-    def field(self, key):
-        '''Returns the field that is indexed with the specified key.'''
-        return self.__field__(key)
+    def field(self, *keys):
+        '''Returns the field that is indexed with the specified keys.'''
+        get_field = lambda object, field: object.__field__(field) if hasattr(object, '__field__') else operator.getitem(object, field)
+        return functools.reduce(get_field, keys, self)
 
     def __getitem__(self, key):
         '''x.__getitem__(y) <==> x[y]'''
@@ -4248,6 +4249,34 @@ if __name__ == '__main__':
         a = p()
         a.set({k for k in a.keys() if k.startswith('set')})
         if all(a[k] for k in a.keys() if k.startswith('set')) and all(not(a[k]) for k in a.keys() if k.startswith('notset')):
+            raise Success
+
+    @TestCase
+    def test_get_field_0():
+        class t(pbinary.struct): _fields_ = [(4, 'a'), (4, 'b'), (4, 'c'), (4, 'd')]
+        x = pbinary.new(t)
+        x.a.set(a=1, b=2, c=3)
+        res = x.field()
+        if id(res) == id(x):
+            raise Success
+
+    @TestCase
+    def test_get_field_1():
+        class t(pbinary.struct): _fields_ = [(4, 'a'), (4, 'b'), (4, 'c'), (4, 'd')]
+        x = pbinary.new(t)
+        x.a.set(a=1, b=2, c=3)
+        res = x.field('b')
+        if res.bitmap() == (2, 4):
+            raise Success
+
+    @TestCase
+    def test_get_field_2():
+        class t1(pbinary.struct): _fields_ = [(32, 'c')]
+        class t2(pbinary.struct): _fields_ = [(t1, 'b')]
+        class t3(pbinary.struct): _fields_ = [(t2, 'a')]
+
+        x = pbinary.new(t3).a
+        if x.field('a', 'b', 'c').bitmap() == (0, 32):
             raise Success
 
 if __name__ == '__main__':

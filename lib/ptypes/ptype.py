@@ -1351,9 +1351,10 @@ class container(base):
             pass
         return res
 
-    def field(self, key):
-        '''Returns the field that is indexed with the specified key.'''
-        return self.__field__(key)
+    def field(self, *keys):
+        '''Returns the field that is indexed with the specified keys.'''
+        get_field = lambda object, field: object.__field__(field) if hasattr(object, '__field__') else operator.getitem(object, field)
+        return functools.reduce(get_field, keys, self)
 
     def setoffset(self, offset, recurse=False):
         """Changes the current offset to ``offset``
@@ -3947,6 +3948,32 @@ if __name__ == '__main__':
         v = x['a']['b']['c']['d']
         res = v.getparent(b)
         if builtins.isinstance(res, b):
+            raise Success
+
+    @TestCase
+    def test_get_field_0():
+        class t(pstruct.type): _fields_ = [(pint.uint8_t, 'a'), (pint.uint8_t, 'b'), (pint.uint32_t, 'c')]
+
+        x = t().alloc(a=1, b=2, c=3)
+        if x.field().serialize() == x.serialize():
+            raise Success
+
+    @TestCase
+    def test_get_field_1():
+        class t(pstruct.type): _fields_ = [(pint.uint8_t, 'a'), (pint.uint8_t, 'b'), (pint.uint32_t, 'c')]
+
+        x = t().alloc(a=1, b=2, c=3)
+        if x.field('b').int() == 2:
+            raise Success
+
+    @TestCase
+    def test_get_field_2():
+        class t1(pstruct.type): _fields_ = [(pint.uint32_t, 'c')]
+        class t2(pstruct.type): _fields_ = [(t1, 'b')]
+        class t3(pstruct.type): _fields_ = [(t2, 'a')]
+
+        x = t3().a
+        if x.field('a', 'b', 'c').int() == 0:
             raise Success
 
 if __name__ == '__main__':
