@@ -5,8 +5,10 @@ class family(pint.enum):
     '''address family numbers'''
     _values_ = [
         ('other', 0),
-        ('ipV4', 1),
-        ('ipV6', 2),
+        #('ipV4', 1),
+        #('ipV6', 2),
+        ('ip4', 1),
+        ('ip6', 2),
         ('nsap', 3),
         ('hdlc', 4),
         ('bbn1822', 5),
