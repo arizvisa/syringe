@@ -16,7 +16,7 @@ class stackable(object):
 class terminal(stackable):
     pass
 
-from . import datalink, network, transport
+from . import datalink, network, transport, address
 
 class data(ptype.block):
     pass
