@@ -1704,6 +1704,10 @@ class block(type):
         if self.blocksize() > 0:
             return self.details() + '\n'
         return self.summary()
+    def summary(self):
+        if self.initializedQ():
+            return '...' if self.length is None and self.size() == 0 else "({:d}) {:s}".format(self.size(), super(block, self).summary())
+        return super(block, self).summary()
     def __setvalue__(self, *values, **attrs):
         """Set entire type equal to ``value``"""
         if not values:
