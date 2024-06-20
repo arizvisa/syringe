@@ -1,8 +1,8 @@
-import ptypes, builtins, functools, logging
+import ptypes, builtins, logging
 from ptypes import *
 
 import ptypes.bitmap as bitmap
-from . import layer, stackable, terminal, datalink
+from . import layer, stackable, terminal, datalink, utils
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
@@ -378,19 +378,9 @@ class ip4_hdr(pstruct.type, stackable):
         (dyn.padding(4), 'padding(ip_opt)'),
     ]
 
-    @classmethod
-    def _checksum(cls, bytes):
-        array = bytearray(bytes)
-        iterable = map(functools.partial(functools.reduce, lambda agg, item: 0x100 * agg + item), zip(*[iter(array)] * 2))
-        shorts = [item for item in iterable]
-        seed = sum(shorts)
-        shifted, _ = divmod(seed, pow(2, 16))
-        checksum = shifted + (seed & 0XFFFF)
-        return 0xFFFF & ~checksum
-
     def checksum(self):
-        bytes = self.copy().set(ip_sum=0).serialize()
-        return self._checksum(bytes)
+        instance = self.copy().set(ip_sum=0)
+        return utils.checksum(instance.serialize())
 
     def layer(self):
         layer, id, remaining = super(ip4_hdr, self).layer()
