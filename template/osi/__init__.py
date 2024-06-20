@@ -113,10 +113,17 @@ class layers(parray.terminated):
         return dynamic.clone(data, length=available) if available else data
 
     def haslayer(self, layer):
-        raise NotImplementedError
+        if not (ptypes.istype(layer) or callable(layer)):
+            raise TypeError(layer)
+        F = (lambda item: isinstance(item, layer)) if ptypes.istype(layer) else layer
+        return next((True for item in self if F(item)), False)
 
     def getlayer(self, layer):
-        raise NotImplementedError
+        if not (ptypes.istype(layer) or callable(layer)):
+            raise TypeError(layer)
+        F = (lambda item: isinstance(item, layer)) if ptypes.istype(layer) else layer
+        iterable = (item for item in self if F(item))
+        return next(iterable)
 
     def append(self, layer):
         if not all([hasattr(layer, 'type'), self.value and isinstance(self.value[-1], stackable)]):
