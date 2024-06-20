@@ -112,13 +112,15 @@ class layers(parray.terminated):
         # that consumes whatever is available. This should terminate the array.
         return dynamic.clone(data, length=available) if available else data
 
-    def haslayer(self, layer):
+    def has(self, layer):
+        '''Return whether the array contains an instance of the specified layer.'''
         if not (ptypes.istype(layer) or callable(layer)):
             raise TypeError(layer)
         F = (lambda item: isinstance(item, layer)) if ptypes.istype(layer) else layer
         return next((True for item in self if F(item)), False)
 
-    def getlayer(self, layer):
+    def layer(self, layer):
+        '''Return an instance of the specified layer from the array..'''
         if not (ptypes.istype(layer) or callable(layer)):
             raise TypeError(layer)
         F = (lambda item: isinstance(item, layer)) if ptypes.istype(layer) else layer
