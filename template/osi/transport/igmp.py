@@ -2,17 +2,16 @@ import ptypes, functools, operator, sys
 from ptypes import *
 
 from . import layer, stackable, terminal, network
+from . import utils, address
 
 pint.setbyteorder(ptypes.config.byteorder.bigendian)
-
-from ..network import inet4
 
 tohex = operator.methodcaller('encode', 'hex') if sys.version_info.major < 3 else operator.methodcaller('hex')
 
 class u_char(pint.uint8_t): pass
 class u_short(pint.uint16_t): pass
 class u_long(pint.uint32_t): pass
-class in_addr(inet4.in_addr): pass
+in_addr = address.in4_addr
 
 def checksum(bytes):
     array = bytearray(bytes)
