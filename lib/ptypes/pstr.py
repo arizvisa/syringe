@@ -437,7 +437,7 @@ class string(ptype.type):
         prefix, spec = spec[:-1], spec[-1:]
         if '#' in prefix and spec in 's':
             data = self.serialize()
-            decoded, length = self.encoding.decode(data, errors='ignore')
+            decoded, length = self.encoding.decode(data, 'ignore')
             return "{:{:s}s}".format(string_escape(decoded.rstrip('\0')), ''.join(char for char in prefix if char != '#'))
         elif spec in 's':
             return "{:{:s}s}".format(self.str(), prefix)
@@ -982,6 +982,20 @@ if __name__ == '__main__':
         data = b'\xe3\x82\xb3\xe3\x83\xbc\xe3\x83\x89'
         self = pstr.string(length=12, encoding='utf-8').set(data)
         if self.serialize() == b'\xe3\x82\xb3\xe3\x83\xbc\xe3\x83\x89\0\0\0' and self.blocksize() == 12 and self.size() == 12:
+            raise Success
+
+    @TestCase
+    def test_str_format_alternative_1():
+        data = b'\xe3\x82\xb3\xe3\x83\xbc\xe3\x83\x89'
+        self = pstr.string(length=12, encoding='latin1').set(data)
+        if "{:#s}".format(self) == r'\XE3\X82\XB3\XE3\X83\XBC\XE3\X83\X89'.lower():
+            raise Success
+
+    @TestCase
+    def test_str_format_alternative_2():
+        data = b'\xe3\x82\xb3\xe3\x83\xbc\xe3\x83\x89'
+        self = pstr.string(encoding='utf-8').set(data)
+        if "{:#s}".format(self) == r'\U30B3\U30FC\U30C9'.lower():
             raise Success
 
 if __name__ == '__main__':
