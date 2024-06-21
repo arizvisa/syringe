@@ -2182,8 +2182,9 @@ class definition(object):
                 raise TypeError("type object '{:s}' in attribute '{:s}' is not a supported enumeration type".format('.'.join(getattr(result, attribute) for attribute in ['__module__', '__name__'] if hasattr(result, attribute)), '.'.join([clsname, self._definition])))
 
             def get_filtered_values(values):
-                newvalues = {object.__name__ : self.bytes_or_whatever(result, key) for key, object in type.cache.items()}
-                newvalues.update({name : key for name, key in values})
+                unique_values = {self.bytes_or_whatever(result, key): object.__name__ for key, object in type.cache.items()}
+                unique_values.update({key : name for name, key in values})
+                newvalues = {name : key for key, name in unique_values.items()}
                 if all(builtins.isinstance(key, bitmap.integer_types) for _, key in newvalues.items()):
                     return [(name, integer) for name, integer in newvalues.items()]
 
@@ -3978,6 +3979,106 @@ if __name__ == '__main__':
 
         x = t3().a
         if x.field('a', 'b', 'c').int() == 0:
+            raise Success
+
+    @TestCase
+    def test_definition_enum_descriptor_1():
+        class d(ptype.definition):
+            cache = {}
+            class _enum_(pint.enum):
+                _values_ = [('a', 2)]
+
+        if {(key, value) for key, value in d.enum._values_} == {('a', 2)}:
+            raise Success
+
+    @TestCase
+    def test_definition_enum_descriptor_2():
+        class d(ptype.definition):
+            cache = {}
+            class _enum_(pint.enum):
+                pass
+
+        @d.define(type=2)
+        class a(ptype.type):
+            length = 1
+
+        if {(key, value) for key, value in d.enum._values_} == {('a', 2)}:
+            raise Success
+
+    @TestCase
+    def test_definition_enum_descriptor_3():
+        class d(ptype.definition):
+            cache = {}
+            class _enum_(pint.enum):
+                _values_ = [('b', 1)]
+
+        @d.define(type=2)
+        class a(ptype.type):
+            length = 1
+
+        if {(key, value) for key, value in d.enum._values_} == {('a', 2), ('b', 1)}:
+            raise Success
+
+    @TestCase
+    def test_definition_enum_descriptor_4():
+        class d(ptype.definition):
+            cache = {}
+            class _enum_(pint.enum):
+                _values_ = [('b', 2)]
+
+        @d.define(type=2)
+        class a(ptype.type):
+            length = 1
+
+        if {(key, value) for key, value in d.enum._values_} == {('b', 2)}:
+            raise Success
+
+    @TestCase
+    def test_definition_type_descriptor_1():
+        class d(ptype.definition):
+            cache = {}
+            class _object_(pint.uint32_t):
+                pass
+
+        if hasattr(d, 'type') and d.type().a.size() == 4:
+            raise Success
+
+    @TestCase
+    def test_definition_type_descriptor_2():
+        def py3_object_(length):
+            class b(ptype.block): pass
+            b.length = length
+            return b()
+        def py2_object_(*args):
+            return py3_object_(*args)
+        class d(ptype.definition):
+            cache = {}
+            _object_ = staticmethod(py2_object_) if sys.version_info.major < 3 else py3_object_
+        if hasattr(d, 'type') and d.type(4).a.size() == 4:
+            raise Success
+
+    @TestCase
+    def test_definition_type_descriptor_3():
+        class d(ptype.definition):
+            cache = {}
+            @classmethod
+            def _object_(cls, length):
+                class b(ptype.block): pass
+                b.length = length
+                return b()
+        if hasattr(d, 'type') and d.type(4).a.size() == 4:
+            raise Success
+
+    @TestCase
+    def test_definition_type_descriptor_4():
+        class d(ptype.definition):
+            cache = {}
+            @staticmethod
+            def _object_(length):
+                class b(ptype.block): pass
+                b.length = length
+                return b()
+        if hasattr(d, 'type') and d.type(4).a.size() == 4:
             raise Success
 
 if __name__ == '__main__':
