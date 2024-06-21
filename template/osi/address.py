@@ -64,6 +64,10 @@ class family(ptype.definition):
     class _enum_(family_t): pass
     attribute = 'family'
 
+@family.define
+class other_addr(ptype.block):
+    family = family.enum.byname('other')
+
 class u_long(pint.uint32_t): pass
 
 @family.define
