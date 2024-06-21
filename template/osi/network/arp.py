@@ -2,6 +2,7 @@ import ptypes
 from ptypes import *
 
 from . import layer, stackable, terminal, datalink
+from . import utils, address
 from . import inet4, inet6
 
 pint.setbyteorder(ptypes.config.byteorder.bigendian)
@@ -14,7 +15,7 @@ class ar_hrd(datalink.layer.enum, u_short):
 
 class hwtypes(ptype.definition):
     cache = { ar_hrd.byname(id, id) : header for id, header in [
-        ('Ethernet', datalink.ethernet.lladdr),
+        ('Ethernet', address.ethaddr),
     ]}
 
 class ar_pro(layer.enum, u_short):
