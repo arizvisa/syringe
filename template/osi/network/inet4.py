@@ -2,109 +2,15 @@ import ptypes, builtins, logging
 from ptypes import *
 
 import ptypes.bitmap as bitmap
-from . import layer, stackable, terminal, datalink, utils
+from . import layer, stackable, terminal, datalink
+from . import utils, address
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
 class u_char(pint.uint8_t): pass
 class u_short(pint.uint16_t): pass
 class u_long(pint.uint32_t): pass
-
-@ptypes.pint.bigendian
-class in_addr(pint.enum, u_long):
-    _values_ = [
-        ('ALL-SYSTEMS', 0xE0000001),
-        ('ALL-ROUTERS', 0xE0000002),
-        ('DVRMP', 0xE0000004),
-        ('ALL-OSPF', 0xE0000005),
-        ('ALL-OSPF-DR', 0xE0000006),
-        ('ALL-RIPv2', 0xE0000009),
-        ('EIGRP', 0xE000000A),
-        ('PIM', 0xE000000D),
-        ('VRRP', 0xE0000012),
-        ('IPAllL1ISs', 0xE0000013),
-        ('IPAllL2ISs', 0xE0000014),
-        ('IPAllIntermediate', 0xE0000015),
-        ('IGMPv3', 0xE0000016),
-        ('HSRPv2', 0xE0000066),
-        ('MDAP', 0xE0000067),
-        ('PTPv2-Peer', 0xE000006B),
-        ('AllJoyn', 0xE0000071),
-        ('MDNS', 0xE00000FB),
-        ('LLMNR', 0xE00000FC),
-        ('Teredo-Discovery', 0xE00000FD),
-        ('NTP-Client', 0xE0000101),
-        ('SLPv1-General', 0xE0000116),
-        ('SLPv1-Agent', 0xE0000123),
-        ('AUTO-RP-ANNOUNCE', 0xE0000127),
-        ('AUTO-RP-DISCOVERY', 0xE0000128),
-        ('H.323', 0xE0000129),
-        ('PTPv2', 0xE0000181),
-        ('SSDP', 0xEFFFFFFA),
-        ('SLPv2', 0xEFFFFFFA),
-    ]
-
-    def __format__(self, spec):
-        hash = spec.find('#')
-        if spec.endswith('A'):
-            spec = spec[:-1] if hash < 0 else spec[:hash] + spec[1 + hash:-1]
-            octets = bytearray(self.serialize())
-            dotted = "{:d}.{:d}.{:d}.{:d}".format(*octets)
-            res = "{:#s}({:s})".format(self, dotted) if hash >= 0 and self.has(self.int()) else dotted
-            return "{:{:s}s}".format(res, spec)
-        return super(in_addr, self).__format__(spec)
-
-    def summary(self):
-        res = self.int()
-        integer = bitmap.new(res, 32)
-        octets = bitmap.split(integer, 8)
-        if self.has(res):
-            return '{:#s}({:#x}) : {:d}.{:d}.{:d}.{:d}'.format(self, *map(bitmap.int, [integer] + octets))
-        return '{:#x} : {:d}.{:d}.{:d}.{:d}'.format(*map(bitmap.int, [integer] + octets))
-
-    def set(self, integer):
-        if isinstance(integer, str) and self.has(integer):
-            return self.__setvalue__(integer)
-        elif isinstance(integer, str):
-            octets = integer.split('.', 3)
-            return self.set([builtins.int(item) for item in integer.split('.')])
-        elif isinstance(integer, (tuple, list)):
-            octets = bitmap.join([bitmap.new(item, 8) for item in integer])
-            integer = bitmap.push(octets, bitmap.new(0, 32 - bitmap.size(octets)))
-            return self.set(bitmap.int(integer))
-        elif not bitmap.isinteger(integer):
-            raise TypeError(integer)
-        return super(in_addr, self).set(integer)
-
-    def is_linklocal(self):
-        '''169.254/16'''
-        Fcidr = lambda size: lambda bits, broadcast=pow(2, size) - 1: broadcast & ~(pow(2, size - bits) - 1)
-        Fmask = Fcidr(8 * self.blocksize())
-        return self.int() & Fmask(16) == 0xA9FE0000
-
-    def is_multicast(self):
-        '''224/4'''
-        Fcidr = lambda size: lambda bits, broadcast=pow(2, size) - 1: broadcast & ~(pow(2, size - bits) - 1)
-        Fmask = Fcidr(8 * self.blocksize())
-        return self.int() & Fmask(4) == 0xE0000000
-
-    def is_broadcast(self):
-        '''224/4'''
-        Fcidr = lambda size: lambda bits, broadcast=pow(2, size) - 1: broadcast & ~(pow(2, size - bits) - 1)
-        Fmask = Fcidr(8 * self.blocksize())
-        return self.int() & Fmask(32) == 0xFFFFFFFF
-
-    def is_local(self):
-        '''127/8'''
-        Fcidr = lambda size: lambda bits, broadcast=pow(2, size) - 1: broadcast & ~(pow(2, size - bits) - 1)
-        Fmask = Fcidr(8 * self.blocksize())
-        return self.int() & Fmask(8) == 0x7F000000
-
-    def is_private(self):
-        '''10/8 172.16/12 192.168/16'''
-        Fcidr = lambda size: lambda bits, broadcast=pow(2, size) - 1: broadcast & ~(pow(2, size - bits) - 1)
-        address, Fmask = self.int(), Fcidr(8 * self.blocksize())
-        return any(address & Fmask(bits) == network for bits, network in [(8, 0x0A00000000), (12, 0xAC100000), (16, 0xC0A80000)])
+in_addr = address.in4_addr
 
 class ip4_option_type(ptype.definition):
     cache = {}

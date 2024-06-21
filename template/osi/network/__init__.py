@@ -1,5 +1,6 @@
 import ptypes, logging
-from .. import layer, stackable, terminal, datalink, utils
+from .. import layer, stackable, terminal, datalink
+from .. import utils, address
 
 class layer(layer):
     """

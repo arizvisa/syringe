@@ -9,6 +9,7 @@ from ptypes import *
 
 import ptypes.bitmap as bitmap
 from . import layer, stackable, terminal, datalink
+from . import address, utils
 
 class ip6layer(layer):
     cache = {}
@@ -17,39 +18,11 @@ class ip6stackable(stackable):
 
 pint.setbyteorder(ptypes.config.byteorder.bigendian)
 
-class in_addr(parray.type):
-    length, _object_ = 4, pint.uint32_t
-    def summary(self):
-        iterable = (item.int() for item in self)
-        res = functools.reduce(lambda agg, item: agg * pow(2, 32) + item, iterable, 0)
-        num = bitmap.new(res, 128)
-        components = bitmap.split(num, 16)
-
-        # FIXME: there's got to be a more elegant way than a hacky state machine
-        result, counter = [], 0
-        for item in map(bitmap.number, components):
-            if counter < 2:
-                if item == 0:
-                    counter = 1
-                    if len(result) == 0:
-                        result.append('')
-                    continue
-                elif counter > 0:
-                    result.extend(['', "{:x}".format(item)])
-                    counter = 2
-                    continue
-            result.append("{:x}".format(item))
-        return ':'.join(result + ([':'] if counter == 1 else []))
-    def is_linklocal(self):
-        # fe80::/10
-        res = functools.reduce(lambda agg, item: agg * pow(2, 32) + item, iterable, 0)
-        Fcidr = lambda size: lambda bits, broadcast=pow(2, size) - 1: broadcast & ~(pow(2, size - bits) - 1)
-        return res & Fcidr(128)(10) == 0xfe800000000000000000000000000000
-in6_addr = in_addr
-
 class u_int32_t(pint.uint32_t): pass
 class u_int16_t(pint.uint16_t): pass
 class u_int8_t(pint.uint8_t): pass
+class in6_addr(address.in6_addr): pass
+in_addr = address.in6_addr
 
 @layer.define(type = 41)    # protocol number
 @datalink.layer.define
