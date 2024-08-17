@@ -515,6 +515,7 @@ class HeaderMiniFat(pstruct.type):
 
     def alloc(self, **fields):
         fields.setdefault('sectMiniFat', 'ENDOFCHAIN')
+        fields.setdefault('ulMiniSectorCutoff', 0x1000)
         return super(HeaderMiniFat, self).alloc(**fields)
 
 class HeaderDiFat(pstruct.type):
