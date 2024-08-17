@@ -437,7 +437,7 @@ class Header(pstruct.type):
         fields.setdefault('abSig', self._abSig)
         res = super(Header, self).alloc(**fields)
         res if 'uMinorVersion' in fields else res['uMinorVersion'].set(0x3e)
-        res if 'uMajorVersion' in fields else res['uMajorVersion'].set(2)
+        res if 'uMajorVersion' in fields else res['uMajorVersion'].set(3)
         res if 'uByteOrder' in fields else res['uByteOrder'].set('BigEndian')
         return res
 
