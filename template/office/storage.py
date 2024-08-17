@@ -111,10 +111,10 @@ class AllocationTable(parray.type):
     # Walk the linked-list of sectors
     def chain(self, index):
         '''Yield the index of each sector in the chain starting at the given index.'''
-        maximum = MAXREGSECT.type + 1
-        if 0 <= index < maximum:
+        maximum = MAXREGSECT.type
+        if 0 <= index <= maximum:
             yield index
-        while 0 <= index < maximum and self[index].int() < maximum:
+        while 0 <= index <= maximum and self[index].int() <= maximum:
             index = self[index].int()
             yield index
         return
@@ -294,7 +294,7 @@ class DIFAT(AllocationTable):
     def enumerate(self):
         '''Yield the index and IndirectPointer of each entry within the DiFat.'''
         for index, table in enumerate(self.li):
-            if table.object.int() >= MAXREGSECT.type:
+            if table.object.int() > MAXREGSECT.type:
                 break
             yield index, table
         return
@@ -320,7 +320,7 @@ class DIFAT(AllocationTable):
             if pointer.object['ENDOFCHAIN']:
                 break
 
-            elif pointer.object.int() >= MAXREGSECT.type:
+            elif pointer.object.int() > MAXREGSECT.type:
                 logger.error("{:s}: Encountered {:#s} while trying to traverse to next {:s} table at {:s}.".format('.'.join([cls.__module__, cls.__name__]), pointer.object, cls.typename(), this.instance()))
                 break
 
@@ -1423,7 +1423,7 @@ class File(pstruct.type):
 
         # If there's nothing specified in the header, then we're essentially done.
         start, count = self['DiFat']['sectDifat'], self['DiFat']['csectDifat'].int()
-        if start.int() >= MAXREGSECT.type:
+        if start.int() > MAXREGSECT.type:
             return items
 
         # Dereference the pointer in the header to grab the first sector,
@@ -1470,7 +1470,7 @@ class File(pstruct.type):
         fat, directory = self.Fat(), self.Directory()
         root = directory.RootEntry()
         start, _ = (root[item].int() for item in ['sectLocation', 'qwSize'])
-        return [item.l for item in self.fatsectors(fat.chain(start))]
+        return [item.l for item in self.fatsectors(fat.chain(start))] if 0 <= start <= MAXREGSECT.type else []
 
     def minisectors(self, chain):
         '''Yield the contents of each minisector specified by the given chain.'''
@@ -1488,7 +1488,7 @@ class File(pstruct.type):
     def difatchain(self):
         '''Return the fat chain for the DIFAT as a list of sector numbers.'''
         start, count = self['DiFat']['sectDifat'], self['DiFat']['csectDifat'].int()
-        if start.int() >= MAXREGSECT.type:
+        if start.int() > MAXREGSECT.type:
             return []
 
         # snag the last entry of each difat sector. this entry'll be the index
