@@ -973,7 +973,7 @@ class file(fileobj):
         res = self.open(*args, **kwds)
         return super(file, self).__init__(res)
 
-    @utils.mapexception(any=error.ProviderError)
+    @utils.mapexception(any=error.ProviderError, ignored=(ValueError,))
     def open(self, filename, mode='rw'):
         usermode = list(x.lower() for x in mode)
 
@@ -985,10 +985,12 @@ class file(fileobj):
             access = 'r+b'
         elif 'r' in usermode and 'w' in usermode:
             access = 'r+b'
-        elif 'w' in usermode:
+        elif 'w' in usermode or 'x' in usermode:
             access = 'wb'
         elif 'r' in usermode:
             access = 'rb'
+        else:
+            raise ValueError("invalid mode: {!r}".format(''.join(usermode)))
 
         straccess = 'read/write' if access =='r+b' else 'write' if access == 'wb' else 'read-only' if access == 'rb' else 'unknown'
 
