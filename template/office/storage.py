@@ -1250,7 +1250,12 @@ class MiniStreamSectors(ContentStream):
 
 ### File type
 class File(pstruct.type):
-    attributes = {'_uHeaderSize': pow(2, 9)}    # _always_ hardcoded to 512
+    attributes = {
+        '_uHeaderSize': pow(2, 9),      # _always_ hardcoded to 512
+        '_uSectorSize': pow(2, 9),
+        '_uMiniSectorSize': pow(2, 6),
+    }
+
     def __reserved(self):
         '''Hook decoding of the "reserved" field in order to keep track of the sector and mini-sector dimensions.'''
         header = self['Header'].li
