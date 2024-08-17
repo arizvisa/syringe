@@ -484,6 +484,7 @@ class HeaderFat(pstruct.type):
         (SECT, 'sectDirectory'),        # First directory sector location
         (DWORD, 'dwTransaction'),
     ]
+
     def summary(self):
         fields = [
             ('sectDirectory', None),
@@ -493,12 +494,17 @@ class HeaderFat(pstruct.type):
         ]
         return ' '.join("{:s}={!s}".format(fld, fmtstring.format(self[fld].int()) if fmtstring else self[fld].summary()) for fld, fmtstring in fields)
 
+    def alloc(self, **fields):
+        fields.setdefault('sectDirectory', 'ENDOFCHAIN')
+        return super(HeaderFat, self).alloc(**fields)
+
 class HeaderMiniFat(pstruct.type):
     _fields_ = [
         (ULONG, 'ulMiniSectorCutoff'),  # Mini stream cutoff size
         (SECT, 'sectMiniFat'),          # First mini fat sector location
         (DWORD, 'csectMiniFat'),        # Number of mini fat sectors
     ]
+
     def summary(self):
         fields = [
             ('ulMiniSectorCutoff', "{:d}"),
@@ -506,6 +512,10 @@ class HeaderMiniFat(pstruct.type):
             ('csectMiniFat', "{:d}")
         ]
         return ' '.join("{:s}={!s}".format(fld, fmtstring.format(self[fld].int()) if fmtstring else self[fld].summary()) for fld, fmtstring in fields)
+
+    def alloc(self, **fields):
+        fields.setdefault('sectMiniFat', 'ENDOFCHAIN')
+        return super(HeaderMiniFat, self).alloc(**fields)
 
 class HeaderDiFat(pstruct.type):
     def __sectDifat(self):
