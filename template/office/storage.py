@@ -883,7 +883,7 @@ class Directory(parray.block):
             count, invalid = len(self), [index for index, entry in enumerate(self) if not entry.used()]
             descriptions = [string for string in itertools.chain(map("{:d}".format, invalid[:-1]), map("and {:d}".format, invalid[-1:]))] if len(invalid) > 1 else ["{:d}".format(*invalid)] if invalid else []
             complaints = ', '.join(descriptions) if len(descriptions) > 2 else ' '.join(descriptions)
-            raise KeyError("{:s}.RootEntry(): Unable to find a \"{:s}\" directory entry out of {:d} entr{:s}{:s}.".format(self.classname(), type, count, 'y' if count == 1 else 'ies', " (entr{:s} {:s} possibly corrupted)".format('y' if len(descriptions) == 1 else 'ies', complaints) if descriptions else ''))
+            raise KeyError("{:s}.RootEntry(): Unable to find a \"{:s}\" directory entry within the {:d} entr{:s}{:s} that are available.".format(self.classname(), type, count, 'y' if count == 1 else 'ies', " (entr{:s} {:s} possibly corrupted)".format('y' if len(descriptions) == 1 else 'ies', complaints) if descriptions else ''))
         return result
     root = property(fget=RootEntry)
 
@@ -1468,7 +1468,10 @@ class File(pstruct.type):
     def __ministream_sectors__(self):
         '''Return the contents of the sectors containing the ministream as a list.'''
         fat, directory = self.Fat(), self.Directory()
-        root = directory.RootEntry()
+        candidates = [entry for entry in directory if entry['Type']['Root']]
+        if len(candidates) != 1:
+            return []
+        [root] = candidates
         start, _ = (root[item].int() for item in ['sectLocation', 'qwSize'])
         return [item.l for item in self.fatsectors(fat.chain(start))] if 0 <= start <= MAXREGSECT.type else []
 
