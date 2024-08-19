@@ -1,4 +1,4 @@
-import logging, contextlib, itertools
+import logging, contextlib, itertools, operator
 
 import ptypes, office.storage
 from ptypes import ptype
@@ -203,8 +203,26 @@ def ModifyDirectory(store):
     if additional:
         logger.info("Adding {:d} sector{:s} to {:s}".format(len(additional), '' if len(additional) == 1 else 's', fat.instance()))
 
-    iterable = (new.a.asDirectory() for new in additional if not new.initializedQ())
-    [ new.a.c for new in iterable ]
+    # we now need to ensure that all of the sectors are initialized with an
+    # allocated DirectoryEntry. however, the sector size might not actually
+    # be a multiple of the entry size. so, we need the offset of each sector.
+    empty = office.storage.DirectoryEntry().a
+    iterable = itertools.accumulate(map(operator.methodcaller('blocksize'), additional), operator.add)
+    size, iterable = empty.size(), itertools.chain([0], iterable)
+    source, iterable = ptypes.provider.proxy(empty), (divmod(offset, size) for offset in iterable)
+
+    # then we can use the offset to figure out which part of the
+    # empty DirectoryEntry we'll load the sector from. otherwise,
+    # we can just treat the sector as a directory and then allocate.
+    for new, (index, remainder) in zip(additional, iterable):
+        sector = new.blocksize()
+        if new.initializedQ():
+            continue
+        elif sector < size:
+            loaded = new.load(source=source, offset=remainder)
+        else:
+            loaded = new.a.asDirectory().alloc(length=sector // size)
+        loaded.c
 
     # now we can unlink the previous chain and link the new one.
     [fat[oidx].c for oidx in fat.unlink(oldchain)]
