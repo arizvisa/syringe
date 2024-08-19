@@ -1184,7 +1184,17 @@ class SectorContent(ptype.block):
         '''Return the sector as a list of directory entries.'''
         attrs.setdefault('source', ptypes.provider.proxy(self, autocommit={}))
         attrs.setdefault('blocksize', self.size)
-        return self.new(Directory, **attrs).li
+
+        # If a single directory entry can fit within this block, then
+        # we can simply load it using the sector as its contents.
+        required, size = DirectoryEntry().a.blocksize(), self.size()
+        if required <= size:
+            return self.new(Directory, **attrs).li
+
+        # Otherwise, this sector is smaller than a directory entry,
+        # and we can't use it as backing for the directory.
+        logger.warning("{:s}: Unable to fit a directory entry ({:+#x} byte{:s}) into the {:+#x} byte{:s} sector at {:s}.".format('.'.join([self.__class__.__module__, self.__class__.__name__]), required, '' if required == 1 else 's', size, '' if size == 1 else 's', self.instance()))
+        return self.new(parray.type, _object_=DirectoryEntry, length=0, source=attrs['source'])
     asdirectory = property(fget=lambda self: self.asDirectory)
 
 class FileSector(SectorContent):
