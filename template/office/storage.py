@@ -1494,10 +1494,10 @@ class File(pstruct.type):
         return (minisectors[index] for index in chain)
 
     def directorysectors(self):
-        '''Return the contents of the sectors that contain the Directory for the file as a list.'''
+        '''Return the contents of each sector containing the Directory as a list.'''
         fat, directory = self.Fat(), self['Fat']['sectDirectory'].int()
         iterable = (sector.li for sector in self.fatsectors(fat.chain(directory)))
-        return [sector.asDirectory() for sector in iterable]
+        return [sector for sector in iterable]
 
     def difatchain(self):
         '''Return the fat chain for the DIFAT as a list of sector numbers.'''
