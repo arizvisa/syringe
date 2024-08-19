@@ -547,8 +547,15 @@ def ModifyDiFat(store):
     newfat = store.Fat()
 
     # now we can update the new fat with the sectors containing our modified difat.
-    [ newfat[nidx].set('DIFSECT').c for nidx in newchain ]
-    newchain and logger.info("Updated {:d} sector{:s} in {:s} to {:s}.".format(len(newchain), '' if len(newchain) == 1 else 's', newfat.instance(), 'DIFSECT'))
+    if any([not newchain, newchain and max(newchain) < len(newfat)]):
+        [ newfat[nidx].set('DIFSECT').c for nidx in newchain ]
+        newchain and logger.info("Marked {:d} sector{:s} as {:s} in {:s} ({:d} total entr{:s}).".format(len(newchain), '' if len(newchain) == 1 else 's', 'DIFSECT', newfat.instance(), len(newfat), '' if len(newfat) == 1 else 'ies'))
+
+    # update as many entries in the fat as possible.
+    else:
+        [ newfat[nidx].set('DIFSECT').c for nidx in newchain if nidx < len(newfat) ]
+        newchain and logger.info("Unable to mark {:d} of {:d} sector{:s} as {:s} in {:s} ({:d} mark{:s} were successful).".format(len(newchain) - sum(1 for nidx in newchain if nidx < len(newfat)), len(newchain), 'DIFSECT', '' if len(newchain) == 1 else 's', newfat.instance(), len(newfat), '' if len(newfat) == 1 else 's'))
+    return
 
 @contextlib.contextmanager
 def ModifyMiniFat(store):
