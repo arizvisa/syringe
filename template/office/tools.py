@@ -423,7 +423,12 @@ def ModifyFat(store):
     # now we'll need to initialize any of the additional sectors.
     if additional:
         logger.info("Adding {:d} sector{:s} to {:s}".format(len(additional), '' if len(additional) == 1 else 's', fat.instance()))
-    [ new.a.asTable(office.storage.FAT).a.c for new in additional if not new.initializedQ() ]
+
+    # to ensure each sector is initialized with an empty allocation table,
+    # we'll need to allocate each one that hasn't already been initialized.
+    empty = store.new(store.FileSector, source=ptypes.provider.empty()).a
+    empty.asTable(office.storage.FAT).a.c
+    [ new.load(source=ptypes.provider.proxy(empty), offset=0).c for new in additional if not new.initializedQ() ]
 
     # then we can update the difat with each entry for the file allocation table.
     logger.info("Updating {:s} with {:d} sector{:s} for {:s}".format(difat.instance(), len(newchain), '' if len(newchain) == 1 else 's', fat.instance()))
