@@ -353,11 +353,12 @@ def ModifyMiniFatChain(store, chain):
     [mfat[nidx].c for nidx in mfat.link(newchain)]
 
 @contextlib.contextmanager
-def ModifyFat(store):
+def ModifyFat(store, markfat=True):
     """A context manager that allows one to modify the file sectors that are used by the FAT.
 
     A tuple containing two lists is yielded. The first list is the original list of file sector
     indices. The second list is intended to be modified with the desired new file sector indices.
+    If "markfat" is set, then clear the sectors with "FREESECT" and mark new ones with "FATSECT".
     """
     difat, world = store.DiFat(), store['Data']
     fat, sectors = store.Fat(), [sector.int() for index, sector in difat.enumerate()]
@@ -444,19 +445,22 @@ def ModifyFat(store):
     # reset the fat for the entire document so we can update it with the sectors that are used.
     store.value = [item for item in store.value]
 
-    logger.info("Reloading {:s} with {:d} sector{:s} from {:s} ({:s}).".format(fat.instance(), len(newchain), '' if len(newchain) == 1 else 's', difat.instance(), ', '.join(map("{:d}".format, newchain))))
-    newdfat, newfat = store.DiFat(), store.Fat()
+    if markfat:
+        logger.info("Reloading {:s} with {:d} sector{:s} from {:s} ({:s}).".format(fat.instance(), len(newchain), '' if len(newchain) == 1 else 's', difat.instance(), ', '.join(map("{:d}".format, newchain))))
+        newdfat, newfat = store.DiFat(), store.Fat()
 
-    [ newfat[oidx].set('FREESECT').c for oidx in oldchain ]
-    [ newfat[nidx].set('FATSECT').c for nidx in newchain ]
-    newchain and logger.info("Updated {:d} sector{:s} in {:s} to {:s}.".format(len(newchain), '' if len(newchain) == 1 else 's', newfat.instance(), 'FATSECT'))
+        [ newfat[oidx].set('FREESECT').c for oidx in oldchain ]
+        [ newfat[nidx].set('FATSECT').c for nidx in newchain ]
+        newchain and logger.info("Updated {:d} sector{:s} in {:s} to {:s}.".format(len(newchain), '' if len(newchain) == 1 else 's', newfat.instance(), 'FATSECT'))
+    return
 
 @contextlib.contextmanager
-def ModifyDiFat(store):
+def ModifyDiFat(store, markfat=True):
     """A context manager that allows one to modify the file sectors that are used by the DIFAT.
 
     A tuple containing two lists is yielded. The first list is the original list of file sector
     indices. The second list is intended to be modified with the desired new file sector indices.
+    If "markfat" is set, then clear the sectors with "FREESECT" and mark new ones with "DIFSECT".
     """
     difat, world, dfchain = store.DiFat(), store['Data'], store.difatchain()
 
@@ -549,15 +553,15 @@ def ModifyDiFat(store):
     store.value = [item for item in store.value]
 
     logger.info("Reloading {:s} using {:d} sector{:s} from {:s} ({:s}).".format(fat.instance(), len(newchain), '' if len(newchain) == 1 else 's', difat.instance(), ', '.join(map("{:d}".format, newchain))))
-    newfat = store.Fat()
+    newfat = store.Fat() if markfat else []
 
     # now we can update the new fat with the sectors containing our modified difat.
-    if any([not newchain, newchain and max(newchain) < len(newfat)]):
+    if markfat and any([not newchain, newchain and max(newchain) < len(newfat)]):
         [ newfat[nidx].set('DIFSECT').c for nidx in newchain ]
         newchain and logger.info("Marked {:d} sector{:s} as {:s} in {:s} ({:d} total entr{:s}).".format(len(newchain), '' if len(newchain) == 1 else 's', 'DIFSECT', newfat.instance(), len(newfat), '' if len(newfat) == 1 else 'ies'))
 
     # update as many entries in the fat as possible.
-    else:
+    elif markfat:
         [ newfat[nidx].set('DIFSECT').c for nidx in newchain if nidx < len(newfat) ]
         newchain and logger.info("Unable to mark {:d} of {:d} sector{:s} as {:s} in {:s} ({:d} mark{:s} were successful).".format(len(newchain) - sum(1 for nidx in newchain if nidx < len(newfat)), len(newchain), 'DIFSECT', '' if len(newchain) == 1 else 's', newfat.instance(), len(newfat), '' if len(newfat) == 1 else 's'))
     return
