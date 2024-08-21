@@ -1301,7 +1301,7 @@ class File(pstruct.type):
             self._uMiniSectorSize = self.attributes['_uMiniSectorSize'] = miniSectorSize
         self._uMiniSectorCount = self.attributes['_uMiniSectorCount'] = miniSectorSize // Pointer().blocksize()
 
-        return dyn.block(6)
+        return dyn.clone(ptype.block, length=6)
 
     def __Data(self):
         if not getattr(self, '_uSectorSize', 0):
@@ -1318,8 +1318,9 @@ class File(pstruct.type):
         return dyn.clone(DIFAT, length=leftover)
 
     def __padding(self):
-        total, size = self._uHeaderSize, sum(self[fld].li.size() for fld in ['Header', 'SectorShift', 'reserved', 'Fat', 'MiniFat', 'DiFat', 'Table'])
-        return dyn.block(max(0, total - size))
+        res, fields = self._uHeaderSize, ['Header', 'SectorShift', 'reserved', 'Fat', 'MiniFat', 'DiFat', 'Table']
+        size = max(0, res - sum(self[fld].li.size() for fld in fields))
+        return dyn.block(size) if size else ptype.block
 
     _fields_ = [
         (Header, 'Header'),
