@@ -1433,6 +1433,12 @@ class File(pstruct.type):
         source = ptypes.provider.disorderly(realsectors, autocommit={})
         return self.new(FAT, recurse=self.attributes, length=length, source=source).load(**attrs)
 
+    def __difat_entry__(self):
+        '''Return the element type used for each element of the indirect file allocation table.'''
+        entry = self.__fat_entry__()
+        object = dyn.clone(FAT, length=self._uSectorCount, _object_=entry)
+        return dyn.clone(DIFAT.IndirectPointer, _object_=object)
+
     def __difat_sectors__(self):
         '''Return a list of the sectors that compose the difat excluding the "Table" included in the header.'''
         items = []
@@ -1448,6 +1454,11 @@ class File(pstruct.type):
         for _, table in zip(range(count), dfsector.collect()):
             items.append(table)
         return items
+
+    def __fat_entry__(self):
+        '''Return the element type used for each element of the file allocation table.'''
+        object = dyn.clone(FileSector, length=self._uSectorCount)
+        return dyn.clone(FAT.Pointer, _object_=object)
 
     def __fat_sectors__(self):
         '''Return a list of the sectors that compose the file allocation table.'''
