@@ -751,6 +751,9 @@ class generic(__interface__):
     def __ne__(self, other):
         '''x.__ne__(y) <==> x!=y'''
         return not(self == other)
+    def __bool__(self):
+        return True
+    __nonzero__ = __bool__
     def __getstate__(self):
         return ()
     def __setstate__(self, state):
@@ -4079,6 +4082,18 @@ if __name__ == '__main__':
                 b.length = length
                 return b()
         if hasattr(d, 'type') and d.type(4).a.size() == 4:
+            raise Success
+
+    @TestCase
+    def test_nonzero_type_1():
+        x = ptype.type().a
+        if x:
+            raise Success
+
+    @TestCase
+    def test_nonzero_container_2():
+        x = ptype.container(value=[]).a
+        if x:
             raise Success
 
 if __name__ == '__main__':
