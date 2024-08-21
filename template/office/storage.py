@@ -1217,7 +1217,7 @@ class SectorContent(ptype.block, AllocationTableMixin):
             attrs['_object_'] = self.__difat_entry__() if allocationTable == DIFAT else self.__fat_entry__()
         elif allocationTable in {MINIFAT}:
             pass    # FIXME
-        return self.new(allocationTable, **attrs).li
+        return self.new(allocationTable, **attrs)
     astable = property(fget=lambda self: self.asTable)
 
     def asDirectory(self, **attrs):

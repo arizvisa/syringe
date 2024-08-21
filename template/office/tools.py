@@ -539,7 +539,7 @@ def ModifyDiFat(store, markfat=True):
     newdfat.extend(additional)
     for index, nidx in enumerate(newchain[1:]):
         sector = newdfat[index]
-        new = sector.asTable(office.storage.DIFAT) if sector.initializedQ() else sector.a.asTable(office.storage.DIFAT).a
+        new = sector.asTable(office.storage.DIFAT).l if sector.initializedQ() else sector.a.asTable(office.storage.DIFAT).a
         logger.info("Updating {:s} to reference sector {:d} containing {:s}.".format(new[-1].instance(), nidx, difat.instance()))
         new[-1].set(nidx)
         new.c
