@@ -259,6 +259,39 @@ class AllocationTable(parray.type):
         iterable = range(start, len(self) if stop is None else stop)
         return (index for index in range(start, len(self)) if critique(self[index]))
 
+class AllocationTableMixin(object):
+    def __entry_count__(self):
+        if hasattr(self, '_uSectorCount'):
+            return self._uSectorCount
+        elif self.parent or isinstance(self, File):
+            return self.getparent(File)._uSectorCount
+        raise NotImplementedError
+
+    def __difat_entry__(self):
+        '''Return the element type used for each element of the indirect file allocation table.'''
+        entry, count = self.__fat_entry__(), self.__entry_count__()
+        object = dyn.clone(FAT, length=count, _object_=entry)
+        return dyn.clone(DIFAT.IndirectPointer, _object_=object)
+
+    def __fat_entry__(self):
+        '''Return the element type used for each element of the file allocation table.'''
+        count = self.__entry_count__()
+        object = dyn.clone(FileSector, length=count)
+        return dyn.clone(FAT.Pointer, _object_=object)
+
+    def __minientry_count__(self):
+        '''Return the number of minisectors within a file sector.'''
+        if all(hasattr(self, attribute) for attribute in ['_uSectorCount', '_uMiniSectorSize']):
+            return self._uSectorSize // self._uMiniSectorSize
+        elif self.parent or isinstance(self, File):
+            self = self.getparent(File)
+            return self._uSectorSize // self._uMiniSectorSize
+        raise NotImplementedError
+
+    def __minifat_entry__(self):
+        '''Return the element type used for each element of the miniature file allocation table.'''
+        raise NotImplementedError
+
 class FAT(AllocationTable):
     class Pointer(Pointer):
         def _calculate_(self, nextindex):
@@ -274,7 +307,7 @@ class FAT(AllocationTable):
         target = dyn.clone(FileSector, length=self._uSectorSize)
         return dyn.clone(self.Pointer, _object_=target, __index__=len(self.value))
 
-class DIFAT(AllocationTable):
+class DIFAT(AllocationTable, AllocationTableMixin):
     class IndirectPointer(Pointer):
         '''
         the value for an indirect pointer points directly to the sector
@@ -522,12 +555,11 @@ class HeaderMiniFat(pstruct.type):
         fields.setdefault('ulMiniSectorCutoff', 0x1000)
         return super(HeaderMiniFat, self).alloc(**fields)
 
-class HeaderDiFat(pstruct.type):
+class HeaderDiFat(pstruct.type, AllocationTableMixin):
     def __sectDifat(self):
-        parent = None if hasattr(self, '_uSectorCount') else self.getparent(File) if self.parent else None
-        length = parent._uSectorCount if parent else getattr(self, '_uSectorCount', 0)
-        target = dyn.clone(DIFAT, length=length) if length else DIFAT
-        return dyn.clone(SECT, _object_=target)
+        entry = self.__difat_entry__()
+        object = dyn.clone(DIFAT, _object_=self.__difat_entry__(), length=self.__entry_count__())
+        return dyn.clone(SECT, _object_=object)
 
     _fields_ = [
         (__sectDifat, 'sectDifat'),     # First difat sector location
@@ -1172,7 +1204,7 @@ class Directory(parray.block):
         return self[ientry]
 
 ### Sector types
-class SectorContent(ptype.block):
+class SectorContent(ptype.block, AllocationTableMixin):
     @classmethod
     def typename(cls):
         return cls.__name__
@@ -1181,6 +1213,10 @@ class SectorContent(ptype.block):
         '''Return the block as an allocation table of the specified type.'''
         assert(issubclass(allocationTable, AllocationTable)), "Given type {:s} does not inherit from {:s}".format(allocationTable.typename(), AllocationTable.typename())
         attrs.setdefault('source', ptypes.provider.proxy(self, autocommit={}))
+        if allocationTable in {DIFAT, FAT}:
+            attrs['_object_'] = self.__difat_entry__() if allocationTable == DIFAT else self.__fat_entry__()
+        elif allocationTable in {MINIFAT}:
+            pass    # FIXME
         return self.new(allocationTable, **attrs).li
     astable = property(fget=lambda self: self.asTable)
 
@@ -1274,7 +1310,7 @@ class MiniStreamSectors(ContentStream):
         return super(MiniStreamSectors, self).asTable(allocationTable, **attrs)
 
 ### File type
-class File(pstruct.type):
+class File(pstruct.type, AllocationTableMixin):
     attributes = {
         '_uHeaderSize': pow(2, 9),      # _always_ hardcoded to 512
         '_uSectorSize': pow(2, 9),
@@ -1315,7 +1351,7 @@ class File(pstruct.type):
 
         # Figure out how many pointers can fit into whatever number of bytes are left
         leftover = max(0, total - size) // Pointer().blocksize()
-        return dyn.clone(DIFAT, length=leftover)
+        return dyn.clone(DIFAT, length=leftover, _object_=self.__difat_entry__())
 
     def __padding(self):
         res, fields = self._uHeaderSize, ['Header', 'SectorShift', 'reserved', 'Fat', 'MiniFat', 'DiFat', 'Table']
@@ -1403,7 +1439,7 @@ class File(pstruct.type):
         assert(count == length), "expected {:d} DiFat entries, got {:d} instead".format(count, length)
 
         ## Attach the source to the DIFAT, load it, and then return.
-        return self.new(DIFAT, recurse=self.attributes, length=length, source=source).load()
+        return self.new(DIFAT, recurse=self.attributes, length=length, source=source, _object_=self.__difat_entry__()).load()
 
     @ptypes.utils.memoize(self=lambda self: id(self.value), attrs=lambda attrs:frozenset(map(tuple, attrs.items())))
     def MiniFat(self, **attrs):
@@ -1433,12 +1469,6 @@ class File(pstruct.type):
         source = ptypes.provider.disorderly(realsectors, autocommit={})
         return self.new(FAT, recurse=self.attributes, length=length, source=source).load(**attrs)
 
-    def __difat_entry__(self):
-        '''Return the element type used for each element of the indirect file allocation table.'''
-        entry = self.__fat_entry__()
-        object = dyn.clone(FAT, length=self._uSectorCount, _object_=entry)
-        return dyn.clone(DIFAT.IndirectPointer, _object_=object)
-
     def __difat_sectors__(self):
         '''Return a list of the sectors that compose the difat excluding the "Table" included in the header.'''
         items = []
@@ -1454,11 +1484,6 @@ class File(pstruct.type):
         for _, table in zip(range(count), dfsector.collect()):
             items.append(table)
         return items
-
-    def __fat_entry__(self):
-        '''Return the element type used for each element of the file allocation table.'''
-        object = dyn.clone(FileSector, length=self._uSectorCount)
-        return dyn.clone(FAT.Pointer, _object_=object)
 
     def __fat_sectors__(self):
         '''Return a list of the sectors that compose the file allocation table.'''
