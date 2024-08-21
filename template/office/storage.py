@@ -1558,6 +1558,16 @@ class File(pstruct.type):
         logger.warning("{:s}.minichain({:d}): The minifat chain ({:d} minisector{:s}) was truncated due to being terminated by {:s} instead of {:s} as expected.".format('.'.join([cls.__module__, cls.__name__]), sector, len(truncated), '' if len(truncated) == 1 else 's', entry.object, expected))
         return truncated
 
+    def filesectors(self, start, *stop):
+        '''Use the specified index to return a `FileSector` or range of `FileSectors` from the file.'''
+        integer_types = tuple(operator.add(index, sys.maxsize).__class__ for index in range(2))
+        size = pow(2, self['SectorShift']['uSectorShift'].int())
+        location = self._uHeaderSize + size * start
+        if not stop:
+            return self.new(self.FileSector, offset=location)
+        count = operator.sub(*sorted(itertools.chain([start], stop))[::-1])
+        return self.new(FileSectors, offset=location, blocksize=lambda cb=count * size: cb)
+
     def Stream(self, sector):
         '''Return the contents of the stream starting at a specified sector using the fat.'''
         fat = self.Fat()
