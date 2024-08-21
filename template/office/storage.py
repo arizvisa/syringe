@@ -121,7 +121,8 @@ class AllocationTable(parray.type):
 
     def count(self, index):
         '''Return the number of sectors contained by a chain starting at the specified index until termination or encountering a cycle.'''
-        visited, iterable = {index for index in []}, self.chain(index) if isinstance(index, (int, (1 + sys.maxsize).__class__)) else index
+        integer_types = tuple(operator.add(index, sys.maxsize).__class__ for index in range(2))
+        visited, iterable = {index for index in []}, self.chain(index) if isinstance(index, integer_types) else index
         for index in iterable:
             if index in visited:
                 break
@@ -229,12 +230,14 @@ class AllocationTable(parray.type):
     # General utilities used for calculating sizes.
     def tableSize(self, length):
         '''Return the size of an allocation table that can hold the specified number of entries.'''
-        count = length if isinstance(length, (int, (1 + sys.maxsize).__class__)) else len(length)
+        integer_types = tuple(operator.add(index, sys.maxsize).__class__ for index in range(2))
+        count = length if isinstance(length, integer_types) else len(length)
         return count * self.new(self._object_).a.size()
 
     def streamSize(self, length):
         '''Return the size of a stream containing the specified number of sectors from the allocation table.'''
-        count = length if isinstance(length, (int, (1 + sys.maxsize).__class__)) else len(length)
+        integer_types = tuple(operator.add(index, sys.maxsize).__class__ for index in range(2))
+        count = length if isinstance(length, integer_types) else len(length)
         return self.sectorSize() * count
 
     # Methods that can be used to search for entries of specific types.
@@ -382,8 +385,8 @@ class MINIFAT(AllocationTable):
 ### Header types
 class uByteOrder(pint.enum, USHORT):
     _values_ = [
-        ('LittleEndian', 0xfffe),
-        ('BigEndian', 0xfeff),
+        ('little', 0xfffe),
+        ('big', 0xfeff),
     ]
     def ByteOrder(self):
         res = self.int()
@@ -396,11 +399,12 @@ class uByteOrder(pint.enum, USHORT):
         return order
 
     def set(self, order):
-        if isinstance(order, (sys.maxint.__class__, (sys.maxint + 1).__class__) if hasattr(sys, 'maxint') else int):
+        integer_types = tuple(operator.add(index, sys.maxsize).__class__ for index in range(2))
+        if isinstance(order, integer_types):
             return super(uByteOrder, self).set(order)
-        elif not order.startswith(('big', 'little')):
-            return super(uByteOrder, self).set(order)
-        return self.set('BigEndian') if order.startswith('big') else self.set('LittleEndian')
+        elif order.lower().startswith(('big', 'little')):
+            return super(uByteOrder, self).set('big') if order.lower().startswith('big') else super(uByteOrder, self).set('little')
+        return super(uByteOrder, self).set(order)
 
     def alloc(self, *args, **attrs):
         res = super(uByteOrder, self).alloc(*args, **attrs)
@@ -438,7 +442,7 @@ class Header(pstruct.type):
         res = super(Header, self).alloc(**fields)
         res if 'uMinorVersion' in fields else res['uMinorVersion'].set(0x3e)
         res if 'uMajorVersion' in fields else res['uMajorVersion'].set(3)
-        res if 'uByteOrder' in fields else res['uByteOrder'].set('BigEndian')
+        res if 'uByteOrder' in fields else res['uByteOrder'].set('little')
         return res
 
     def summary(self):
