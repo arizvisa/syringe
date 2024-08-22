@@ -1869,7 +1869,6 @@ if __name__ == '__main__':
     print('>>> Loading MiniFat...')
     print(store['MiniFat'])
     minifat = mfat = store.MiniFat()
-    print(store['MiniFat'])
     print()
 
     print('>>> Loading Directory...')
