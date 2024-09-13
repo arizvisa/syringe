@@ -2704,6 +2704,10 @@ if 'Heap':
                 return pbinary.littleendian(t, 2)
             return P(FrontEndHeapUsageDataArray)
 
+        def __FrontEndHeapPointer(self):
+            heap_t = lambda *args, **kwargs: FrontEndHeap.lookup(self['FrontEndHeapType'].li.int(), None) or PVOID._object_
+            return P(heap_t)
+
         def __init__(self, **attrs):
             super(HEAP, self).__init__(**attrs)
             aligned = dyn.align(8 if getattr(self, 'WIN64', False) else 4)
@@ -2751,7 +2755,7 @@ if 'Heap':
                     (self._FreeLists, 'FreeLists'),
                     (P(HEAP_LOCK), 'LockVariable'),
                     (PVOID, 'CommitRoutine'),
-                    (P(lambda target: FrontEndHeap.lookup(self['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
+                    (self.__FrontEndHeapPointer, 'FrontEndHeap'),
                     (USHORT, 'FrontHeapLockCount'),
                     (FrontEndHeap.Type, 'FrontEndHeapType'),
                     (UCHAR, 'LastSegmentIndex'),
@@ -2798,7 +2802,7 @@ if 'Heap':
                     (dyn.clone(LIST_ENTRY, _path_=['ListEntry'], _object_=fpointer(_HEAP_CHUNK, 'ListEntry')), 'FreeLists'),
                     (P(HEAP_LOCK), 'LockVariable'),
                     (dyn.clone(ENCODED_POINTER, _object_=ptype.undefined), 'CommitRoutine'),
-                    (P(lambda target: FrontEndHeap.lookup(self['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
+                    (self.__FrontEndHeapPointer, 'FrontEndHeap'),
                     (USHORT, 'FrontHeapLockCount'),
                     (FrontEndHeap.Type, 'FrontEndHeapType'),
                     (aligned, 'align(Counters)'),   # FIXME: used to be a byte
@@ -2848,7 +2852,7 @@ if 'Heap':
                     (dyn.clone(LIST_ENTRY, _path_=['ListEntry'], _object_=fpointer(_HEAP_CHUNK, 'ListEntry')), 'FreeLists'),
                     (P(HEAP_LOCK), 'LockVariable'),
                     (dyn.clone(ENCODED_POINTER, _object_=ptype.undefined), 'CommitRoutine'),
-                    (P(lambda target: FrontEndHeap.lookup(self['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
+                    (self.__FrontEndHeapPointer, 'FrontEndHeap'),
                     (USHORT, 'FrontHeapLockCount'),
                     (FrontEndHeap.Type, 'FrontEndHeapType'),
                     (FrontEndHeap.Type, 'RequestedFrontEndHeapType'),
@@ -2906,7 +2910,7 @@ if 'Heap':
                     (dyn.clone(ENCODED_POINTER, _object_=ptype.undefined), 'CommitRoutine'),   # FIXME: this is encoded with something somewhere
                     (rtltypes.RTL_RUN_ONCE, 'StackTraceInitVar'),
                     (rtltypes.RTL_HEAP_MEMORY_LIMIT_DATA if getattr(self, 'WIN64', False) else ptype.undefined, 'CommitLimitData'),
-                    (P(lambda target: FrontEndHeap.lookup(self['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
+                    (self.__FrontEndHeapPointer, 'FrontEndHeap'),
                     (USHORT, 'FrontHeapLockCount'),
                     (FrontEndHeap.Type, 'FrontEndHeapType'),
                     (FrontEndHeap.Type, 'RequestedFrontEndHeapType'),
