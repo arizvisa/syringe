@@ -991,11 +991,8 @@ class GF256(object):
 
 if __name__ == '__main__':
     import sys, importlib
-    sys.path.append('.')
-    import ptypes, rfc3208
-
-    importlib.reload(rfc3208)
-    from rfc3208 import *
+    import ptypes, protocol.rfc3208, protocol.rfc3208 as rfc3208
+    from protocol.rfc3208 import *
 
     x = pgm_packet().alloc(pgm_tsdu_length=0x10)
     osi.utils.checksum(x.serialize())
