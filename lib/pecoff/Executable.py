@@ -8,6 +8,7 @@ class Signature(pint.enum, uint16):
     # We'll just store all signature types here
     _values_ = [
         ('IMAGE_DOS_SIGNATURE', 0x5a4d),
+        ('IMAGE_DOS_SIGNATURE_BE', 0x4d5a),
         ('IMAGE_OS2_SIGNATURE', 0x454e),
         ('IMAGE_OS2_SIGNATURE_LE', 0x454c),
         ('IMAGE_NT_SIGNATURE', 0x4550),
@@ -63,17 +64,21 @@ class IMAGE_DOS_HEADER(pstruct.type):
         return dyn.block(max(0, res.int() - sum(self[fld].li.size() for fld in fields)))
 
     def __e_lfanew(self):
-        paragraphs, relocations = self['e_cparhdr'].li, self['e_lfarlc'].li
+        HeaderSizeInParagraphs, AddressOfRelocationTable, NumberOfRelocationItems = (self[fld].li for fld in ['e_cparhdr', 'e_lfarlc', 'e_crlc'])
+        FileSizeInPages, UsedbytesInLastPage = (self[fld].li for fld in ['e_cp', 'e_cblp'])
+
+        header, hsize = 0x10 * HeaderSizeInParagraphs.int(), 0x200 * FileSizeInPages.int()
+        relocations, rsize = AddressOfRelocationTable.int(), 4 * NumberOfRelocationItems.int()
         fields = ['e_magic', 'e_cblp', 'e_cp', 'e_crlc', 'e_cparhdr', 'e_minalloc', 'e_maxalloc', 'e_ss', 'e_sp', 'e_csum', 'e_ip', 'e_cs', 'e_lfarlc', 'e_ovno', 'e_oem']
 
         # if everything matches, then there's a pointer here for PECOFF executables
-        if 0x10 * paragraphs.int() == relocations.int() == sum(self[fld].li.size() for fld in fields) + 4:
+        if relocations + rsize <= hsize and sum(self[fld].li.size() for fld in fields) + 4 <= hsize:
             return dyn.rpointer(Next, self, pint.uint32_t)
 
         # XXX: otherwise if paragraphs are less than the relocation pointer, then assume the e_lfanew pointer is still here.
-        elif 0x10 * paragraphs.int() < relocations.int() and relocations.int() == sum(self[fld].li.size() for fld in fields) + 4:
+        elif hsize < relocations and relocations == sum(self[fld].li.size() for fld in fields) + 4:
             cls = self.__class__
-            logging.warning("{:s} : IMAGE_DOS_HEADER.e_cparhdr specified an unexpected number of paragraphs ({:d}). Assuming that there's at least {:d}.".format('.'.join([cls.__module__, cls.__name__]), paragraphs.int(), 4))
+            logging.warning("{:s} : IMAGE_DOS_HEADER.e_cparhdr specified an unexpected number of paragraphs ({:d}). Assuming that there's at least {:d}.".format('.'.join([cls.__module__, cls.__name__]), HeaderSizeInParagraphs.int(), 4))
             return dyn.rpointer(Next, self, pint.uint32_t)
 
         # any other condition means that there isn't anything here.
@@ -141,6 +146,16 @@ class IMAGE_DOS_HEADER(pstruct.type):
         ( __e_rlc, 'e_rlc' ),       # relocations...sometimes?
         ( __e_parhdr, 'e_parhdr'),  # padding according to number of paragraphs for header size
     ]
+
+    def getloadedsize(self):
+        pages, last = (self[fld] for fld in ['e_cp', 'e_cblp'])
+        size, header = 0x200 * self['e_cp'].int(), 0x10 * self['e_cparhdr'].int()
+        if last.int():
+            return operator.sub(0x200 * pages.int(), 512 - last.int())
+        return 0x200 * pages.int()
+
+    def header(self):
+        return 0x10 * self['e_cparhdr'].int()
 
 ### What file format the next header is
 class NextHeader(ptype.definition):
