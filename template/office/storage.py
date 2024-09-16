@@ -592,7 +592,7 @@ class DirectoryEntryRootData(parray.type):
         raise NotImplementedError
 
 class DirectoryEntryType(pint.enum, BYTE):
-    _values_=[('Unknown', 0), ('Storage', 1), ('Stream', 2), ('Root', 5)]
+    _values_=[('Unknown', 0), ('Storage', 1), ('Stream', 2), ('ILockBytes', 3), ('IPropertyStorage', 4), ('Root', 5), ('Substream', 10)]
 class DirectoryEntryFlag(pint.enum, BYTE):
     _values_=[('red', 0), ('black', 1)]
 class DirectoryEntryIdentifier(pint.enum, DWORD):
