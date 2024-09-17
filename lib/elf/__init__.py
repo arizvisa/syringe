@@ -349,7 +349,7 @@ class File(pstruct.type, base.ElfXX_File):
                 for bounds, key in items + items:
                     _, header = headers[key]
                     if header not in used:
-                        logging.debug("(flatten) segm {:s} {:s}".format(header.typename(), Fsegment_summary(header)))
+                        logging.debug("(flatten) segm {:s} {:s}".format(header.typename(), Fsummary(header)))
 
                     # If the header has been used once before, then compare
                     # the offset we get against the end of the segment.
@@ -392,7 +392,7 @@ class File(pstruct.type, base.ElfXX_File):
             # We need to double check that the segment is not the header
             # we're processing. because it always prefixes our results.
             if head == item:
-                logging.debug("(flatten)     skip {:s} {:s}".format(item.typename(), Fsegment_summary(item)))
+                logging.debug("(flatten)     skip {:s} {:s}".format(item.typename(), Fsummary(item)))
                 continue
 
             # We got an entry that we're keeping. So, add it to our results.
@@ -458,6 +458,7 @@ class File(pstruct.type, base.ElfXX_File):
         # Assign our fields and an anonymous function to summarize items for debugging
         Fsection_offset, Fsegment_offset = map(operator.itemgetter, fields)
         Fsummary = lambda section_or_segment: Fsection_summary(section_or_segment) if isinstance(section_or_segment, section.ElfXX_Shdr) else Fsegment_summary(section_or_segment)
+        Foffset = lambda section_or_segment: Fsection_offset(section_or_segment).int() if isinstance(section_or_segment, section.ElfXX_Shdr) else Fsegment_offset(section_or_segment).int()
 
         # Build a index of segments that we can sort by their offset using
         # our segment list. We only care about the ones that're in our table
@@ -476,7 +477,7 @@ class File(pstruct.type, base.ElfXX_File):
             # offsets. This way we can drop anything that comes before
             # the minimum offset. We'll be using the number of elements
             # we cull when modifying the entries in our table.
-            iterable = ((Fsection_offset(entry).int() if isinstance(entry, section.ElfXX_Shdr) else Fsegment_offset(entry).int()) for entry in entries)
+            iterable = (Foffset(entry) for entry in entries)
             filtered = itertools.dropwhile(functools.partial(operator.gt, minimum), iterable)
 
             # Figure out how many elements were filtered, and use it to
@@ -522,7 +523,7 @@ class File(pstruct.type, base.ElfXX_File):
             # maximum size for the loaded segment. This way we can track when
             # an entry goes out of bounds be able to trim it down if so.
             for count, item in enumerate(entries):
-                entrysize, offset = Fsize(item), Fsegment_offset(item).int() if isinstance(item, segment.ElfXX_Phdr) else Fsection_offset(item).int()
+                entrysize, offset = Fsize(item), Foffset(item)
 
                 # If this is the very first segment and we have some entries,
                 # then we ignore the entrysize and clamp it down towards
@@ -612,7 +613,7 @@ class File(pstruct.type, base.ElfXX_File):
             # If we have any leftover entries, then continue to process
             # those, getting their size, and adding them to our results.
             for index, item in enumerate(entries[count:]):
-                entrysize, offset = Fsize(item), Fsegment_offset(item).int() if isinstance(item, segment.ElfXX_Phdr) else Fsection_offset(item).int()
+                entrysize, offset = Fsize(item), Foffset(item)
 
                 # However, we still need to track our offset because we
                 # actually might need to pad our way there.
