@@ -180,7 +180,7 @@ class File(pstruct.type, base.ElfXX_File):
         # using our index table.
         return {offset : [(size, table[key]) for size, key in items] for offset, items in collection.items()}
 
-    def __gather_segments__(self, segments, sections):
+    def __gather_segments__(self, segments, sections, others=[]):
 
         # If we're using a memory-based backing, then we need
         # to use different methods to access the boundaries.
@@ -291,6 +291,45 @@ class File(pstruct.type, base.ElfXX_File):
                 logging.debug("(insert) {:s} ({:d}/{:d}) {:#010x}..{:#010x} {:s}".format('>', 0, 1, start, stop, Fsegment_summary(phdr)))
             continue
 
+        # Now we need to go ahead and process the "others" that were given
+        # to us by the caller. This is used for contiguous blocks of memory
+        # that aren't a segment or a section.
+        for offset, size, item in others:
+            start, stop = bounds = offset, offset + size
+            tree_index.setdefault(start, []), tree_index.setdefault(stop, [])
+            start_index, stop_index = bisect.bisect_left(tree, start), bisect.bisect_right(tree, stop)
+
+            if start_index % 2 or stop_index % 2 or start_index != stop_index:
+                offset = tree[stop_index - 1]
+                items = tree_index.setdefault(offset, [])
+
+                # As the current segment is overlapping, we gather it into a
+                # list for this segment because we'll sort this out later.
+                index = bisect.bisect_left(items, (bounds, headers_index[phdr]))
+                items.insert(index, (bounds, headers_index[phdr]))
+
+                # Log which side of the tree we're overlapping.
+                logging.debug("(overlap) {:s} ({:d}/{:d}) {:#010x}..{:#010x} {}".format('<' if start_index % 2 else '>', index, len(items), start, stop, item.summary()))
+
+            elif not(start_index % 2 and stop_index % 2):
+                tree[start_index : stop_index] = [start, stop]
+                tree_index[start].append((bounds, headers_index[phdr]))
+                tree_index[stop].append((bounds, headers_index[phdr]))
+                logging.debug("(insert) {:s} ({:d}/{:d}) {:#010x}..{:#010x} {}".format('><', 0, 1, start, stop, item.summary()))
+
+            elif start_index % 2:
+                tree[start_index : stop_index] = [stop]
+                tree_index[start].append((bounds, headers_index[phdr]))
+                tree_index[stop].append((bounds, headers_index[phdr]))
+                logging.debug("(insert) {:s} ({:d}/{:d}) {:#010x}..{:#010x} {}".format('<', 0, 1, start, stop, item.summary()))
+
+            elif stop_index % 2:
+                tree[start_index : stop_index] = [start]
+                tree_index[start].append((bounds, headers_index[phdr]))
+                tree_index[stop].append((bounds, headers_index[phdr]))
+                logging.debug("(insert) {:s} ({:d}/{:d}) {:#010x}..{:#010x} {}".format('>', 0, 1, start, stop, item.summary()))
+            continue
+
         # Define a closure that will walk the tree returning the segment
         # header for any offset that gets sent to it. We'll use a set to
         # keep track of the segments that have been used because we use
@@ -339,19 +378,20 @@ class File(pstruct.type, base.ElfXX_File):
         # Now we can pass the prior closure the segment tree, its index, and
         # the list of headers and then use it to produce a table of the
         # segments and the headers each of them actually contains.
-        results, flattener = {}, flatten(tree, tree_index, headers); next(flattener)
-        for bounds, item in headers:
+        results, iterable = {}, (((offset, offset + size), item) for offset, size, item in others)
+        flattener = flatten(tree, tree_index, headers); next(flattener)
+        for bounds, item in itertools.chain(headers, iterable):
             offset, _ = bounds
 
-            # Send our offset, get our segment. Simple as that. We first
-            # need to update our results with it since it will always be
-            # the first member for each segment in our results.
-            segment = flattener.send(offset)
-            items = results.setdefault(segment, [segment])
+            # Send our offset, get our encompassing (head) segment, and
+            # then use it to update our results. We will also use it as
+            # the first member for each set of results that we return.
+            head = flattener.send(offset)
+            items = results.setdefault(head, [head])
 
             # We need to double check that the segment is not the header
             # we're processing. because it always prefixes our results.
-            if segment == item:
+            if head == item:
                 logging.debug("(flatten)     skip {:s} {:s}".format(item.typename(), Fsegment_summary(item)))
                 continue
 
@@ -666,6 +706,7 @@ class File(pstruct.type, base.ElfXX_File):
         #(__e_hdrentries, 'e_hdrentries'),
         (__e_padding, 'e_padding'),
         (__e_entries, 'e_entries'),
+        (ptype.block, 'e_trailer'),
     ]
 
 ### recursion for python2
