@@ -522,9 +522,6 @@ class File(pstruct.type, base.ElfXX_File):
                     logging.debug("(-pad)   {:#010x} goal:{:#010x} {:#04x}{:+#04x} : {:s}".format(base + position, base + offset, base + position, -offset, Fsummary(item)))
                     position = offset
 
-                # If the next item has its address aligned, then we need
-                # to ensure
-
                 # If our next position is actually outside the bounds of
                 # the segment, then we need to exit our loop only if the
                 # size of the entry holds something. We have to explicitly
@@ -587,7 +584,7 @@ class File(pstruct.type, base.ElfXX_File):
 
                 # If we're not at the correct position, then we need to
                 # adjust the size of our item so the sections line up.
-                elif position > offset:
+                if position > offset:
                     delta = position - offset
                     #result[-1] = max(0, delta - previous), t
                     logging.debug("(clamp) {:#010x} goal:{:#010x} {:#04x}{:+#04x} : {:s}".format(base + offset, base + position, base + position, delta, block_t.typename()))
