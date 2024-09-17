@@ -1095,7 +1095,7 @@ class type(base):
         """Return contents of type as a string"""
 
         # if we're not initialized, then return a padded value up to the blocksize
-        if not self.initializedQ():
+        if self.value is None or not self.initializedQ():
             res = self.blocksize()
 
             # FIXME: this should definitely be clamped to a maximum size
@@ -1126,11 +1126,13 @@ class type(base):
                 return b''
 
             # generate padding up to the blocksize
-            Log.debug("type.serialize : {:s} : Padding data by {:+#x} bytes due to element being partially uninitialized during serialization.".format(self.instance(), res))
-            padding = utils.padding.fill(res if res > 0 else 0, self.padding)
+            needed = res - len(self.value or b'')
+            if needed:
+                Log.debug("type.serialize : {:s} : Padding data by {:+#x} bytes due to element being uninitialized during serialization.".format(self.instance(), needed))
+            padding = utils.padding.fill(needed if needed > 0 else 0, self.padding)
 
             # prefix beginning of padding with any data that element contains
-            return padding if self.value is None else self.value + padding[len(self.value):]
+            return padding if self.value is None else self.value + padding
 
         # take the current value as a string, which should match up to .size()
         data = self.value
@@ -1138,7 +1140,7 @@ class type(base):
         # pad up to the .blocksize() if our length doesn't meet the minimum
         res = self.blocksize()
         if len(data) < res:
-            Log.debug("type.serialize : {:s} : Padding data by {:+#x} bytes due to element being partially initialized during serialization.".format(self.instance(), res))
+            Log.debug("type.serialize : {:s} : Padding data by {:+#x} bytes due to element being partially initialized during serialization ({:d} < {:d}).".format(self.instance(), res, len(data), res))
             padding = utils.padding.fill(res-len(data), self.padding)
             data += padding
         return data
@@ -1176,9 +1178,8 @@ class type(base):
         If type is uninitialized, issue a warning and return 0.
         """
         length = getattr(self, 'length', None)
-        if self.initializedQ() or self.value is not None:
+        if self.value is not None:
             return len(self.value) if length is None else len(self.value)
-        cls = type
         Log.info("type.size : {:s} : Unable to determine (real) size with {!s}, as object is still uninitialized.".format(self.instance(), type.typename()))
         return 0
 
@@ -1258,7 +1259,8 @@ class container(base):
 
     def size(self):
         """Returns a sum of the number of bytes that are currently in use by all sub-elements"""
-        return sum(item.size() for item in self.value or [])
+        iterable = self.value or []
+        return sum(item.size() for item in iterable if item.value is not None)
 
     def __blocksize_originalQ__(self):
         '''Return whether the instance's blocksize has been rewritten by a definition.'''
