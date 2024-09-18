@@ -141,7 +141,7 @@ class Elf32_Phdr(pstruct.type, ElfXX_Phdr):
         (lambda self: _p_vaddress(Elf32_VAddr, CLASS=ELFCLASS32), 'p_paddr'),
         (Elf32_Word, 'p_filesz'),
         (Elf32_Word, 'p_memsz'),
-        (PF_, 'p_flags'),
+        (dyn.clone(pbinary.partial, _object_=PF_), 'p_flags'),
         (Elf32_Word, 'p_align'),
         (__p_unknown, 'p_unknown'),
     ]
@@ -155,7 +155,7 @@ class Elf64_Phdr(pstruct.type, ElfXX_Phdr):
 
     _fields_ = [
         (p_type, 'p_type'),
-        (PF_, 'p_flags'),
+        (dyn.clone(pbinary.partial, _object_=PF_), 'p_flags'),
         (lambda self: _p_offset(Elf64_Off, CLASS=ELFCLASS64), 'p_offset'),
         (lambda self: _p_vaddress(Elf64_VAddr, CLASS=ELFCLASS64), 'p_vaddr'),
         (lambda self: _p_vaddress(Elf64_VAddr, CLASS=ELFCLASS64), 'p_paddr'),

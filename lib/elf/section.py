@@ -333,7 +333,7 @@ class Elf32_Shdr(pstruct.type, ElfXX_Shdr):
     _fields_ = [
         (sh_name, 'sh_name'),
         (sh_type, 'sh_type'),
-        (sh_flags, 'sh_flags'),
+        (dyn.clone(pbinary.partial, _object_=sh_flags), 'sh_flags'),
         (lambda self: _sh_vaddress(Elf32_VAddr, CLASS=ELFCLASS32), 'sh_addr'),
         (lambda self: _sh_offset(Elf32_Off, CLASS=ELFCLASS32), 'sh_offset'),
         (Elf32_Word, 'sh_size'),
@@ -363,7 +363,7 @@ class Elf64_Shdr(pstruct.type, ElfXX_Shdr):
     _fields_ = [
         (sh_name, 'sh_name'),
         (sh_type, 'sh_type'),
-        (sh_flags, 'sh_flags'),
+        (dyn.clone(pbinary.partial, _object_=sh_flags), 'sh_flags'),
         (lambda self: _sh_vaddress(Elf64_VAddr, CLASS=ELFCLASS64), 'sh_addr'),
         (lambda self: _sh_offset(Elf64_Off, CLASS=ELFCLASS64), 'sh_offset'),
         (Elf64_Xword, 'sh_size'),
