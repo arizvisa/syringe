@@ -312,25 +312,25 @@ class File(pstruct.type, base.ElfXX_File):
                 items.insert(index, (bounds, headers_index[phdr]))
 
                 # Log which side of the tree we're overlapping.
-                logging.debug("(overlap) {:s} ({:d}/{:d}) {:#010x}..{:#010x} {}".format('<' if start_index % 2 else '>', index, len(items), start, stop, item.summary()))
+                logging.debug("(overlap) {:s} ({:d}/{:d}) {:#010x}..{:#010x} {}".format('<' if start_index % 2 else '>', index, len(items), start, stop, item.typename()))
 
             elif not(start_index % 2 and stop_index % 2):
                 tree[start_index : stop_index] = [start, stop]
                 tree_index[start].append((bounds, headers_index[phdr]))
                 tree_index[stop].append((bounds, headers_index[phdr]))
-                logging.debug("(insert) {:s} ({:d}/{:d}) {:#010x}..{:#010x} {}".format('><', 0, 1, start, stop, item.summary()))
+                logging.debug("(insert) {:s} ({:d}/{:d}) {:#010x}..{:#010x} {}".format('><', 0, 1, start, stop, item.typename()))
 
             elif start_index % 2:
                 tree[start_index : stop_index] = [stop]
                 tree_index[start].append((bounds, headers_index[phdr]))
                 tree_index[stop].append((bounds, headers_index[phdr]))
-                logging.debug("(insert) {:s} ({:d}/{:d}) {:#010x}..{:#010x} {}".format('<', 0, 1, start, stop, item.summary()))
+                logging.debug("(insert) {:s} ({:d}/{:d}) {:#010x}..{:#010x} {}".format('<', 0, 1, start, stop, item.typename()))
 
             elif stop_index % 2:
                 tree[start_index : stop_index] = [start]
                 tree_index[start].append((bounds, headers_index[phdr]))
                 tree_index[stop].append((bounds, headers_index[phdr]))
-                logging.debug("(insert) {:s} ({:d}/{:d}) {:#010x}..{:#010x} {}".format('>', 0, 1, start, stop, item.summary()))
+                logging.debug("(insert) {:s} ({:d}/{:d}) {:#010x}..{:#010x} {}".format('>', 0, 1, start, stop, item.typename()))
             continue
 
         # Define a closure that will walk the tree returning the segment
@@ -461,12 +461,17 @@ class File(pstruct.type, base.ElfXX_File):
         if not segmentlist:
             return ptype.clone(parray.type, length=0)
 
+        # Gather any segment boundaries explicitly defined in the header. These might
+        # not be part of the regular segments and sections tables, but we still need
+        # to inject these into our tree in order to cover the entire file contents.
+        others = []
+        otherstable = {ooffset: otype for ooffset, osize, otype in others}
+
         # Finally, we can build our index of the segments that we'll later
         # use to determine the boundaries of our entries. We also calculate
         # the minimum address of the sections/segments so that we can discard
         # entries that reference the header and entries that were loaded earlier.
         minimum = sum(self[fld].li.size() for fld in ['e_ident', 'e_data', 'e_padding'])
-        others = []
         table = self.__gather_segments__(segmentlist, sectionlist, others)
 
         # Afterwards, we build a lookup table to map each segment, section,
@@ -621,7 +626,7 @@ class File(pstruct.type, base.ElfXX_File):
 
                 # Raise an exception because this shouldn't happen at all.
                 else:
-                    raise AssertionError
+                    raise AssertionError("(error)  {:#010x} goal:{:#010x} {:+#04x} : {:s}".format(base + eoffset, base + eoffset + esize, esize, Fentry_summary(item)))
                 continue
 
             # Increment by one if we completed process the entries to
@@ -655,7 +660,6 @@ class File(pstruct.type, base.ElfXX_File):
                 # adjust the size of our item so the sections line up.
                 if position > eoffset:
                     delta = position - eoffset
-                    #result[-1] = max(0, delta - previous), t
                     logging.debug("(clamp) {:#010x} goal:{:#010x} {:#04x}{:+#04x} : {:s}".format(base + eoffset, base + position, base + position, delta, block_t.typename()))
                     result.append((eoffset, esize - delta, item))
                     position += esize - delta
@@ -676,7 +680,8 @@ class File(pstruct.type, base.ElfXX_File):
             if maximum is not None and any([maximum <= offset, maximum <= offset + size]):
                 if isinstance(item, segment.ElfXX_Phdr):    keyword, type = '__segment__', segment.UndefinedSegmentData
                 elif isinstance(item, section.ElfXX_Shdr):  keyword, type = '__section__', section.UndefinedSectionData
-                else:                                       keyword, type = '', ptype.undefined
+                elif offset not in otherstable:             keyword, type = '', ptype.undefined
+                else:                                       return otherstable[offset]
                 return ptype.clone(type, length=size, **{keyword: item} if keyword else {})
             elif isinstance(item, segment.ElfXX_Phdr):
                 return ptype.clone(segment_t, length=size, __segment__=item)
