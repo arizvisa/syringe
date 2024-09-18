@@ -423,6 +423,35 @@ class File(pstruct.type, base.ElfXX_File):
         # Now that we have the closest boundary, we can calculate the length.
         return ptype.clone(ptype.block, length=length - offset)
 
+    def __e_entries_unmapped_fields(self):
+        '''Yield any section/segment boundaries for fields in the header that might be stored outside the segments list.
+
+        Specifically, this can include the section header (usually) or
+        the program header lists. These tables aren't actually required
+        to be available during runtime. So there's a chance that they're in
+        the file but won't be caught by our segment tree logic. As such,
+        we need to explicitly check for them and inject them into our tree.
+        '''
+        data, memory_backed = self['e_data'].li, isinstance(self.source, ptypes.provider.memorybase)
+
+        # If it's memory-backed, then we don't really care since
+        # only program headers should be loaded into memory.
+        if memory_backed:
+            return
+
+        # Use the sizes for the fields that we've decoded in order to determine
+        # whether the segment or section header offset has been loaded already.
+        fields = ['e_ident', 'e_data', 'e_padding']
+        minimum = sum(self[fld].li.size() for fld in fields)
+
+        # Grab the section header and segment header offsets for checking.
+        shdr, phdr = (data[fld].li for fld in ['e_shoff', 'e_phoff'])
+        if data['e_shoff'].int() > minimum:
+            yield data['e_shoff'].int(), data['e_shentsize'].int() * data['e_shnum'].int(), shdr.d.__class__
+        if data['e_phoff'].int() > minimum:
+            yield data['e_phoff'].int(), data['e_phentsize'].int() * data['e_phnum'].int(), phdr.d.__class__
+        return
+
     def __e_entries(self):
         data, memory_backed = self['e_data'].li, isinstance(self.source, ptypes.provider.memorybase)
 
@@ -464,7 +493,7 @@ class File(pstruct.type, base.ElfXX_File):
         # Gather any segment boundaries explicitly defined in the header. These might
         # not be part of the regular segments and sections tables, but we still need
         # to inject these into our tree in order to cover the entire file contents.
-        others = []
+        others = [offset_size_type for offset_size_type in self.__e_entries_unmapped_fields()]
         otherstable = {ooffset: otype for ooffset, osize, otype in others}
 
         # Finally, we can build our index of the segments that we'll later
