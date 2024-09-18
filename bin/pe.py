@@ -1,0 +1,1 @@
+../lib/pecoff/__main__.py
