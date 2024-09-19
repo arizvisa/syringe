@@ -185,7 +185,7 @@ class File(pstruct.type, base.ElfXX_File):
         # If we're using a memory-based backing, then we need
         # to use different methods to access the boundaries.
         if isinstance(self.source, ptypes.provider.memorybase):
-            Fsize = operator.methodcaller('getloadsize')
+            Fentry_size = operator.methodcaller('getloadsize')
             fields, Floadable = ['p_vaddr', 'sh_addr'], functools.partial(functools.reduce, operator.getitem, ['p_type', 'LOAD'])
 
             Fsegment_summary = lambda item: "{:s} ({:s}) {:#0{:d}x}..{:#0{:d}x} flags:{:s}".format(item.__class__.__name__, item['p_type'].str(), item['p_vaddr'].int(), 2+6, item['p_vaddr'].int() + item.getloadsize(), 2+6, ''.join(name for name in item['p_flags'] if item['p_flags'][name]))
@@ -195,8 +195,9 @@ class File(pstruct.type, base.ElfXX_File):
         # we'll sort by the LOAD type so we don't include
         # any of the other types that users won't care about.
         else:
-            Fsize = operator.methodcaller('getreadsize')
+            Fentry_size = operator.methodcaller('getreadsize')
             fields, Floadable = ['p_offset', 'sh_offset'], functools.partial(functools.reduce, operator.getitem, ['p_type', 'LOAD'])
+
             Fsegment_summary = lambda item: "{:s} ({:s}) {:#0{:d}x}..{:#0{:d}x} flags:{:s}".format(item.__class__.__name__, item['p_type'].str(), item['p_offset'].int(), 2+6, item['p_offset'].int() + item.getreadsize(), 2+6, ''.join(name for name in item['p_flags'] if item['p_flags'][name]))
             Fsection_summary = lambda item: "{:s} ({:s}) {:#0{:d}x}..{:#0{:d}x} name:{!r} flags:{:s}".format(item.__class__.__name__, item['sh_type'].str(), item['sh_offset'].int(), 2+6, item['sh_offset'].int() + item.getreadsize(), 2+6, item['sh_name'].str(), ' '.join(name for name in item['sh_flags'] if item['sh_flags'][name] and not isinstance(item['sh_flags'][name], pstruct.pbinary.flags)))
 
@@ -212,6 +213,8 @@ class File(pstruct.type, base.ElfXX_File):
         # mutable and thus not comparable. So to handle this, we
         # key each of them into a table at the same time we collect.
         table, (Fsegment_offset, Fsection_offset) = {}, map(operator.itemgetter, fields)
+        Fdetermine_offset = lambda table: lambda section_or_segment: (lambda F: (lambda field: field.int() if ptype.isinstance(field) else field)(F(section_or_segment)))(next((F for baseclass, F in table.items() if isinstance(section_or_segment, baseclass)), 0))
+        Fentry_offset = Fdetermine_offset({section.ElfXX_Shdr: Fsection_offset, segment.ElfXX_Phdr: Fsegment_offset})
 
         # First we'll gather the segments. We need to do two things
         # here. We need to build an index to recognize them which
@@ -223,7 +226,7 @@ class File(pstruct.type, base.ElfXX_File):
         items = []
         for index, phdr in enumerate(segments):
             table[0, index] = phdr
-            offset, size = Fsegment_offset(phdr).int(), Fsize(phdr)
+            offset, size = Fsegment_offset(phdr).int(), Fentry_size(phdr)
             items.append(((offset, offset + (size if phdr['p_type']['LOAD'] else 0)), (0, phdr['p_type'].str()), (0, index)))
 
         # Next we'll do something similar for the sections in
@@ -232,7 +235,7 @@ class File(pstruct.type, base.ElfXX_File):
         # to find the sections inside our header index.
         for index, shdr in enumerate(sections):
             table[1, index] = shdr
-            offset, size = Fsection_offset(shdr).int(), Fsize(shdr)
+            offset, size = Fsection_offset(shdr).int(), Fentry_size(shdr)
             items.append(((offset, offset + size), (1, shdr['sh_name'].str()), (1, index)))
 
         # Now that our list of entries have been made, we need to replace
@@ -251,7 +254,7 @@ class File(pstruct.type, base.ElfXX_File):
         # segment header that a point on the tree is describing.
         tree, tree_index = [], {}
         for phdr in filter(Floadable, segments):
-            offset, size = Fsegment_offset(phdr).int(), Fsize(phdr)
+            offset, size = Fsegment_offset(phdr).int(), Fentry_size(phdr)
             start, stop = bounds = offset, offset + size
             tree_index.setdefault(start, []), tree_index.setdefault(stop, [])
 
@@ -264,8 +267,8 @@ class File(pstruct.type, base.ElfXX_File):
             # segment is overlapping because we're always inserting the
             # boundaries of the segment into the tree in pairs.
             if start_index % 2 or stop_index % 2 or start_index != stop_index:
-                offset = tree[stop_index - 1]
-                items = tree_index.setdefault(offset, [])
+                point = tree[stop_index - 1]
+                items = tree_index.setdefault(point, [])
 
                 # As the current segment is overlapping, we gather it into a
                 # list for this segment because we'll sort this out later.
@@ -303,8 +306,8 @@ class File(pstruct.type, base.ElfXX_File):
             start_index, stop_index = bisect.bisect_left(tree, start), bisect.bisect_right(tree, stop)
 
             if start_index % 2 or stop_index % 2 or start_index != stop_index:
-                offset = tree[stop_index - 1]
-                items = tree_index.setdefault(offset, [])
+                point = tree[stop_index - 1]
+                items = tree_index.setdefault(point, [])
 
                 # As the current segment is overlapping, we gather it into a
                 # list for this segment because we'll sort this out later.
@@ -352,7 +355,7 @@ class File(pstruct.type, base.ElfXX_File):
                 for bounds, key in items + items:
                     _, header = headers[key]
                     if header not in used:
-                        logging.debug("(flatten) segm {:s} {:s}".format(header.typename(), Fentry_summary(header)))
+                        logging.debug("(flatten) {:s} segm {:s} {:s}".format("{:#x}..{:#x}".format(*bounds), header.typename(), Fentry_summary(header)))
 
                     # If the header has been used once before, then compare
                     # the offset we get against the end of the segment.
@@ -391,16 +394,19 @@ class File(pstruct.type, base.ElfXX_File):
             # the first member for each set of results that we return.
             head = flattener.send(offset)
             items = results.setdefault(head, [head])
+            hoffset, hsize = Fentry_offset(head), Fentry_size(head)
 
             # We need to double check that the segment is not the header
             # we're processing. because it always prefixes our results.
             if head == item:
-                logging.debug("(flatten)     skip {:s} {:s}".format(item.typename(), Fentry_summary(item)))
+                logging.debug("(flatten) {:#x}..{:#x}     skip {:s} {:s}".format(hoffset, hoffset + hsize, item.typename(), Fentry_summary(item)))
                 continue
 
             # We got an entry that we're keeping. So, add it to our results.
-            logging.debug("(flatten)     keep {:s} {:s}".format(item.typename(), Fentry_summary(item)))
+            logging.debug("(flatten) {:#x}..{:#x}     keep {:s} {:s}".format(hoffset, hoffset + hsize, item.typename(), Fentry_summary(item)))
             items.append(item)
+
+        flattener.close()
         return results
 
     def __e_padding(self):
