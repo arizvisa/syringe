@@ -293,7 +293,7 @@ class ElfXX_Shdr(ElfXX_Header):
 
         # Build the string components for each set of fields.
         description = "{:>13s} {:<20s}".format("({:s})".format(type.str()), name.str())
-        location = "offset:{:#0{:d}x}<>{:#0{:d}x} ({:+#0{:d}x})".format(offset, 2+6, offset + size, 2+6, size, 1+2+4)
+        location = "offset:{:#0{:d}x}..{:#0{:d}x} ({:+#0{:d}x})".format(offset, 2+6, offset + size, 2+6, size, 1+2+4)
         address_location = "addr:{:#0{:d}x}({:d})".format(addr, 2+4, addralign)
         extra = ["{:s}={:#x}".format(field, self[field].int()) for field in ['sh_link', 'sh_info'] if self[field].int()]
 

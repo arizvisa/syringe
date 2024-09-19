@@ -121,7 +121,7 @@ class ElfXX_Phdr(ElfXX_Header):
         # Regular fields
         offset, vaddr, paddr = (self[fld].int() for fld in ['p_offset', 'p_vaddr', 'p_paddr'])
         filesz, memsz, align = (self[fld].int() for fld in ['p_filesz', 'p_memsz', 'p_align'])
-        location = "vaddr:{:#0{:d}x}<>{:#0{:d}x} memsz:({:+#x})".format(vaddr, 2+6, vaddr + memsz, 2+6, memsz) if isinstance(self.source, ptypes.provider.memorybase) else "offset:{:#0{:d}x}<>{:#0{:d}x} filesz:({:+#x})".format(offset, 2+6, offset + filesz, 2+6, filesz)
+        location = "vaddr:{:#0{:d}x}..{:#0{:d}x} memsz:({:+#x})".format(vaddr, 2+6, vaddr + memsz, 2+6, memsz) if isinstance(self.source, ptypes.provider.memorybase) else "offset:{:#0{:d}x}..{:#0{:d}x} filesz:({:+#x})".format(offset, 2+6, offset + filesz, 2+6, filesz)
         if paddr == vaddr:
             return "{:<13s} {:s} flags:{:s} align:{:#x}{:s}".format(type.str(), location, flags_summary, align, " unknown:{:s}".format(self['p_unknown'].summary()) if self['p_unknown'].size() else '')
         return "{:<13s} {:s} paddr:{:#x} flags:{:s} align:{:#x}{:s}".format(type.str(), location, paddr, flags_summary, align, " unknown:{:s}".format(self['p_unknown'].summary()) if self['p_unknown'].size() else '')
