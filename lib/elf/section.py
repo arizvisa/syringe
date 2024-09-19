@@ -442,7 +442,12 @@ class Elf32_Rela(pstruct.type):
         (Elf32_Sword, 'r_addend'),
     ]
 class Elf32_Relr(Elf32_Word):
-    _fields_ = []
+    pass
+class Elf32_RelativeRecord(pstruct.type):
+    _fields_ = [
+        (Elf32_Relr, 'relr'),
+        (Elf32_Relr, 'bitmap'),
+    ]
 
 class ELF64_R_INFO(pbinary.flags):
     # Elf64_Xword
@@ -462,7 +467,12 @@ class Elf64_Rela(pstruct.type):
         (Elf64_Sxword, 'r_addend'),
     ]
 class Elf64_Relr(Elf64_Xword):
-    _fields_ = []
+    pass
+class Elf64_RelativeRecord(pstruct.type):
+    _fields_ = [
+        (Elf64_Relr, 'relr'),
+        (Elf64_Relr, 'bitmap'),
+    ]
 
 class SYMINFO_FLG_(pbinary.flags):
     # Elf32_Half/Elf64_Half

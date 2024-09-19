@@ -365,14 +365,18 @@ class ELFCLASS32(object):
         type = 36
         def _object_(self):
             from .segment import ELFCLASSXX
-            from .section import Elf32_Relr
+            from .section import Elf32_RelativeRecord, Elf32_Relr
             p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
 
             dt_relrent = p.by_tag('DT_RELRENT')
             dt_relrsz = p.by_tag('DT_RELRSZ')
 
-            relr_t = Elf32_Relr
+            record_t, relr_t = Elf32_RelativeRecord, Elf32_Relr
             return dyn.blockarray(relr_t, dt_relrsz.int())
+
+            count, extra = divmod(dt_relrsz.int(), record_t().a.blocksize())
+            unaligned = lambda self: record_t if len(self.value) <= count else relr_t
+            return dyn.blockarray(unaligned if extra else record_t, dt_relrsz.int())
 
     @DT_.define
     class DT_RELRENT(d_val): type = 37
@@ -703,14 +707,18 @@ class ELFCLASS64(object):
         type = 36
         def _object_(self):
             from .segment import ELFCLASSXX
-            from .section import Elf64_Relr
+            from .section import Elf64_RelativeRecord, Elf64_Relr
             p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
 
             dt_relrent = p.by_tag('DT_RELRENT')
             dt_relrsz = p.by_tag('DT_RELRSZ')
 
-            relr_t = Elf64_Relr
+            record_t, relr_t = Elf64_RelativeRecord, Elf64_Relr
             return dyn.blockarray(relr_t, dt_relrsz.int())
+
+            count, extra = divmod(dt_relrsz.int(), record_t().a.blocksize())
+            unaligned = lambda self: record_t if len(self.value) <= count else relr_t
+            return dyn.blockarray(unaligned if extra else record_t, dt_relrsz.int())
 
     @DT_.define
     class DT_RELRENT(d_val): type = 37
@@ -849,7 +857,9 @@ class ELFCLASS64(object):
     class DT_SUNW_LDMACH(d_val): type = 0x6000001b
 
 ### dynamic section entry
-class ElfXX_Dyn(pstruct.type): pass
+class ElfXX_Dyn(pstruct.type):
+    def summary(self):
+        return "d_tag={:s} : ({:s}) d_un={:s}".format(self['d_tag'].summary(), self['d_un'].classname(), self['d_un'].summary())
 
 class Elf32_Dyn(ElfXX_Dyn):
     class _d_tag(DT_, Elf32_Sword):

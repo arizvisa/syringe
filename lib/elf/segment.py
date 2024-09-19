@@ -197,6 +197,15 @@ class ELFCLASSXX(object):
             return next(iterable)
         by = bytag = by_tag
 
+        def details(self):
+            res = []
+            for item in self:
+                res.append("{}".format(item))
+            return "{:s}\n".format('\n'.join(res))
+
+        def repr(self):
+            return self.details()
+
     class PT_INTERP(pstr.szstring):
         type = 3
 
