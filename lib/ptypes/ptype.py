@@ -524,7 +524,20 @@ class __interface__(object):
     def __format__(self, spec):
         prefix, spec = spec[:-1], spec[-1:]
         if spec:
-            if self.value is None:
+            if spec in 'I':
+                offset, name = self.getoffset(), self.name()
+                format = functools.partial("[{:#x}] {:s}".format, offset) if '#' in prefix else "{:s}".format
+                if self.value is None:
+                    cls = self.__class__
+                    return format(utils.repr_class(cls.typename() if istype(cls) else cls.__name__))
+                return format(utils.repr_instance(self.classname(), name))
+
+            elif spec in 'P':
+                format = "{{{:s}}}".format if '#' in prefix else "{:s}".format
+                properties = ','.join(u"{:s}={!r}".format(k, v) for k, v in self.properties().items())
+                return format(properties) if properties else u''
+
+            elif self.value is None:
                 raise error.InitializationError(self, '__interface__.__format__')
             return super(__interface__, self).__format__(spec)
 
