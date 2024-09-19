@@ -87,6 +87,33 @@ class E_IDENT(pstruct.type):
             res['valid'] = self.valid()
         return res
 
+class E_ENTRIES(parray.type):
+    def details(self):
+        if isinstance(self.source, ptypes.provider.memorybase):
+            Fsegment_summary = lambda item: "{:s} ({:s}) {:#0{:d}x}..{:#0{:d}x} flags:{:s}".format(item.__class__.__name__, item['p_type'].str(), item['p_vaddr'].int(), 2+6, item['p_vaddr'].int() + item.getloadsize(), 2+6, ''.join(name for name in item['p_flags'] if item['p_flags'][name]))
+            Fsection_summary = lambda item: "{:s} ({:s}) {:#0{:d}x}..{:#0{:d}x} name:{!r} flags:{:s}".format(item.__class__.__name__, item['sh_type'].str(), item['sh_offset'].int(), 2+6, item['sh_offset'].int() + item.getloadsize(), 2+6, ' '.join(name for name in item['sh_flags'] if item['sh_flags'][name] and not isinstance(item['sh_flags'][name], pstruct.pbinary.flags)))
+        else:
+            Fsegment_summary = lambda item: "{:s} ({:s}) {:#0{:d}x}..{:#0{:d}x} flags:{:s}".format(item.__class__.__name__, item['p_type'].str(), item['p_offset'].int(), 2+6, item['p_offset'].int() + item.getreadsize(), 2+6, ''.join(name for name in item['p_flags'] if item['p_flags'][name]))
+            Fsection_summary = lambda item: "{:s} ({:s}) {:#0{:d}x}..{:#0{:d}x} name:{!r} flags:{:s}".format(item.__class__.__name__, item['sh_type'].str(), item['sh_offset'].int(), 2+6, item['sh_offset'].int() + item.getreadsize(), 2+6, item['sh_name'].str(), ' '.join(name for name in item['sh_flags'] if item['sh_flags'][name] and not isinstance(item['sh_flags'][name], pstruct.pbinary.flags)))
+
+        res, width = [], 4
+        for item in self:
+            offset, size = item.getoffset(), item.size()
+            left, right = offset, offset + size
+            if hasattr(item, '__segment__'):
+                row = Fsegment_summary(item.__segment__)
+            elif hasattr(item, '__section__'):
+                row = Fsection_summary(item.__section__)
+            else:
+                row = item.summary()
+            properties = "{:#P}".format(item)
+            hdr = "{:#I}{:s} ({:+#0{:d}x}) {:#x}..{:#x}{:s}".format(item, " {:s}".format(properties) if properties else '', size, 2 + 2 * width, left, right, " : {:s}".format(row) if row else '')
+            res.append(hdr)
+        return '\n'.join(res)
+
+    def repr(self):
+        return "{:s}\n".format(self.details())
+
 ### File types
 class File(pstruct.type, base.ElfXX_File):
     def __e_data(self):
@@ -749,7 +776,7 @@ class File(pstruct.type, base.ElfXX_File):
             return ptype.clone(item, length=size)
 
         # Finally we can construct our array composed of the proper types
-        return ptype.clone(parray.type, _object_=_object_, length=len(result))
+        return ptype.clone(E_ENTRIES, _object_=_object_, length=len(result))
 
     def __e_programhdrentries(self):
         data = self['e_data'].li
