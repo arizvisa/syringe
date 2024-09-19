@@ -41,8 +41,14 @@ class DT_(pint.enum):
 
         ('DT_PREINIT_ARRAY', 32),
         ('DT_PREINIT_ARRAYSZ', 33),
-        ('DT_MAXPOSTAGS', 34),
-        ('DT_NUM', 35),
+        #('DT_MAXPOSTAGS', 34),
+        #('DT_NUM', 35),
+        ('DT_SYMTAB_SHNDX', 34),
+
+        ('DT_RELRSZ', 35),
+        ('DT_RELR', 36),
+        ('DT_RELRENT', 37),
+        ('DT_RELLEB', 38),
 
         # DT_VALRNGLO(0x6ffffd00) - DT_VALRNGHI(0x6ffffdff)
         ('DT_GNU_PRELINKED', 0x6ffffdf5),
@@ -346,10 +352,30 @@ class ELFCLASS32(object):
             return dyn.blockarray(Elf32_VAddr, dt_preinit_arraysz.int())
     @DT_.define
     class DT_PREINIT_ARRAYSZ(d_val): type = 33
+    #@DT_.define
+    #class DT_MAXPOSTAGS(d_val): type = 34
+    #@DT_.define
+    #class DT_NUM(d_val): type = 35
+
     @DT_.define
-    class DT_MAXPOSTAGS(d_val): type = 34
+    class DT_RELRSZ(d_val): type = 35
+
     @DT_.define
-    class DT_NUM(d_val): type = 35
+    class DT_RELR(d_ptr):
+        type = 36
+        def _object_(self):
+            from .segment import ELFCLASSXX
+            from .section import Elf32_Relr
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+
+            dt_relrent = p.by_tag('DT_RELRENT')
+            dt_relrsz = p.by_tag('DT_RELRSZ')
+
+            relr_t = Elf32_Relr
+            return dyn.blockarray(relr_t, dt_relrsz.int())
+
+    @DT_.define
+    class DT_RELRENT(d_val): type = 37
 
     # DT_VALRNGLO(0x6ffffd00) - DT_VALRNGHI(0x6ffffdff)
     @DT_.define
@@ -664,10 +690,30 @@ class ELFCLASS64(object):
             return dyn.blockarray(Elf64_VAddr, dt_preinit_arraysz.int())
     @DT_.define
     class DT_PREINIT_ARRAYSZ(d_val): type = 33
+    #@DT_.define
+    #class DT_MAXPOSTAGS(d_val): type = 34
+    #@DT_.define
+    #class DT_NUM(d_val): type = 35
+
     @DT_.define
-    class DT_MAXPOSTAGS(d_val): type = 34
+    class DT_RELRSZ(d_val): type = 35
+
     @DT_.define
-    class DT_NUM(d_val): type = 35
+    class DT_RELR(d_ptr):
+        type = 36
+        def _object_(self):
+            from .segment import ELFCLASSXX
+            from .section import Elf64_Relr
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+
+            dt_relrent = p.by_tag('DT_RELRENT')
+            dt_relrsz = p.by_tag('DT_RELRSZ')
+
+            relr_t = Elf64_Relr
+            return dyn.blockarray(relr_t, dt_relrsz.int())
+
+    @DT_.define
+    class DT_RELRENT(d_val): type = 37
 
     # DT_VALRNGLO(0x6ffffd00) - DT_VALRNGHI(0x6ffffdff)
     @DT_.define

@@ -47,6 +47,7 @@ class SHT_(pint.enum):
         ('PREINIT_ARRAY', 16),
         ('GROUP', 17),
         ('SYMTAB_SHNDX', 18),
+        ('RELR', 19),
 
         # SHT_LOOS(0x60000000) - SHT_HIOS(0x6fffffff)
         ('GNU_INCREMENTAL_INPUTS', 0x6fff4700),
@@ -54,6 +55,23 @@ class SHT_(pint.enum):
         ('GNU_HASH', 0x6ffffff6),
         ('GNU_LIBLIST', 0x6ffffff7),
         ('CHECKSUM', 0x6ffffff8),
+
+        ('ANDROID_REL', 0x60000001),
+        ('ANDROID_RELA', 0x60000002),
+        ('GNU_INCREMENTAL_INPUTS', 0x6fff4700),     # Incremental build data
+        ('LLVM_ODRTAB', 0x6fff4c00),                # LLVM ODR table.
+        ('LLVM_LINKER_OPTIONS', 0x6fff4c01),        # LLVM Linker Options.
+        ('LLVM_ADDRSIG', 0x6fff4c03),               # List of address-significant symbols for safe ICF.
+        ('LLVM_DEPENDENT_LIBRARIES', 0x6fff4c04),   # LLVM Dependent Library Specifiers.
+        ('LLVM_SYMPART', 0x6fff4c05),               # Symbol partition specification.
+        ('LLVM_PART_EHDR', 0x6fff4c06),             # ELF header for loadable partition.
+        ('LLVM_PART_PHDR', 0x6fff4c07),             # Phdrs for loadable partition.
+        ('LLVM_BB_ADDR_MAP_V0', 0x6fff4c08),        # LLVM Basic Block Address Map.
+        ('LLVM_CALL_GRAPH_PROFILE', 0x6fff4c09),    # LLVM Call Graph Profile.
+        ('LLVM_BB_ADDR_MAP', 0x6fff4c0a),           # LLVM Basic Block Address Map.
+        ('LLVM_OFFLOADING', 0x6fff4c0b),            # LLVM device offloading data.
+        ('LLVM_LTO', 0x6fff4c0c),                   # .llvm.lto for fat LTO.
+        ('ANDROID_RELR', 0x6fffff00),
 
         # SHT_LOSUNW(0x6ffffffa) - SHT_HISUNW(0x6fffffff)
         ('SUNW_move', 0x6ffffffa),
@@ -423,6 +441,8 @@ class Elf32_Rela(pstruct.type):
         (ELF32_R_INFO, 'r_info'),
         (Elf32_Sword, 'r_addend'),
     ]
+class Elf32_Relr(Elf32_Word):
+    _fields_ = []
 
 class ELF64_R_INFO(pbinary.flags):
     # Elf64_Xword
@@ -441,6 +461,8 @@ class Elf64_Rela(pstruct.type):
         (ELF64_R_INFO, 'r_info'),
         (Elf64_Sxword, 'r_addend'),
     ]
+class Elf64_Relr(Elf64_Xword):
+    _fields_ = []
 
 class SYMINFO_FLG_(pbinary.flags):
     # Elf32_Half/Elf64_Half
@@ -791,6 +813,10 @@ class ELFCLASSXX(object):
         type = 18
         _object_ = None
 
+    class SHT_RELR(parray.block):
+        type = 19
+        _object_ = None
+
     class SHT_GNU_HASH(pstruct.type):
         type = 0x6ffffff6
         class _gnuBucketChain(parray.terminated):
@@ -862,6 +888,10 @@ class ELFCLASS32(object):
     @SHT_.define
     class SHT_RELA(ELFCLASSXX.SHT_RELA):
         _object_ = Elf32_Rela
+
+    @SHT_.define
+    class SHT_RELR(ELFCLASSXX.SHT_RELR):
+        _object_ = Elf32_Relr
 
     @SHT_.define
     class SHT_HASH(ELFCLASSXX.SHT_HASH):
@@ -973,6 +1003,10 @@ class ELFCLASS64(object):
     @SHT_.define
     class SHT_RELA(ELFCLASSXX.SHT_RELA):
         _object_ = Elf64_Rela
+
+    @SHT_.define
+    class SHT_RELR(ELFCLASSXX.SHT_RELR):
+        _object_ = Elf64_Relr
 
     @SHT_.define
     class SHT_HASH(ELFCLASSXX.SHT_HASH):
