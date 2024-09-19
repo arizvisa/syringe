@@ -532,13 +532,14 @@ class File(pstruct.type, base.ElfXX_File):
         # our segment list. We only care about the ones that're in our table
         # because our table uses a segment as its key.
         items = {Fsegment_offset(item).int() : item for item in segmentlist if item in table}
-        index = [(position, items[position]) for position in sorted(items)]
+        headerindex = [(position, items[position]) for position in sorted(items)]
+        Flogging_debug = lambda string: logging.debug("{:s}{:s}".format('    ', string))
 
         # With our index, we can now access the tables individually and
         # collect each of the entries for each loaded segment. This is
         # because we're going to iterate through as many segments as necessary
         # to remove entries that were loaded before the minimum offset.
-        for _, header in index:
+        for _, header in headerindex:
             entries = table[header]
 
             # Take our entries and convert them into an iterator of
@@ -549,8 +550,8 @@ class File(pstruct.type, base.ElfXX_File):
             filtered = itertools.dropwhile(functools.partial(operator.gt, minimum), iterable)
 
             # Figure out how many elements were filtered, and use it to
-            # determine the count to slice our our entries. We always
-            # ensure that the segment header is the first entry.
+            # determine the count for slicing our entries. We also need to
+            # ensure that the segment header is included as the first entry.
             count = sum(1 for item in filtered)
             entries[:] = [header] + entries[-count:]
 
@@ -561,150 +562,173 @@ class File(pstruct.type, base.ElfXX_File):
                 break
             continue
 
-        # Finally we can iterate through index table and calculate the boundaries
-        # between each member for each loaded segment.
+        # Finally, we start iterating through the index and using it to calculate
+        # the boundaries between each member belonging to the current segment.
         result, position, base = [], minimum, self.getparent(None).getoffset()
-        for boundary, header in index:
-            entries, size, items = table[header], Fentry_size(header), []
-            logging.debug("(decode) Processing segment: {:s}".format(Fsegment_summary(header)))
+        for boundary, header in headerindex:
+            entries, size = table[header], Fentry_size(header)
+            left, right, items = boundary, boundary + size, []
 
-            # If we're memory-backed, then we need to align our segment. This is
-            # unmapped, so we'll need to make sure we don't decode from its address.
-            if isinstance(self.source, ptypes.provider.memorybase) and position < boundary:
-                delta = header.align(boundary) - boundary
+            logging.debug("Processing segment ({:#010x}..{:#010x}): {:s}".format(boundary, boundary + size, Fsegment_summary(header)))
 
-                # We got the size of our alignment so pad our results with a block.
-                res = position, boundary - position + delta, ptype.undefined
+            # First thing to do is to pad our current position until
+            # we got to the starting offset for the current header.
+            if position < left:
+                res = position, left - position, block_t
                 result.append(res)
-                logging.debug("(align)  {:#010x}..{:#010x} goal:{:#010x} {:#04x}{:+#04x}{:+#x} : {:s}".format(base + position, base + boundary, base + header.align(boundary), base + position, boundary - position, delta, ptype.undefined.typename()))
-                position = header.align(boundary)
+                Flogging_debug("(pad)    {:#010x} goal:{:#010x} {:#04x}{:+#04x} : {:s}".format(base + position, base + boundary, base + position, boundary - position, block_t.typename()))
+                position = left
 
-            # Very first thing we need to do is to pad things up to the current
-            # segment ensuring that we begin at the right place.
-            if position < boundary:
-                res = position, boundary - position, block_t
-                result.append(res)
-                logging.debug("(pad)    {:#010x} goal:{:#010x} {:#04x}{:+#04x} : {:s}".format(base + position, base + boundary, base + position, boundary - position, block_t.typename()))
-                position = boundary
+            # Now we iterate through every entry for the current header, and
+            # gather only the ones that are within the current segment. The
+            # purpose of this loop is to identify the segments that have the
+            # highest priority so that we can slice them up into sections.
+            logging.debug("Processing {:d} entries for segment ({:#010x}..{:#010x}): {:s}".format(len(entries), boundary, boundary + size, Fsegment_summary(header)))
 
-            # Iterate through all of our entries while keeping track of the
-            # maximum size for the loaded segment. This way we can track when
-            # an entry goes out of bounds be able to trim it down if so.
-            for count, item in enumerate(entries):
+            index, collected = 0, []
+            while position < right:
+                item = entries[index]
                 eoffset, esize = Fentry_offset(item), Fentry_size(item)
 
-                # If this is the very first segment and we have some entries,
-                # then we ignore the entrysize (esize) and clamp it down towards
-                # whatever size we need for the next element.
+                # We first need to handle a special case for when the segment
+                # being processed includes the header that was read earlier
+                # when decoding. We do this by adjusting both the offset and
+                # size of the entry to exclude the header from its boundaries.
+                if eoffset < minimum:
+                    delta = minimum - eoffset
+                    Flogging_debug("<adjust> {:#010x}..{:#010x} {:#04x}{:+#04x} : {:s}".format(base + eoffset, base + eoffset + esize, base + eoffset, esize, Fentry_summary(item)))
+                    eoffset, esize = delta + eoffset, esize - delta
+
+                # If we haven't added any entries yet, then this is the
+                # first entry which should contain the segment boundaries.
                 if not items:
                     res = eoffset, esize, item
-                    items.append(res[-2:]), result.append(res)
-                    logging.debug("(header) {:#010x}..{:#010x} {:#04x}{:+#04x} : {:s}".format(base + eoffset, base + eoffset + esize, base + eoffset, esize, Fentry_summary(item)))
+                    items.append(res[-2:]), collected.append(res)
+                    Flogging_debug("(header) {:#010x}..{:#010x} {:#04x}{:+#04x} : {:s}".format(base + eoffset, base + eoffset + esize, base + eoffset, esize, Fentry_summary(item)))
                     position = eoffset + esize
+                    index += 1
                     continue
 
                 # If we're below the minimum offset which should only really
                 # happen if we're memory-backed, then adjust the previous
                 # result so that it has a size that doesn't overlap anything.
-                elif eoffset < minimum:
+                if eoffset < minimum:
                     delta = minimum - eoffset
-                    res, previous, t = result[-1]
-                    result[-1] = res, previous - delta, t
-                    logging.debug("(-min)   {:#010x} goal:{:#010x} {:#04x}{:+#04x} ({:#x}) : {:s}".format(base + eoffset, base + minimum, base + previous, -delta, base + boundary + previous - delta, Fentry_summary(item)))
+                    res, previous, type = collected[-1]
+                    collected[-1] = res, previous - delta, type
+                    Flogging_debug("(-min)   {:#010x} goal:{:#010x} {:#04x}{:+#04x} ({:#x}) : {:s}".format(base + eoffset, base + minimum, base + previous, -delta, base + boundary + previous - delta, Fentry_summary(item)))
 
-                # If our position does not point at our entry's offset,
-                # then we need to add a block to pad us all the way there.
+                # If the current position is not pointing at the offset
+                # for the entry, then pad ourselves all the way there.
                 elif position < eoffset:
                     delta = eoffset - position
                     res = eoffset, delta, block_t
-                    logging.debug("(+pad)   {:#010x} goal:{:#010x} {:#04x}{:+#04x} : {:s}".format(base + position, base + eoffset, base + position, -position, Fentry_summary(item)))
-                    items.append(res[-2:]), result.append(res)
+                    Flogging_debug("(+pad)   {:#010x} goal:{:#010x} {:#04x}{:+#04x} : {:s}".format(base + position, base + eoffset, base + position, -position, Fentry_summary(item)))
+                    items.append(res[-2:]), collected.append(res)
                     position = eoffset
 
-                # If our projected position pushes us all the way to
-                # our segment and we didn't terminate the loop, then
-                # we need to backtrack and try it out again.
+                # If we've pushed past the offset of the current entry, then we
+                # need to adjust the size for the previous result so that we don't.
                 elif position > eoffset:
                     delta = position - eoffset
-                    res, previous, t = result[-1]
-                    result[-1] = res, max(0, delta - previous), t
-                    logging.debug("(-pad)   {:#010x} goal:{:#010x} {:#04x}{:+#04x} : {:s}".format(base + position, base + eoffset, base + position, -eoffset, Fentry_summary(item)))
+                    res, previous, type = collected[-1]
+                    collected[-1] = res, max(0, delta - previous), type
+                    Flogging_debug("(-pad)   {:#010x} goal:{:#010x} {:#04x}{:+#04x} : {:s}".format(base + position, base + eoffset, base + position, -eoffset, Fentry_summary(item)))
                     position = eoffset
-
-                # If our next position is actually outside the bounds of
-                # the segment, then we need to exit our loop only if the
-                # size of the entry holds something. We have to explicitly
-                # check for this because we didn't constrain our entries
-                # when we built our segment index. Since we're terminating
-                # early, subtract one from the counter since we're not
-                # going to be processing the next element.
-                if position >= boundary + size and size > 0:
-                    logging.debug("(break)  {:#010x} >= {:#010x} {:+#04x} : {:s}".format(base + position, base + boundary + size, size, Fentry_summary(item)))
                     break
 
-                # If we're where we expect, but it pushes us outside the
-                # boundaries of the segment, the clamp it to a size that
-                # lays us at the very end of the segment.
-                elif position == eoffset and eoffset + esize > boundary + size:
-                    res = eoffset, (boundary + size) - eoffset, item
-                    items.append(res[-2:]), result.append(res)
-                    logging.debug("(clamp)  {:#010x} goal:{:#010x} {:+#04x} : {:s}".format(base + eoffset, base + boundary + size, size, Fentry_summary(item)))
-                    position = boundary + size
+                # Our current position should now correspond to the offset
+                # of the current entry. So, we now need to add the entry
+                # to our results, whilst taking care that the size is correct.
 
-                # If our position is where we expect it, then we can simply
-                # append our element with its esize.
-                elif position == eoffset and eoffset + esize <= boundary + size:
+                # If adding the entry still keeps us within the current
+                # segment, then we can add it to our results untouched.
+                if eoffset + esize <= right:
                     res = eoffset, esize, item
-                    items.append(res[-2:]), result.append(res)
-                    logging.debug("(append) {:#010x} goal:{:#010x} {:+#04x} : {:s}".format(base + eoffset, base + eoffset + esize, esize, Fentry_summary(item)))
+                    items.append(res[-2:]), collected.append(res)
+                    Flogging_debug("(append) {:#010x} goal:{:#010x} {:+#04x} : {:s}".format(base + eoffset, base + eoffset + esize, esize, Fentry_summary(item)))
                     position = eoffset + esize
 
-                # Raise an exception because this shouldn't happen at all.
+                # If the entry pushes us outside of the segment, then
+                # we need to clamp its size so that it fits correctly.
+                elif eoffset + esize > right:
+                    res = eoffset, right - eoffset, item
+                    items.append(res[-2:]), collected.append(res)
+                    Flogging_debug("(clamp)  {:#010x} goal:{:#010x} {:+#04x} : {:s}".format(base + eoffset, base + right, right - left, Fentry_summary(item)))
+                    position = boundary + size
+
+                # Otherwise, raise an exception...this case shouldn't ever be hit.
                 else:
                     raise AssertionError("(error)  {:#010x} goal:{:#010x} {:+#04x} : {:s}".format(base + eoffset, base + eoffset + esize, esize, Fentry_summary(item)))
+
+                index += 1
                 continue
 
-            # Increment by one if we completed process the entries to
-            # so that slicing doesn't include any of our entries.
-            else:
-                count += 1
+            # After processing the entries, we now need to check if
+            # our current position has gotten to the end of the segment.
+            # However, if we're memory-backed then we need to align the
+            # current position before verifying that we're at the end.
+            if memory_backed and position < right:
+                delta = header.align(right) - position
 
-            # If there's no leftover entries, then we can simply move
-            # onto the next segment to process.
-            if count == len(entries):
-                continue
+                # After calculating alignment, pad our results with it.
+                res = position, operator.sub(boundary, position + delta), ptype.undefined
+                collected.append(res)
+                Flogging_debug("(align)  {:#010x}..{:#010x} goal:{:#010x} {:#04x}{:+#04x}{:+#x} : {:s}".format(base + position, base + boundary, base + header.align(boundary), base + position, boundary - position, delta, ptype.undefined.typename()))
+                position = header.align(boundary)
 
-            # Otherwise we have some leftover entries and we need to
-            # continue to add them to our list of results.
-            logging.debug("(leftover) {:#010x}..{:#010x} {:d}/{:d} (need {:+d} more)".format(base + position, base + position + size, count, len(entries), len(entries) - count))
+            # We should've completely covered the segment. Although, we still need
+            # to slice up our results to include any other entries that weren't processed.
+            remaining = ((Fentry_offset(entry), Fentry_size(entry), entry) for entry in entries[index:])
+            while collected:
+                offset, size, instance = collected.pop(0)
+                while size > 0:
+                    eoffset_esize_einstance = next(remaining, None)
+                    if not eoffset_esize_einstance:
+                        break
 
-            # If we have any leftover entries, then continue to process
-            # those, getting their size, and adding them to our results.
-            for index, item in enumerate(entries[count:]):
-                eoffset, esize = Fentry_offset(item), Fentry_size(item)
+                    # If the boundaries and the instance are the same,
+                    # then we can just skip it.
+                    eoffset, esize, einstance = eoffset_esize_einstance
+                    if (left, right) == (eoffset, eoffset + esize):
+                        continue
 
-                # However, we still need to track our offset because we
-                # actually might need to pad our way there.
-                if position < eoffset:
-                    res = eoffset, eoffset - position, block_t
-                    result.append(res)
-                    logging.debug("(pad)   {:#010x} goal:{:#010x} {:#04x}{:+#04x} : {:s}".format(base + position, base + eoffset, base + position, eoffset - position, block_t.typename()))
-                    position = eoffset
+                    # If the entry offset comes before our current offset,
+                    # then adjust the previous entry so that the entry fits.
+                    if eoffset < offset:
+                        assert(result), "{:#x}..{:#x} {:#x}{:+#x} : {}".format(offset, offset + size, offset, size, instance)
+                        correction = offset - eoffset
+                        ooffset, osize, oinstance = result[-1]
+                        result[-1] = ooffset, osize - correction, oinstance
 
-                # If we're not at the correct position, then we need to
-                # adjust the size of our item so the sections line up.
-                if position > eoffset:
-                    delta = position - eoffset
-                    logging.debug("(clamp) {:#010x} goal:{:#010x} {:#04x}{:+#04x} : {:s}".format(base + eoffset, base + position, base + position, delta, block_t.typename()))
-                    result.append((eoffset, esize - delta, item))
-                    position += esize - delta
+                    # Pad up to the current element offset.
+                    if eoffset > offset:
+                        result.append((offset, eoffset - offset, instance))
+                    offset, size = eoffset, size - eoffset + offset
 
-                # We should be good, so we just need to add it.
-                else:
-                    result.append((eoffset, esize, item))
-                    logging.debug("(append) {:d}/{:d} {:#010x} goal:{:#010x} {:+#04x} : {:s}".format(1 + count + index, len(entries), base + eoffset, base + eoffset + esize, esize, Fentry_summary(item)))
-                    position += esize
-                continue
+                    # Finally add the regular entry to our results.
+                    result.append((eoffset, esize, einstance))
+                    offset, size = eoffset + esize, size - esize
+
+                # Now we can add the header to the results.
+                result.append((offset, size, instance))
+
+            # Now we add every entry that is remaining. These don't reside within
+            # a known segment, so we don't need to guarantee that they're paired.
+            for eoffset, esize, einstance in remaining:
+                if eoffset < offset:
+                    assert(result), "{:#x}..{:#x} {:#x}{:+#x} : {}".format(eoffset, eoffset + esize, eoffset, esize, einstance)
+                    correction = offset - eoffset
+                    ooffset, osize, oinstance = result[-1]
+                    result[-1] = ooffset, osize - correction, oinstance
+
+                # Pad up to the current element offset.
+                if eoffset > offset:
+                    result.append((offset, eoffset - offset, block_t))
+                offset, size = eoffset, size - eoffset + offset
+
+                result.append((eoffset, esize, einstance))
+                offset, size = eoffset + esize, size - esize
             continue
 
         # Everything has been sorted, so now we can construct our array and
