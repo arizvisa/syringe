@@ -372,6 +372,15 @@ class XhdrEntries(parray.type):
             continue
         return
 
+    def details(self):
+        result = []
+        for index, header in enumerate(self):
+            result.append("{}".format(header))
+        return "{:s}\n".format('\n'.join(result))
+
+    def repr(self):
+        return self.details()
+
 class ShdrEntries(XhdrEntries):
     def by_offset(self, ofs):
         iterable = (item for item in self if item.containsoffset(ofs))
