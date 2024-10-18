@@ -1102,16 +1102,17 @@ if __name__ == '__main__':
         relocations = relocations['Address'].d
         print(relocations.l)
 
-    baseaddress = v['OptionalHeader']['ImageBase']
-    for section in sections:
-        print(section)
-        data = section.data().serialize()
-        for item in relocations.filter(section):
-            grouped = {}
-            [ grouped.setdefault(type, []).append(offset) for type, offset in item.getrelocations(section) ]
-            print("{}".format(item))
-            for type in sorted(grouped):
-                print("\ttype {:d} : ...{:d} entries...".format(type, len(grouped[type])))
+    relocations = v['DataDirectory'][5]
+    if relocations['Address'].int():
+        baseaddress, relocations = v['OptionalHeader']['ImageBase'], relocations['Address'].d
+        for section in sections:
+            print(section)
+            data = section.data().serialize()
+            for item in relocations.filter(section):
+                grouped = {}
+                [ grouped.setdefault(type, []).append(offset) for type, offset in item.getrelocations(section) ]
+                print("{}".format(item))
+                for type in sorted(grouped):
+                    print("\ttype {:d} : ...{:d} entries...".format(type, len(grouped[type])))
+                continue
             continue
-        continue
-
