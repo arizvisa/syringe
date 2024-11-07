@@ -298,13 +298,13 @@ class TrackHeaderBox(FullBox):
             (pint.uint32_t, 'Creation time'),
             (pint.uint32_t, 'Modification time'),
             (pint.uint32_t, 'Track ID'),
-            (pint.uint32_t, 'Reserved'),
+            (pint.uint32_t, 'Reserved_c'),
             (pint.uint32_t, 'Duration'),    # XXX: is this right?
-            (pint.uint64_t, 'Reserved'),
+            (pint.uint64_t, 'Reserved_14'),
             (pint.uint16_t, 'Layer'),
             (pint.uint16_t, 'Alternate group'),
             (pint.uint16_t, 'Volume'),
-            (pint.uint16_t, 'Reserved'),
+            (pint.uint16_t, 'Reserved_22'),
             (Matrix, 'Matrix structure'),
             (Fixed, 'Track width'),
             (Fixed, 'Track height'),
@@ -359,11 +359,12 @@ class HandlerBox(FullBox):
     class Box(pstruct.type):
         _fields_ = [
             (pint.uint32_t, 'Component type'),
-            (pint.uint32_t, 'Component subtype'),
+            (pQTType, 'Component subtype'),
             (pint.uint32_t, 'Component manufacturer'),
             (pint.uint32_t, 'Component flags'),
             (pint.uint32_t, 'Component flags mask'),
-            (pQTString, 'Component name')
+            #(pQTString, 'Component name')
+            (pstr.szstring, 'Component name')
         ]
 
 ## stsd
