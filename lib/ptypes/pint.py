@@ -466,30 +466,32 @@ class enum(type):
         #      they're within the boundaries of our type
         return
 
-    def __byvalue__(self, value, *default):
+    @classmethod
+    def __byvalue__(cls, value, *default):
         '''Internal method to search the enumeration for the name representing the provided value.'''
         if len(default) > 1:
-            raise error.TypeError(self, 'enum.byvalue', "{:s}.byvalue expected at most 3 arguments, got {:d}".format(self.typename(), 2 + len(default)))
+            raise error.TypeError(cls, 'enum.byvalue', "{:s}.byvalue expected at most 3 arguments, got {:d}".format(cls.typename(), 2 + len(default)))
         values = make_integers(ord(value)) if isinstance(value, ordinal_types) and len(value) == 1 else make_integers(value)
-        iterable = (name for name, item in self._values_ if item in values)
+        iterable = (name for name, item in cls._values_ if item in values)
         try:
             res = utils.next(iterable, *default)
 
         except StopIteration:
-            raise error.KeyError(self, 'enum.byvalue', value)
+            raise error.KeyError(cls, 'enum.byvalue', value)
         return res
 
-    def __byname__(self, name, *default):
+    @classmethod
+    def __byname__(cls, name, *default):
         '''Internal method to search the enumeration for the value corresponding to the provided name.'''
         if len(default) > 1:
-            raise error.TypeError(self, 'enum.byname', "{:s}.byname expected at most 3 arguments, got {:d}".format(self.typename(), 2 + len(default)))
+            raise error.TypeError(cls, 'enum.byname', "{:s}.byname expected at most 3 arguments, got {:d}".format(cls.typename(), 2 + len(default)))
 
-        iterable = (value for item, value in self._values_ if item == name)
+        iterable = (value for item, value in cls._values_ if item == name)
         try:
             res = utils.next(iterable, *default)
 
         except StopIteration:
-            raise error.KeyError(self, 'enum.byname', name)
+            raise error.KeyError(cls, 'enum.byname', name)
         return res
 
     def __getattr__(self, name):
@@ -557,28 +559,12 @@ class enum(type):
     @classmethod
     def byvalue(cls, value, *default):
         '''Lookup the string in an enumeration by it's first-defined value'''
-        if len(default) > 1:
-            raise TypeError("{:s}.byvalue expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
-        values = make_integers(ord(value)) if isinstance(value, ordinal_types) and len(value) == 1 else make_integers(value)
-        iterable = (name for name, item in cls._values_ if item in values)
-        try:
-            result = utils.next(iterable, *default)
-        except StopIteration:
-            raise error.KeyError(cls, 'enum.byvalue', value)
-        return result
+        return cls.__byvalue__(value, *default)
 
     @classmethod
     def byname(cls, name, *default):
         '''Lookup the value in an enumeration by it's first-defined name'''
-        if len(default) > 1:
-            raise TypeError("{:s}.byname expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
-
-        iterable = (value for item, value in cls._values_ if item == name)
-        try:
-            result = utils.next(iterable, *default)
-        except StopIteration:
-            raise error.KeyError(cls, 'enum.byname', name)
-        return result
+        return cls.__byname__(name, *default)
 
     @classmethod
     def has(cls, value):
