@@ -537,9 +537,12 @@ class enum(type):
 
     def __getitem__(self, name):
         '''Return True if the enumeration matches the value of the constant specified by name.'''
-        res = self.get()
+        res, missing = self.get(), object()
         integer = ord(res) if isinstance(res, ordinal_types) and len(res) == 1 else res
-        return integer == name if isinstance(name, integer_types) else integer == self.__byname__(name, None)
+        expected = name if isinstance(name, integer_types) else self.__byname__(name, missing)
+        if expected is missing:
+            raise KeyError(name)
+        return integer == expected
 
     @classmethod
     def enumerations(cls):
@@ -1040,6 +1043,20 @@ if __name__ == '__main__':
             ]
         res, formatter = e().set(0x44), "{:<80o}".format
         if formatter(res).rstrip() == '104' and len(formatter(res)) == 80:
+            raise Success
+
+    @TestCase
+    def test_enum_missing_name_1():
+        class e(pint.enum, pint.uint32_t):
+            _values_ = [
+                ('aa', 0xaaaaaaaa),
+                ('bb', 0xbbbbbbbb),
+                ('cc', 0xcccccccc),
+            ]
+        a = e().a
+        try:
+            a['missing']
+        except KeyError:
             raise Success
 
 if __name__ == '__main__':

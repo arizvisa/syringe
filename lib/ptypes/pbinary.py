@@ -722,9 +722,11 @@ class enum(integer):
 
     def __getitem__(self, name):
         '''If a key is specified, then return True if the enumeration actually matches the specified constant'''
-        if isinstance(name, string_types):
-            return self.__byname__(name, None) == bitmap.value(self.get())
-        return bitmap.value(self.get()) == name
+        res, missing = self.get(), object()
+        expected = self.__byname__(name, missing) if isinstance(name, string_types) else name
+        if expected is missing:
+            raise KeyError(name)
+        return bitmap.value(res) == expected
 
     @classmethod
     def enumerations(cls):
@@ -3346,7 +3348,10 @@ if __name__ == '__main__':
             ]
 
         x = e().a
-        if not x['aa'] and not x['bb'] and not x['cc']: raise Success
+        try:
+            x.set('missing')
+        except KeyError:
+            raise Success
 
     @TestCase
     def test_pbinary_enum_check_attributes_61():
@@ -4277,6 +4282,34 @@ if __name__ == '__main__':
 
         x = pbinary.new(t3).a
         if x.field('a', 'b', 'c').bitmap() == (0, 32):
+            raise Success
+
+    @TestCase
+    def test_pbinary_enum_check_available_name_94():
+        class e(pbinary.enum):
+            length, _values_ = 8, [
+                ('aa', 0xaa),
+                ('bb', 0xbb),
+                ('cc', 0xcc),
+            ]
+
+        x = e().a
+        x['aa']
+        raise Success
+
+    @TestCase
+    def test_pbinary_enum_check_unknown_name_95():
+        class e(pbinary.enum):
+            length, _values_ = 8, [
+                ('aa', 0xaa),
+                ('bb', 0xbb),
+                ('cc', 0xcc),
+            ]
+
+        x = e().a
+        try:
+            x['missing']
+        except KeyError:
             raise Success
 
 if __name__ == '__main__':
