@@ -421,6 +421,15 @@ class uByteOrder(pint.enum, USHORT):
         ('little', 0xfffe),
         ('big', 0xfeff),
     ]
+    _aliases_ = {
+        'littleendian': 'little',
+        'bigendian': 'big',
+    }
+
+    def __getitem__(self, name):
+        name = self._aliases_.get(name.lower(), name)
+        return super(uByteOrder, self).__getitem__(name)
+
     def ByteOrder(self):
         res = self.int()
         if res == 0xfffe:
