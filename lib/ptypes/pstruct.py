@@ -107,7 +107,7 @@ class __structure_interface__(ptype.container):
             if fld.lower() == name.lower():
                 return self.__fastindex__.setdefault(name.lower(), index)
             continue
-        raise KeyError(name)
+        raise error.KeyError(self, '__structure_interface__.__getitem__', name)
 
     ## informational methods
     def initializedQ(self):

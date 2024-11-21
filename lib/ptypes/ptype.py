@@ -2002,7 +2002,7 @@ class definition(object):
             [type] = args
             res = cls.__get__(type, None, **kwargs)
             if not res:
-                raise KeyError(type)
+                raise error.KeyError(cls, 'definition.lookup', type)
             return res
 
         # otherwise, we can simply just use it since we don't have to

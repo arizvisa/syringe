@@ -154,6 +154,8 @@ class ItemNotFoundError(RequestError, exceptions.ValueError):
     """Traversal or search was unable to locate requested type or value"""
 class InitializationError(RequestError, exceptions.ValueError):
     """Object is uninitialized"""
+class KeyError(RequestError, exceptions.KeyError):
+    """Error while trying to fetch a field by name"""
 
 ### assertion errors. doing things invalid
 class AssertionError(MethodBaseWithMessage, exceptions.AssertionError):

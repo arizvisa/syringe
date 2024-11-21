@@ -435,7 +435,7 @@ class enum(type):
                 stringtypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
                 res = [item.__name__ for item in integer_types]
                 integraltypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
-                raise error.TypeError(self, "{:s}.enum.__init__".format(__name__), "The definition of `{:s}` is of an incorrect format and should be a list of tuples with the following types. : [({:s}, {:s}), ...]".format('.'.join([self.typename(), '_values_']), stringtypes, integraltypes))
+                raise error.TypeError(self, 'enum.__init__', "The definition of `{:s}` is of an incorrect format and should be a list of tuples with the following types. : [({:s}, {:s}), ...]".format('.'.join([self.typename(), '_values_']), stringtypes, integraltypes))
 
             if isinstance(value, integer_types):
                 continue
@@ -449,7 +449,7 @@ class enum(type):
             stringtypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
             res = [item.__name__ for item in integer_types]
             integraltypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
-            raise error.TypeError(self, "{:s}.enum.__init__".format(__name__), "The definition of `{:s}` is of an incorrect format and should be a list of tuples with the following types. : [({:s}, {:s}), ...]".format('.'.join([self.typename(), '_values_']), stringtypes, integraltypes))
+            raise error.TypeError(self, 'enum.__init__', "The definition of `{:s}` is of an incorrect format and should be a list of tuples with the following types. : [({:s}, {:s}), ...]".format('.'.join([self.typename(), '_values_']), stringtypes, integraltypes))
 
         # collect duplicate values and give a warning if there are any found for a name
         res = {}
@@ -469,27 +469,27 @@ class enum(type):
     def __byvalue__(self, value, *default):
         '''Internal method to search the enumeration for the name representing the provided value.'''
         if len(default) > 1:
-            raise error.TypeError(self, "{:s}.enum.byvalue".format(__name__), "{:s}.byvalue expected at most 3 arguments, got {:d}".format(self.typename(), 2 + len(default)))
+            raise error.TypeError(self, 'enum.byvalue', "{:s}.byvalue expected at most 3 arguments, got {:d}".format(self.typename(), 2 + len(default)))
         values = make_integers(ord(value)) if isinstance(value, ordinal_types) and len(value) == 1 else make_integers(value)
         iterable = (name for name, item in self._values_ if item in values)
         try:
             res = utils.next(iterable, *default)
 
         except StopIteration:
-            raise KeyError(value)
+            raise error.KeyError(self, 'enum.byvalue', value)
         return res
 
     def __byname__(self, name, *default):
         '''Internal method to search the enumeration for the value corresponding to the provided name.'''
         if len(default) > 1:
-            raise error.TypeError(self, "{:s}.enum.byname".format(__name__), "{:s}.byname expected at most 3 arguments, got {:d}".format(self.typename(), 2 + len(default)))
+            raise error.TypeError(self, 'enum.byname', "{:s}.byname expected at most 3 arguments, got {:d}".format(self.typename(), 2 + len(default)))
 
         iterable = (value for item, value in self._values_ if item == name)
         try:
             res = utils.next(iterable, *default)
 
         except StopIteration:
-            raise KeyError(name)
+            raise error.KeyError(self, 'enum.byname', name)
         return res
 
     def __getattr__(self, name):
@@ -541,7 +541,7 @@ class enum(type):
         integer = ord(res) if isinstance(res, ordinal_types) and len(res) == 1 else res
         expected = name if isinstance(name, integer_types) else self.__byname__(name, missing)
         if expected is missing:
-            raise KeyError(name)
+            raise error.KeyError(self, 'enum.__getitem__', name)
         return integer == expected
 
     @classmethod
@@ -564,7 +564,7 @@ class enum(type):
         try:
             result = utils.next(iterable, *default)
         except StopIteration:
-            raise KeyError(cls, 'enum.byvalue', value)
+            raise error.KeyError(cls, 'enum.byvalue', value)
         return result
 
     @classmethod
@@ -577,7 +577,7 @@ class enum(type):
         try:
             result = utils.next(iterable, *default)
         except StopIteration:
-            raise KeyError(cls, 'enum.byname', name)
+            raise error.KeyError(cls, 'enum.byname', name)
         return result
 
     @classmethod

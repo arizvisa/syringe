@@ -620,7 +620,7 @@ class enum(integer):
             res = [item.__name__ for item in integer_types]
             integraltypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
 
-            raise error.TypeError(self, "{:s}.enum.__init__".format(__name__), "The definition in `{:s}` is of an incorrect format and should be a list of tuples with the following types. : [({:s}, {:s}), ...]".format('.'.join([self.typename(), '_values_']), stringtypes, integraltypes))
+            raise error.TypeError(self, 'enum.__init__', "The definition in `{:s}` is of an incorrect format and should be a list of tuples with the following types. : [({:s}, {:s}), ...]".format('.'.join([self.typename(), '_values_']), stringtypes, integraltypes))
 
         # collect duplicate values and give a warning if there are any found for a name
         res = {}
@@ -655,27 +655,27 @@ class enum(integer):
     def __byvalue__(self, value, *default):
         '''Internal method to search the enumeration for the name representing the provided value.'''
         if len(default) > 1:
-            raise error.TypeError(self, "{:s}.enum.byvalue".format(__name__), "{:s}.byvalue expected at most 3 arguments, got {:d}".format(self.typename(), 2 + len(default)))
+            raise error.TypeError(self, 'enum.byvalue', "{:s}.byvalue expected at most 3 arguments, got {:d}".format(self.typename(), 2 + len(default)))
 
         iterable = (name for name, item in self._values_ if item == value)
         try:
             res = utils.next(iterable, *default)
 
         except StopIteration:
-            raise KeyError(value)
+            raise error.KeyError(self, 'enum.byvalue', value)
         return res
 
     def __byname__(self, name, *default):
         '''Internal method to search the enumeration for the value corresponding to the provided name.'''
         if len(default) > 1:
-            raise error.TypeError(self, "{:s}.enum.byname".format(__name__), "{:s}.byname expected at most 3 arguments, got {:d}".format(self.typename(), 2 + len(default)))
+            raise error.TypeError(self, 'enum.byname', "{:s}.byname expected at most 3 arguments, got {:d}".format(self.typename(), 2 + len(default)))
 
         iterable = (value for item, value in self._values_ if item == name)
         try:
             res = utils.next(iterable, *default)
 
         except StopIteration:
-            raise KeyError(name)
+            raise error.KeyError(self, 'enum.byname', name)
         return res
 
     def __getattr__(self, name):
@@ -725,7 +725,7 @@ class enum(integer):
         res, missing = self.get(), object()
         expected = self.__byname__(name, missing) if isinstance(name, string_types) else name
         if expected is missing:
-            raise KeyError(name)
+            raise error.KeyError(self, 'enum.__getitem__', name)
         return bitmap.value(res) == expected
 
     @classmethod
@@ -749,7 +749,7 @@ class enum(integer):
             result = utils.next(iterable, *default)
 
         except StopIteration:
-            raise KeyError(cls, 'enum.byvalue', value)
+            raise error.KeyError(cls, 'enum.byvalue', value)
         return result
 
     @classmethod
@@ -762,7 +762,7 @@ class enum(integer):
         try:
             result = utils.next(iterable, *default)
         except StopIteration:
-            raise KeyError(cls, 'enum.byname', name)
+            raise error.KeyError(cls, 'enum.byname', name)
         return result
 
     @classmethod
@@ -1402,7 +1402,7 @@ class __structure_interface__(container):
                 if fld.lower() == name.lower():
                     return self.__fastindex__.setdefault(name.lower(), index)
                 continue
-        raise KeyError(name)
+        raise error.KeyError(self, '__structure_interface__.__getindex__', name)
 
     def details(self):
         return self.__details_initialized() if self.initializedQ() else self.__details_uninitialized()
