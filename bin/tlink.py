@@ -70,7 +70,9 @@ class LinkerInternal(DictionaryBase):
             data = [(res & (pow(0x100, octet) * 0xff)) // pow(0x100, octet) for octet in range(4)]
             logging.info("applying relocation {:s} for \"{:s}\" ({:+#x}) in section \"{:s}{:+#x}\" ({:s}) as {:s}.".format(type, symbol.Name(), symbolvalue, section['Name'], offset, section.source.file.name, bytes(bytearray(data)[::-1]).encode('hex') if sys.version_info.major < 3 else bytearray(data)[::-1].hex()))
 
-        elif type['ADDR32NB']:
+        # This relocation type is only available in IMAGE_REL_AMD64. Fortunately,
+        # its value doesn't collide with the IMAGE_REL_I386 relocations.
+        elif type.byname('ADDR32NB', False):
             res = functools.reduce(lambda agg, by: agg * 0x100 + by, reversed(segment[offset : offset + 4]))
             res += (symbolbase + symbolvalue)
             data = [(res & (pow(0x100, octet) * 0xff)) // pow(0x100, octet) for octet in range(4)]
