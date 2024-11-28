@@ -111,7 +111,7 @@ class TEXTRECORD(pstruct.type):
         ]
 
     def __TextColor(self):
-        if int(self['StyleFlags'].li['HasColor']):
+        if self['StyleFlags'].li['HasColor']:
             try:
                 self.getparent(DefineText2)
             except ValueError:
@@ -119,10 +119,10 @@ class TEXTRECORD(pstruct.type):
             return RGBA
         return Empty
 
-    __FontID = lambda s: [Empty, UI16][ int(s['StyleFlags'].li['HasFont']) ]
-    __XOffset = lambda s: [Empty, SI16][ int(s['StyleFlags']['HasXOffset']) ]
-    __YOffset = lambda s: [Empty, SI16][ int(s['StyleFlags']['HasYOffset']) ]
-    __TextHeight = lambda s: [Empty, UI16][ int(s['StyleFlags']['HasFont']) ]
+    __FontID = lambda s: [Empty, UI16][ s['StyleFlags'].li['HasFont'] ]
+    __XOffset = lambda s: [Empty, SI16][ s['StyleFlags']['HasXOffset'] ]
+    __YOffset = lambda s: [Empty, SI16][ s['StyleFlags']['HasYOffset'] ]
+    __TextHeight = lambda s: [Empty, UI16][ s['StyleFlags']['HasFont'] ]
 
     _fields_ = [
         (__StyleFlags, 'StyleFlags'),
@@ -132,7 +132,7 @@ class TEXTRECORD(pstruct.type):
         (__YOffset, 'YOffset'),
         (__TextHeight, 'TextHeight'),
         (UI8, 'GlyphCount'),
-        (lambda s: dyn.clone(pbinary.array, _object_=GLYPHENTRY,length=int(s['GlyphCount'].li)), 'GlyphEntries'),
+        (lambda s: dyn.clone(pbinary.array, _object_=GLYPHENTRY,length=s['GlyphCount'].li.int()), 'GlyphEntries'),
     ]
 
 ###
@@ -306,7 +306,7 @@ class CONVOLUTIONFILTER(pstruct.type):
         (UI8, 'MatrixY'),
         (FLOAT, 'Divisor'),
         (FLOAT, 'Bias'),
-        (lambda self: dyn.array(FLOAT, self['MatrixX']*self['MatrixY'])(), 'Matrix'),
+        (lambda self: dyn.array(FLOAT, self['MatrixX'].int()*self['MatrixY'].int()), 'Matrix'),
         (RGBA, 'DefaultColor'),
         (_CONVOLUTIONFILTER_Flags, 'Flags')
     ]
@@ -329,8 +329,8 @@ class _GRADIENTBEVELFILTER_Flags(pbinary.struct):
 class GRADIENTBEVELFILTER(pstruct.type):
     _fields_ = [
         (UI8, 'NumColors'),
-        (lambda self: dyn.array(RGBA, self['NumColors'])(), 'Gradientcolors'),
-        (lambda self: dyn.array(UI8, self['NumColors'])(), 'GradientRatio'),
+        (lambda self: dyn.array(RGBA, self['NumColors'].int()), 'Gradientcolors'),
+        (lambda self: dyn.array(UI8, self['NumColors'].int()), 'GradientRatio'),
         (FIXED, 'BlurX'),
         (FIXED, 'BlurY'),
         (FIXED, 'Angle'),
@@ -363,7 +363,7 @@ class FILTER(pstruct.type):
 class FILTERLIST(pstruct.type):
     _fields_ = [
         (UI8, 'NumberOfFilters'),
-        (lambda self: dyn.array(FILTER, self['NumberOfFilters'])(), 'Filter')
+        (lambda self: dyn.array(FILTER, self['NumberOfFilters'].int())(), 'Filter')
     ]
 
 class CLIPACTIONS(pstruct.type):
@@ -395,13 +395,13 @@ class _GRADIENT_bits(pbinary.struct):
 class GRADIENT(pstruct.type):
     _fields_ = [
         (_GRADIENT_bits, 'GradientHeader'),
-        (lambda self: dyn.array(GRADRECORD, self['GradientHeader']['NumGradients'])(), 'GradientRecords')
+        (lambda self: dyn.array(GRADRECORD, self['GradientHeader']['NumGradients'].int())(), 'GradientRecords')
     ]
 
 class FOCALGRADIENT(pstruct.type):
     _fields_ = [
         (_GRADIENT_bits, 'GradientHeader'),
-        (lambda self: dyn.array(GRADRECORD, self['GradientHeader']['NumGradients'])(), 'GradientRecords'),
+        (lambda self: dyn.array(GRADRECORD, self['GradientHeader']['NumGradients'].int())(), 'GradientRecords'),
         (FIXED8, 'FocalPoint')
     ]
 
