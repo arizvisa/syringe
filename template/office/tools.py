@@ -141,9 +141,10 @@ def ModifyDirectoryEntryChain(store, entry):
 def ModifyDirectory(store):
     """A context manager that allows one to modify the sectors that are used by directory.
 
-    A tuple containing two lists is yielded. The first list is the original chain of sectors
-    containing the directory. The second list is intended to be modified with the desired
-    sectors that the directory should be moved to.
+    A tuple containing two lists is yielded. The first list is the original
+    chain of sectors containing the directory. The second list is intended to be
+    modified with the desired sectors that the directory should be moved to. If
+    the new sectors do not exist in the file, they will be added automatically.
     """
     header, fat, world = store['Fat'], store.Fat(), store['Data']
 
@@ -237,9 +238,11 @@ def ModifyDirectory(store):
 def ModifyFatChain(store, chain):
     """A context manager that allows one to modify the sectors that are used by the specified fat chain.
 
-    A tuple containing two lists is yielded. The first list is the original chain of file sectors by
-    index. The second list is intended to be modified with the new indices of the desired file sectors.
-    The contents of the entire chain is preserved and the number of file-sectors cannot be modified.
+    A tuple containing two lists is yielded. The first list is the original
+    chain of file sectors by index. The second list is intended to be modified
+    with the new indices of the desired file sectors.  The contents of each
+    sector within the entire chain is preserved. The number of sectors for the
+    old chain and the new chain must be the same to avoid loss of data.
     """
     fat, world = store.Fat(), store['Data']
 
@@ -356,9 +359,14 @@ def ModifyMiniFatChain(store, chain):
 def ModifyFat(store, markfat=True):
     """A context manager that allows one to modify the file sectors that are used by the FAT.
 
-    A tuple containing two lists is yielded. The first list is the original list of file sector
-    indices. The second list is intended to be modified with the desired new file sector indices.
-    If "markfat" is set, then clear the sectors with "FREESECT" and mark new ones with "FATSECT".
+    A tuple containing two lists is yielded. The first list is the original list
+    of file sector indices. The second list is intended to be modified with the
+    desired new file sector indices.  If the second list contains sectors that
+    do not exist in the file, they will be added automatically and initialized
+    with "FREESECT".
+
+    If "markfat" is set as True, then clear the old sector indices with
+    "FREESECT" and mark the new ones with "FATSECT".
     """
     difat, world = store.DiFat(), store['Data']
     fat, sectors = store.Fat(), [sector.int() for index, sector in difat.enumerate()]

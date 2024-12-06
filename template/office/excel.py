@@ -4825,6 +4825,13 @@ class TxO(pstruct.type):
 class Continue(ptype.block):
     type = 0x3c
     type = 60
+    def alloc(self, *args, **attributes):
+        if any([args, attributes]):
+            return super(Continue, self).alloc(*args, **attributes)
+
+        # The number of bytes in this stream MUST be less than 8225.
+        attributes.setdefault('length', 0x2020)     # 8224 bytes
+        return super(Continue, self).alloc(*args, **attributes)
 
 @BIFF5.define
 @BIFF8.define
