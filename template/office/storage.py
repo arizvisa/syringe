@@ -1294,7 +1294,7 @@ class ContentStream(parray.type):
         return self.new(Directory, **attrs).li
     asdirectory = property(fget=lambda self: self.asDirectory)
 
-class FileSectors(parray.block, ContentStream):
+class FileSectors(ContentStream):
     '''An array of sectors within the file.'''
     def _object_(self):
         parent = self.getparent(File)
@@ -1349,11 +1349,21 @@ class File(pstruct.type, AllocationTableMixin):
         return dyn.clone(ptype.block, length=6)
 
     def __Data(self):
-        if not getattr(self, '_uSectorSize', 0):
+        if not all([getattr(self, '_uSectorSize', 0), hasattr(self, '_uHeaderSize')]):
             return FileSectors
-        if isinstance(self.source, ptypes.provider.bounded):
-            return dyn.clone(FileSectors, blocksize=lambda _, cb=max(0, self.source.size() - self._uHeaderSize): cb)
-        return FileSectors
+
+        elif not isinstance(self.source, ptypes.provider.bounded):
+            return FileSectors
+
+        # Check the source size to ensure that it's divisible by the sector
+        # size. If it isn't, then issue a warning and add a partial sector.
+        size = self.source.size()
+        count, remaining = divmod(size - self._uHeaderSize, self._uSectorSize)
+        if remaining:
+            cls = self.__class__
+            logger.warning("{:s}: Loaded {:d} sector{:s} for size {:#x}, but {:#x} byte{:s} were left unloaded.".format('.'.join([cls.__module__, cls.__name__]), count, '' if count == 1 else 's', size, remaining, '' if remaining == 1 else 's'))
+            return dyn.clone(FileSectors, length=1 + count)
+        return dyn.clone(FileSectors, length=count)
 
     def __Table(self):
         total, size = self._uHeaderSize, sum(self[fld].li.size() for fld in ['Header', 'SectorShift', 'reserved', 'Fat', 'MiniFat', 'DiFat'])
@@ -1611,7 +1621,7 @@ class File(pstruct.type, AllocationTableMixin):
         if not stop:
             return self.new(self.FileSector, offset=location)
         count = operator.sub(*sorted(itertools.chain([start], stop))[::-1])
-        return self.new(FileSectors, offset=location, blocksize=lambda cb=count * size: cb)
+        return self.new(FileSectors, offset=location, length=count)
 
     def Stream(self, sector):
         '''Return the contents of the stream starting at a specified sector using the fat.'''
