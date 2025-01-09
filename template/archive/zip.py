@@ -268,7 +268,9 @@ class LocalFileHeader32(LocalFileHeader):
         return self['compression method']
     def Descriptor(self):
         PostDescriptorQ = self['general purpose bit flag'].o['PostDescriptor']
-        return self['post data descriptor']['descriptor'] if PostDescriptorQ else self['data descriptor']
+        if PostDescriptorQ and 'descriptor' in self['post data descriptor']:
+            return self['post data descriptor']['descriptor']
+        return self['data descriptor']
     def Data(self):
         PostDescriptorQ = self['general purpose bit flag'].o['PostDescriptor']
         return self['post data descriptor'].data() if PostDescriptorQ else self['file data'].serialize()
@@ -346,6 +348,9 @@ class CentralDirectoryEntry32(CentralDirectoryEntry):
         (__file_comment, 'file comment'),
     ]
 
+    def Zip64(self):
+        return self['relative offset of local header'].int() in {0xffffffff}
+
     def summary(self):
         disk, offset = (self[item] for item in ['disk number start', 'relative offset of local header'])
         version, needed = (self[item] for item in ['version made by', 'version needed to extract'])
@@ -391,6 +396,16 @@ class EndOfCentralDirectory32(EndOfCentralDirectory):
         (lambda s: dyn.clone(pstr.string, length=s['.ZIP file comment length'].li.int()), '.ZIP file comment'),
     ]
 
+    def Zip64(self):
+        values = {2 : 0xffff, 4: 0xffffffff}
+        fields = [
+            'total number of entries in the central directory on this disk',
+            'total number of entries in the central directory',
+            'size of the central directory',
+            'offset of start of central directory with respect to the starting disk number',
+        ]
+        return all(self[fld].int() == values[self[fld].size()] for fld in fields)
+
     def summary(self):
         disk = self['number of this disk']
         socdisk = self['number of the disk with the start of the central directory']
@@ -416,14 +431,17 @@ class EndOfCentralDirectory32(EndOfCentralDirectory):
 
 @ZipRecord.define
 class EndOfCentralDirectory64(EndOfCentralDirectory):
-    signature = 64, 0x06054b50
+    signature = 0, 0x06064b50
 
     def __ExtensibleDataSector(self):
-        size = EndOfCentralDirectory().a.size()
+        size = sum(self[fld].li.size() for _, fld in self._fields_[+1 : -1])
         expectedSize = self['size of zip64 end of central directory record'].li.int()
         if expectedSize < size:
             ptypes.Config.log.warning('size of zip64 end of central directory record is less than the minimum size: {:#x} < {:#x}'.format(expectedSize, size))
         return dyn.block(expectedSize - size)
+
+    def __OffsetOfCentralDirectory(self):
+        return dyn.pointer(Record, pint.uint64_t)
 
     _fields_ = [
         (pint.uint64_t, 'size of zip64 end of central directory record'),
@@ -437,7 +455,7 @@ class EndOfCentralDirectory64(EndOfCentralDirectory):
 
         (pint.uint64_t, 'total number of entries in the central directory'),
         (pint.uint64_t, 'size of the central directory'),
-        (pint.uint64_t, 'offset of start of central directory with respect to the starting disk number'),
+        (__OffsetOfCentralDirectory, 'offset of start of central directory with respect to the starting disk number'),
         (__ExtensibleDataSector, 'zip64 extensible data sector'),
     ]
 
@@ -445,7 +463,7 @@ class EndOfCentralDirectory64(EndOfCentralDirectory):
         offset = self['offset of start of central directory with respect to the starting disk number']
         length = self['total number of entries in the central directory on this disk']
         size = self['size of the central directory']
-        return "(version {:d}>{:d} index {:d}) offset={:#x} length={:d} size={:+d}{:s}".format(self['version made by'].int(), self['version needed to extract'].int(), self['number of this disk'].int(), offset.int(), length.int(), size.int(), " ({:s})".format(self['.ZIP file comment'].str()) if self['.ZIP file comment length'].int() else '')
+        return "(version {:d}>{:d} index {:d}) offset={:#x} length={:d} size={:+d}".format(self['version made by'].int(), self['version needed to extract'].int(), self['total number of entries in the central directory on this disk'].int(), offset.int(), length.int(), size.int())
 
     def extract(self, **kwds):
         return self.serialize()
@@ -455,15 +473,21 @@ class EndOfCentralDirectory64(EndOfCentralDirectory):
         data = self['zip64 extensible data sector'].summary()
         return '{{{:d}}} {:s} ({:x}{:+x}) version-made-by={:s} version-needed-to-extract={:s} number-of-the-disk-with-the-start-of-the-zip64-end-of-central-directory={:d} number-of-the-disk-with-the-start-of-the-central-directory={:d} total-number-of-entires-in-the-central-directory-on-this-disk={:d} total-number-of-entries-in-the-central-directory={:d} size-of-the-central-directory={:#x} offset-of-start-of-central-directory-with-respect-to-the-starting-disk-number={:d}'.format(index, cls, ofs, bs, self['number of the disk with the start of the zip64 end of central directory'].int(), self['number of the disk with the start of the central directory'].int(), self['total number of entries in the central directory on this disk'].int(), self['total number of entries in the central directory'].int(), self['size of the central directory'].int(), self['offset of start of central directory with respect to the starting disk number'].int(), datasector)
 
+    def Record(self):
+        directory = self['offset of start of central directory with respect to the starting disk number'].d
+        return directory.li
+
 class EndOfCentralDirectoryLocator(pstruct.type):
     signature = 0, 0x07054b50
 
 @ZipRecord.define
 class EndOfCentralDirectoryLocator64(EndOfCentralDirectoryLocator):
-    signature = 64, 0x07054b50
+    signature = 0, 0x07064b50
+    def __EndOfCentralDirectory(self):
+        return dyn.pointer(Record, pint.uint64_t)
     _fields_ = [
         (pint.uint32_t, 'number of the disk with the start of the zip64 end of central directory'),
-        (pint.uint64_t, 'relative offset of the zip64 end of central directory record'),
+        (__EndOfCentralDirectory, 'relative offset of the zip64 end of central directory record'),
         (pint.uint32_t, 'total number of disks'),
     ]
 
@@ -519,14 +543,15 @@ class DigitalSignature32(DigitalSignature):
 
 ## File records
 class Record(pstruct.type):
+    _bits_ = 32
     def __Record(self):
-        bits, sig = 32, self['Signature'].li.int()
+        bits, sig, unknown = self._bits_, self['Signature'].li.int(), ptype.block
         try:
             p = self.getparent(Directory)
         except ptypes.error.ItemNotFoundError:
-            return ZipRecord.lookup((bits, sig))
+            return ZipRecord.lookup((bits, sig)) if ZipRecord.has((bits, sig)) else ZipRecord.lookup((0, sig), unknown)
 
-        t = ZipRecord.lookup((bits, sig))
+        t = ZipRecord.lookup((bits, sig)) if ZipRecord.has((bits, sig)) else ZipRecord.lookup((0, sig), unknown)
         if isinstance(p, File) and hasattr(p, 'Directory'):
             cd = p.Directory
             return dyn.clone(t, DirectoryRecord=cd.member(self.getoffset()))
@@ -675,8 +700,18 @@ if __name__ == '__main__':
         rec = archive.zip.Record(source=ptypes.prov.bytes(source_data[-idx:])).l
 
         # validate it
-        if rec['Signature'].int() == signature.int():
+        if rec['Signature'].int() == signature.int() and not rec['Record'].Zip64():
             eoc = rec['Record']
+
+        elif rec['Signature'].int() == signature.int() and rec['Record'].Zip64():
+            locator_size = archive.zip.Record().alloc(Signature=EndOfCentralDirectoryLocator64.signature[-1]).size()
+            locator = archive.zip.Record(source=ptypes.prov.bytes(source_data[-idx - locator_size:]))
+            locator = locator.l
+            offset = locator['record']['relative offset of the zip64 end of central directory record']
+            eoc64 = archive.zip.Record(source=source, offset=offset.int())
+            eoc64 = eoc64.l
+            eoc = eoc64['record']
+
         else:
             logging.fatal("Unable to locate end of central directory")
 
