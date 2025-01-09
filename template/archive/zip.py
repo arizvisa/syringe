@@ -51,6 +51,13 @@ class DataDescriptor(pstruct.type):
     def summary(self):
         return 'crc-32={:08X} compressed-size={:d} uncompressed-size={:d}'.format(self['crc-32'].int(), self['compressed size'].int(), self['uncompressed size'].int())
 
+class DataDescriptor64(DataDescriptor):
+    _fields_ = [
+        (pint.uint32_t, 'crc-32'),
+        (pint.uint64_t, 'compressed size'),
+        (pint.uint64_t, 'uncompressed size'),
+    ]
+
 class ZipDataDescriptor(pstruct.type):
     Signature = 0x08074b50
     class _SignatureScan(parray.terminated):
@@ -75,6 +82,12 @@ class ZipDataDescriptor(pstruct.type):
 
     def data(self, **kwds):
         return self['data'].data()
+
+class ZipDataDescriptor64(ZipDataDescriptor):
+    _fields_ = [
+        (ZipDataDescriptor._SignatureScan, 'data'),
+        (DataDescriptor64, 'descriptor'),
+    ]
 
 @pbinary.littleendian
 class BitFlags(pbinary.flags):
@@ -235,9 +248,18 @@ class LocalFileHeader32(LocalFileHeader):
     def __post_data_descriptor(self):
         if hasattr(self.p, 'DirectoryRecord'):
             flags = self.p.DirectoryRecord['general purpose bit flag']
-            return DataDescriptor if flags['PostDescriptor'] else ptype.undefined
+            if self['version needed to extract'].li.int() == 45 and flags['PostDescriptor']:
+                return ZipDataDescriptor64
+            elif flags['PostDescriptor']:
+                return DataDescriptor
+            return ptype.undefined
+
         flags = self['general purpose bit flag'].li
-        return ZipDataDescriptor if flags['PostDescriptor'] else ptype.undefined
+        if self['version needed to extract'].li.int() == 45 and flags['PostDescriptor']:
+            return ZipDataDescriptor64
+        elif flags['PostDescriptor']:
+            return ZipDataDescriptor
+        return ptype.undefined
 
     _fields_ = [
         (pint.uint16_t, 'version needed to extract'),
@@ -273,7 +295,9 @@ class LocalFileHeader32(LocalFileHeader):
         return self['data descriptor']
     def Data(self):
         PostDescriptorQ = self['general purpose bit flag'].o['PostDescriptor']
-        return self['post data descriptor'].data() if PostDescriptorQ else self['file data'].serialize()
+        if PostDescriptorQ and isinstance(self['post data descriptor'], ZipDataDescriptor):
+            return self['post data descriptor'].data()
+        return self['file data'].serialize()
 
     def extract(self, **kwds):
         res = self.Data()
