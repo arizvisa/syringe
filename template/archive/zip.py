@@ -630,6 +630,7 @@ if __name__ == '__main__':
     arg_commands_gr.add_argument('-la', '--list-all', action='store_const', help='list the entire contents of an archive', dest='mode', const='list-all')
     arg_commands_gr.add_argument('-x', '--extract', '--get', action='store_const', help='extract the specified file records', dest='mode', const='extract')
     arg_commands_gr.add_argument('-d', '--dump', action='store_const', help='dump the specified file records', dest='mode', const='dump')
+    arg_commands_gr.add_argument('-dh', '--dump-header', action='store_const', help='dump the local file header for the specified file records', dest='mode', const='header')
     arg_device_gr = arg_p.add_argument_group('device selection and switching')
     arg_device_gr.add_argument('-F', action='store_false', default=True, dest='use_eoc', help='use entire file instead of central directory')
     arg_device_gr.add_argument('-f', '--file', action='store', type=argparse.FileType('rb'), default='-', metavar='ARCHIVE', help='use archive file or device ARCHIVE', dest='source')
@@ -767,7 +768,7 @@ if __name__ == '__main__':
     elif args.mode == 'extract':
         target = target or os.path.join('.', '{path:s}', '{name:s}')
 
-    elif args.mode == 'dump':
+    elif args.mode in {'dump', 'header'}:
         target = target or sys.stdout
 
     # help
@@ -788,6 +789,9 @@ if __name__ == '__main__':
                 data = rec['Record'].extract(decompress=not args.decompress)
 
             data = rec['Record']['relative offset of local header'].d.li['Record'].extract(decompress=not args.compress) if isinstance(rec['Record'], archive.zip.CentralDirectoryEntry) else rec['Record'].extract(decompress=not args.decompress)
+        elif args.mode == 'header':
+            rechdr = rec['Record']['relative offset of local header'].d.li
+            data = '\n'.join((' '.join((ptypes.utils.repr_class(rechdr.classname()), rechdr.name())), ptypes.utils.indent('{!r}'.format(rechdr['Record']))))
         elif args.mode == 'dump':
             data = '\n'.join((' '.join((ptypes.utils.repr_class(rec.classname()), rec.name())), ptypes.utils.indent('{!r}'.format(rec['Record']))))
         else:
