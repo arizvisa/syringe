@@ -90,6 +90,7 @@ class HandlerType(pstruct.type):
                 res = self['pType']
             items.append(res.summary())
         return ' '.join([properties] + items)
+_s_HandlerType = HandlerType
 
 class TryBlockMapEntry(pstruct.type):
     class _pHandlerArray(parray.type):
@@ -513,7 +514,10 @@ class UNWIND_HISTORY_TABLE_ENTRY(pstruct.type):
 class UNWIND_HISTORY_TABLE(pstruct.type):
     _fields_ = [
         (ULONG, 'Count'),
+        (UCHAR, 'LocalHint'),
+        (UCHAR, 'GlobalHint'),
         (UCHAR, 'Search'),
+        (UCHAR, 'Once'),
         (ULONG64, 'LowAddress'),
         (ULONG64, 'HighAddress'),
         (lambda self: dyn.array(UNWIND_HISTORY_TABLE_ENTRY, self['Count'].li.int()), 'Entry'),
@@ -524,7 +528,7 @@ class DISPATCHER_CONTEXT(pstruct.type, versioned):
     _fields_ = [
         (ULONG64, 'ControlPc'),
         (ULONG64, 'ImageBase'),
-        (P(RUNTIME_FUNCTION), 'FunctionEntry'),
+        (P(IMAGE_RUNTIME_FUNCTION_ENTRY), 'FunctionEntry'),
         (ULONG64, 'EstablisherFrame'),
         (ULONG64, 'TargetIp'),
         (P(CONTEXT), 'ContextRecord'),
@@ -535,6 +539,9 @@ class DISPATCHER_CONTEXT(pstruct.type, versioned):
         (ULONG, 'ScopeIndex'),
         (ULONG, 'Fill0'),
     ]
+
+class xDISPATCHER_CONTEXT(DISPATCHER_CONTEXT):
+    _fields_ = DISPATCHER_CONTEXT._fields_[:-1]
 
 class PMD(pstruct.type):
     _fields_ = [
@@ -599,7 +606,7 @@ class ThrowInfo(pstruct.type):
         (PVOID, 'pForwardCompat'),
         (P(CatchableTypeArray), 'pCatchableTypeArray'),
     ]
-
+_s_ThrowInfo = ThrowInfo
 
 # corrected with http://www.geoffchappell.com/studies/msvc/language/predefined/index.htm?tx=12,14
 
@@ -657,7 +664,7 @@ class COL_SIG_(pint.enum, unsigned_long):
     ]
 
 class RTTICompleteObjectLocator(pstruct.type, versioned):
-    def __pObjectBase(self):
+    def __pSelf(self):
         sig = self['signature'].li
         return P32(RTTICompleteObjectLocator) if sig['REV1'] else ptype.undefined
     _fields_ = [
@@ -666,9 +673,7 @@ class RTTICompleteObjectLocator(pstruct.type, versioned):
         (unsigned_long, 'cdOffset'),
         (P32(TypeDescriptor), 'pTypeDescriptor'),
         (P32(RTTIClassHierarchyDescriptor), 'pClassDescriptor'),
-
-        # FIXME: crosscheck this from x64 vcruntime.dll
-        (__pObjectBase, 'pObjectBase'),
+        (__pSelf, 'pSelf'),
     ]
 
 if False:
@@ -707,6 +712,19 @@ class PEXCEPTION_ROUTINE(voidstar):
     NTAPI EXCEPTION_ROUTINE(_EXCEPTION_RECORD* ExceptionRecord, PVOID EstablisherFrame, _CONTEXT* ContextRecord, PVOID DispatcherContext);
     '''
 
+class EHExceptionRecord(EXCEPTION_RECORD):
+    class EHParameters(pstruct.type):
+        _fields_ = [
+            (ULONG, 'magicNumber'),
+            (dyn.padding(8), 'padding(magicNumber)'),
+            (PVOID, 'pExceptionObject'),
+            (P(ThrowInfo), 'pThrowInfo'),
+            (PVOID, 'pThrowImageBase'),
+        ]
+    _fields_ = EXCEPTION_RECORD._fields_[:-1] + [
+        (EHParameters, 'params'),
+    ]
+
 class EXCEPTION_REGISTRATION_RECORD(pstruct.type):
     def __Next(self):
         return EXCEPTION_REGISTRATION_RECORD
@@ -714,3 +732,235 @@ class EXCEPTION_REGISTRATION_RECORD(pstruct.type):
         (P(__Next), 'Next'),
         (PEXCEPTION_ROUTINE, 'Hander'),
     ]
+
+class WinRTExceptionInfo(pstruct.type):
+    _fields_ = [
+        (PVOID, 'description'),
+        (PVOID, 'restrictedErrorString'),
+        (PVOID, 'restrictedErrorReference'),
+        (PVOID, 'capabilitySid'),
+        (LONG, 'hr'),
+        (PVOID, 'restrictedInfo'),
+        (P(ThrowInfo), 'throwInfo'),
+        (uint32_t, 'size'),
+        (dyn.padding(8), 'padding(size)'),
+        (PVOID, 'PrepareThrow'),
+    ]
+
+class FrameInfo(pstruct.type):
+    def __pNext(self):
+        return P(FrameInfo)
+    _fields_ = [
+        (PVOID, 'pExceptionObject'),
+        (__pNext, 'pNext'),
+    ]
+
+### VCRUNTIME140.dll - GS_HANDLER_DATA
+class GS_HANDLER_DATA(pstruct.type):
+    class _CookieOffset(dynamic.union):
+        class Bits(pbinary.flags):
+            _fields_ = [
+                (1, 'EHandler'),
+                (1, 'UHandler'),
+                (1, 'HasAlignment'),
+                (29, 'unused'),
+            ]
+        _fields_ = [
+            (Bits, 'bits'),
+            (ULONG, 'offset'),
+        ]
+    _fields_ = [
+        (ULONG, 'CookieOffset'),
+        (ULONG, 'AlignedBaseOffset'),
+        (ULONG, 'Alignment'),
+    ]
+
+### VCRUNTIME140.dll - FrameHandler3
+class FrameHandler3(pstruct.type):
+    pass
+
+class FrameHandler3(FrameHandler3):
+    class TryBlockMap(pstruct.type):
+        _fields_ = [
+            (P(FuncInfo), '_pFuncInfo'),
+            (ULONG64, '_imageBase'),
+        ]
+
+class FrameHandler3(FrameHandler3):
+    class HandlerMap(pstruct.type):
+        _fields_ = [
+            (uint32_t, '_numHandlers'),
+            (dyn.padding(8), 'padding(_numHandlers)'),
+            (P(HandlerType), '_handler'),
+        ]
+
+### VCRUNTIME140.dll - FH4
+class Bool(int32_t): pass
+
+class FH4(object):
+    pass
+
+class FH4(FH4):
+    class HandlerTypeHeader(pbinary.flags):
+        class contType(pbinary.enum):
+            width, _values_ = 2, [
+                ('NONE', 0),
+                ('ONE', 1),
+                ('TWO', 2),
+                ('RESERVED', 3),
+            ]
+
+class FH4(FH4):
+    class HandlerTypeHeader(FH4.HandlerTypeHeader):
+        _fields_ = [
+            (2, 'unused'),
+            #(2, 'contAddr'),
+            (FH4.HandlerTypeHeader.contType, 'contAddr'),
+            (1, 'contIsRVA'),
+            (1, 'dispCatchObj'),
+            (1, 'dispType'),
+            (1, 'adjectives'),
+        ]
+
+class FH4(FH4):
+    class FuncInfoHeader(pbinary.flags):
+        _fields_ = [
+            (1, 'reserved'),
+            (1, 'NoExcept'),
+            (1, 'EHs'),
+            (1, 'TryBlockMap'),
+            (1, 'UnwindMap'),
+            (1, 'BBT'),
+            (1, 'isSeparated'),
+            (1, 'isCatch'),
+        ]
+
+class FH4(FH4):
+    class FuncInfo4(pstruct.type):
+        _fields_ = [
+            (FH4.FuncInfoHeader, 'header'),
+            (dyn.padding(8), 'padding(header)'),
+            (uint32_t, 'bbtFlags'),
+            (int32_t, 'dispUnwindTryBlockIp'),
+            (int32_t, 'dispUnwindTryBlockIp'),
+            (int32_t, 'dispUnwindTryBlockIp'),
+            (uint32_t, 'dispUnwindTryBlockIp'),
+        ]
+
+class FH4(FH4):
+    class TryBlockMapEntry4(pstruct.type):
+        _fields_ = [
+            (int32_t, 'tryLow'),
+            (int32_t, 'tryHigh'),
+            (int32_t, 'catchHigh'),
+            (int32_t, 'dispHandlerArray'),
+        ]
+
+class FH4(FH4):
+    class TryBlockMap4(pstruct.type):
+        _fields_ = [
+            (uint32_t, '_numTryBlocks'),
+            (dyn.padding(8), 'padding(_numTryBlocks)'),
+            (pointer_t, 'buffer'),
+            (pointer_t, '_bufferStart'),
+            (FH4.TryBlockMapEntry4, 'tryBlock'),
+        ]
+
+class FH4(FH4):
+    class HandlerType4(pstruct.type):
+        _fields_ = [
+            (FH4.HandlerTypeHeader, 'header'),
+            (dyn.padding(8), 'padding(header)'),
+            (uint32_t, 'adjectives'),
+            (int32_t, 'dispType'),
+            (uint32_t, 'dispCatchObj'),
+            (int32_t, 'dispOfHandler'),
+            (dyn.padding(8), 'padding(dispOfHandler)'),
+            (dyn.array(uint64_t, 2), 'continuationAddress'),
+        ]
+
+class FH4(FH4):
+    class HandlerMap4(pstruct.type):
+        _fields_ = [
+            (uint32_t, '_numHandlers'),
+            (dyn.padding(8), 'padding(_numHandlers)'),
+            (pointer_t, '_buffer'),
+            (pointer_t, '_bufferStart'),
+            (FH4.HandlerType4, '_handler'),
+            (uint64_t, '_imageBase'),
+            (int32_t, '_functionStart'),
+            (dyn.padding(8), 'padding(_functionStart)'),
+        ]
+
+class FH4(FH4):
+    class UnwindMapEntry4(pstruct.type):
+        class Type(pint.enum, uint32_t):
+            _values_ = [
+                ('NoUW', 0),
+                ('DtorWithObj', 1),
+                ('DtorWithPtrToObj', 2),
+                ('RVA', 3),
+            ]
+
+class FH4(FH4):
+    class UnwindMapEntry4(FH4.UnwindMapEntry4):
+        _fields_ = [
+            (uint32_t, 'nextOffset'),
+            (FH4.UnwindMapEntry4.Type, 'type'),
+            (int32_t, 'action'),
+            (uint32_t, 'object'),
+        ]
+
+class FH4(FH4):
+    class SepIPtoStateMapEntry4(pstruct.type):
+        _fields_ = [
+            (int32_t, 'addrStartRVA'),
+            (int32_t, 'dispOfIPMap'),
+        ]
+
+class FH4(FH4):
+    class SepIPtoStateMap4(pstruct.type):
+        _fields_ = [
+            (uint32_t, '_numEntries'),
+            (dyn.padding(8), 'padding(_numEntries)'),
+            (pointer_t, '_bufferStart'),
+            (uint64_t, '_imageBase'),
+            (FH4.SepIPtoStateMapEntry4, 'singleEntry'),
+            (Bool, 'isSingle'),
+            (dyn.padding(8), 'padding(_numEntries)'),
+        ]
+
+class FH4(FH4):
+    class IPtoStateMap4(pstruct.type):
+        _fields_ = [
+            (uint32_t, '_numEntries'),
+            (dyn.padding(8), 'padding(_numEntries)'),
+            (pointer_t, '_bufferStart'),
+            (uint64_t, '_imageBase'),
+            (uint32_t, '_funcStart'),
+        ]
+
+class FH4(FH4):
+    class IPtoStateMapEntry4(pstruct.type):
+        _fields_ = [
+            (int32_t, 'Ip'),
+            (int32_t, 'State'),
+        ]
+
+class FH4(FH4):
+    class UWMap4(pstruct.type):
+        _fields_ = [
+            (int32_t, '_numEntries'),
+            (dyn.padding(8), 'padding(_numEntries)'),
+            (pointer_t, '_bufferStart'),
+            (FH4.UnwindMapEntry4, '_UWEntry'),
+        ]
+
+class FH4(FH4):
+    class Compress(object):
+        class RVAoffsets(pstruct.type):
+            _fields_ = [
+                (uint32_t, 'count'),
+                (dyn.array(uint32_t, 4), 'values'),
+            ]
+
