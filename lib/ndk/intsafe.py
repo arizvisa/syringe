@@ -181,6 +181,14 @@ class rfc4122(pstruct.type):
             string = arg[+1 : -1] if arg[:1] + arg[-1:] == '{}' else arg
             arg = time_low, time_mid, time_high_and_version, clock_seq, node = [builtins.int(component, 0x10) for component in string.split('-', 4)]
 
+        elif isinstance(arg, (b''.__class__, bytearray)):
+            fields = [fld for fld in self]
+            slots = [self[fld].size() for fld in fields]
+            why_doesnt_zip_fucking_work = iter(bytearray(arg))
+            chunks = [sz * [why_doesnt_zip_fucking_work] for sz in slots]
+            items = [bytearray(map(next, chunk))[::-1 if getattr(self[field], 'byteorder') == ptypes.config.byteorder.littleendian else +1] for field, chunk in zip(fields, chunks)]
+            return self.set(**{field : item for field, item in zip(fields, items)})
+
         # chop up the components and fit them into the right place.
         components = time_low, time_mid, time_high_and_version, clock_seq, node = arg
         time_low_ = bitmap.new(time_low, 8 * 4)
