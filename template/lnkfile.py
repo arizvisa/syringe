@@ -1,6 +1,7 @@
 import ptypes, ndk, office.propertyset
 from ptypes import *
 from ndk.datatypes import *
+import itertools, functools, operator
 
 class uint0(pint.uint_t):
     length = 0
@@ -561,6 +562,106 @@ class DarwinDataBlock(pstruct.type):
         def Fpadding(self):
             return dyn.block(max(0, size - self[field].li.size()))
         return Fpadding
+
+    class DarwinDataEncoded(ptype.encoded_t):
+        class _object_(pstruct.type):
+            class _feature_name(pstr.szstring):
+                def isTerminator(self, ch):
+                    return ch.int() in bytearray(b'<>}\0')
+            _fields_ = [
+                #(dyn.clone(pstr.string, length=20), 'product_code'),
+                (ndk.GUID, 'product_code'),
+                (_feature_name, 'feature_name'),
+                #(pstr.szstring, 'component_id'),
+                (ndk.GUID, 'component_id'),
+            ]
+
+        @classmethod
+        def b85_decodewords(cls, encoded):
+            atable = '\''.join(['!$%&', '()*+,-.0123456789=?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{}~'])
+            btable = b'\''.join([b'!$%&', b'()*+,-.0123456789=?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{}~'])
+            table = atable if isinstance(encoded, str) else btable
+            digits = []
+            for index, character in enumerate(encoded):
+                digit = table.find(character)
+                assert(digit >= 0), ValueError(character, digit)
+                digits.append(digit)
+            iterable = zip(*(5 * [iter(digits)]))
+            reversed = [item[::-1] for item in iterable]
+            decoded = (functools.reduce(lambda agg, item: agg * 85 + item, word) for word in reversed)
+            result = []
+            for word in decoded:
+                bytes = []
+                for index in range(4):
+                    word, octet = divmod(word, 0x100)
+                    bytes.append(octet)
+                result.extend(bytes[::-1])
+                continue
+            if isinstance(encoded, str):
+                return ''.join(map(chr, itertools.chain(result)))
+            return bytearray(itertools.chain(result))
+
+        @classmethod
+        def b85_encodewords(cls, decoded):
+            atable = '\''.join(['!$%&', '()*+,-.0123456789=?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{}~'])
+            btable = b'\''.join([b'!$%&', b'()*+,-.0123456789=?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{}~'])
+            table = atable if isinstance(decoded, str) else btable
+
+            bytes = [ord(ch) for ch in decoded] if isinstance(decoded, str) else bytearray(decoded)
+            iterable = zip(*(4 * [iter(bytes)]))
+            chunks = [chunk for chunk in map(list, iterable)]
+            words = [functools.reduce(lambda agg, item: agg * 0x100 + item, chunk) for chunk in chunks]
+
+            result = []
+            for word in words:
+                digits = []
+                for index in range(5):
+                    word, digit = divmod(word, 85)
+                    digits.append(digit)
+                result.append(digits)
+
+            result_t = decoded.__class__
+            iterable = (result_t().join(table[digit : digit + 1] for digit in digits) for digits in result)
+            return functools.reduce(operator.add, iterable)
+
+        def decode(self, object, **attrs):
+            data = object.serialize()
+            product_code, remaining = data[:20], data[20:]
+            guess = max(remaining.find(b'<'), remaining.find(b'>'))
+            feature_name = remaining[:guess] if guess >= 0 else b''
+            terminal = remaining.find(b'>')
+            delimiter_and_component_id = remaining[terminal:] if terminal >= 0 else b''
+            delimiter = delimiter_and_component_id[:1] if delimiter_and_component_id.startswith((b'<', b'>')) else b''
+            component_id = delimiter_and_component_id[len(delimiter):]
+
+            component_id_stripped = component_id.rstrip(b'\0')
+            terminal_size = len(component_id) - len(component_id_stripped)
+
+            # FIXME: should probably handle decoding errors here...
+            product_code_decoded = self.b85_decodewords(product_code)
+            component_id_decoded = self.b85_decodewords(component_id_stripped) + (component_id[-terminal_size:] if terminal_size else b'')
+
+            res = self._object_().alloc(product_code=bytearray(product_code_decoded)[:12] + bytearray(product_code_decoded)[12:][::-1],
+                                        feature_name=pstr.string().alloc(feature_name + delimiter),
+                                        component_id=bytearray(component_id_decoded)[:12] + bytearray(component_id_decoded)[12:][::-1])
+            return res
+
+        def encode(self, object, **attrs):
+            iterable = (object[fld] for fld in object)
+            product_code, feature_name, component_id = (item.serialize() for item in iterable)
+
+            # FIXME: this doesn't support all the available encoding types, but
+            #        it could...and it should.
+            delimiter = b'>'
+            product_code_encoded = self.b85_encodewords(product_code)
+            feature_name_delimited = feature_name if feature_name.endswith(delimiter) else "{:s}{:s}".format(feature_name, delimiter)
+            component_id_encoded = self.b85_encodewords(component_id)
+
+            res = self._object_().alloc(product_code=pstr.string().alloc(product_code_encoded),
+                                        feature_name=pstr.string().alloc(feature_name_delimited),
+                                        component_id=pstr.string().alloc(component_id_encoded))
+            return res
+
     _fields_ = [
         (pstr.szstring, 'DarwinDataAnsi'),
         (__padding('DarwinDataAnsi', 260), 'padding(DarwinDataAnsi)'),
