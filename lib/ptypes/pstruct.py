@@ -237,10 +237,18 @@ class type(__structure_interface__):
         result._fields_ = self._fields_[:]
         return result
 
-    def alloc(self, **fields):
+    def alloc(self, *args, **fields):
         """Allocate the current instance. Attach any elements defined in **fields to container."""
         if not fields:
-            return super(type, self).alloc()
+            return super(type, self).alloc(*args)
+
+        # FIXME: does it make sense to allow setting bytes to an entire
+        #        structure? one way of decoding is to trust the current field
+        #        sizes, chunk out the bytes, and then set each field
+        #        individually. another way is to just do a full load(), but if
+        #        the user wanted to .load(), then they'd have done it. so, for
+        #        now we require the user to implement the .set() method
+        #        themselves if they want to assign bytes to a container type.
 
         # we need to transform the fields we were given into indices that we can use
         # when adding them to the structure. we also need to do this in order to
