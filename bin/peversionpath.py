@@ -255,7 +255,8 @@ if __name__ == '__main__':
         fixedproperties[u'dwFileVersion'] = ffi['dwFileVersion'].str()
         fixedproperties[u'dwFileOS'] = {u'PLATFORM': ffi['dwFileOS'].field('PLATFORM').str(), u'OS': ffi['dwFileOS'].field('OS').str()}
         fixedproperties[u'dwFileType'] = ffi['dwFileType'].str()
-        fixedproperties[u'dwFileSubtype'] = {u'langID': "{:x}".format(ffi['dwFileSubtype']['langID']), u'charsetID': "{:x}".format(ffi['dwFileSubType']['charsetID'])}
+        #fixedproperties[u'dwFileSubtype'] = {u'langID': "{:x}".format(ffi['dwFileSubtype']['langID']), u'charsetID': "{:x}".format(ffi['dwFileSubType']['charsetID'])}
+        fixedproperties[u'dwFileSubtype'] = {key: "{:x}".format(ffi['dwFileSubtype'][key]) for key in [u'langID', u'charsetID'] if key in ffi['dwFileSubType']}
         fixedproperties[u'dwFileDateMS'] = "{:x}".format(ffi['dwFileDateMS'])
         fixedproperties[u'dwFileDateLS'] = "{:x}".format(ffi['dwFileDateLS'])
 
