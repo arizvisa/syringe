@@ -759,6 +759,9 @@ class enum(integer):
             iterable = (item == value for name, item in cls._values_)
         return any(iterable)
 
+    def __contains__(self, value):
+        return self.has(value)
+
     def __format__(self, spec):
         if self.value is None or not spec:
             return super(enum, self).__format__(spec)
@@ -782,6 +785,11 @@ class enum(integer):
 
 class container(type):
     '''contains a list of variable-bit integers'''
+
+    def __contains__(self, instance):
+        if isinstance(instance, base):
+            return any(item is instance for item in self.value or [])
+        return super(container, self).__contains__(instance)
 
     ## FIXME: positioning doesn't really exist in container types.
     def getposition(self, *field, **options):
@@ -1100,6 +1108,11 @@ class container(type):
 ### generics
 class __array_interface__(container):
     length = 0
+
+    def __contains__(self, instance):
+        if isinstance(instance, integer_types):
+            return 0 <= instance < len(self)
+        return super(__array_interface__, self).__contains__(instance)
 
     def alloc(self, fields=(), **attrs):
         result = super(__array_interface__, self).alloc(**attrs)
@@ -1493,9 +1506,10 @@ class __structure_interface__(container):
     ## method overloads
     def __contains__(self, name):
         '''D.__contains__(k) -> True if D has a field named k, else False'''
-        if not isinstance(name, string_types):
-            raise error.UserError(self, '__structure_interface__.__contains__', message="The type of the requested element name ({!s}) must be of a string type".format(name.__class__))
-        return name.lower() in self.__fastindex__
+        if isinstance(name, string_types):
+            return name.lower() in self.__fastindex__
+        return super(__structure_interface__, self).__contains__(name)
+        #raise error.UserError(self, '__structure_interface__.__contains__', message="The type of the requested element name ({!s}) must be of a string type".format(name.__class__))
 
     def __iter__(self):
         '''D.__iter__() <==> iter(D)'''

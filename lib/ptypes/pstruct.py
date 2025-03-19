@@ -188,9 +188,10 @@ class __structure_interface__(ptype.container):
     ## method overloads
     def __contains__(self, name):
         '''D.__contains__(k) -> True if D has a field named k, else False'''
-        if not isinstance(name, string_types):
-            raise error.UserError(self, '__structure_interface__.__contains__', message='Element names must be of a str type.')
-        return name.lower() in self.__fastindex__
+        if isinstance(name, string_types):
+            return name.lower() in self.__fastindex__
+        return super(__structure_interface__, self).__contains__(name)
+        #raise error.UserError(self, '__structure_interface__.__contains__', message='Element names must be of a str type.')
 
     def __iter__(self):
         '''D.__iter__() <==> iter(D)'''

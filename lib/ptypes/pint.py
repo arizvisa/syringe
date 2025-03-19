@@ -494,6 +494,9 @@ class enum(type):
             raise error.KeyError(cls, 'enum.byname', name)
         return res
 
+    def __contains__(self, name):
+        return self.has(name)
+
     def __getattr__(self, name):
 
         # until we deprecate this method of accessing enumerations, we need to

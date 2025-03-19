@@ -758,6 +758,9 @@ class generic(__interface__):
         raise error.ImplementationError(self, 'generic.__hash__')
     def initializedQ(self):
         raise error.ImplementationError(self, 'generic.initializedQ')
+    def __contains__(haystack, needle):
+        raise error.ImplementationError(haystack, 'generic.__contains__')
+
     def __eq__(self, other):
         '''x.__eq__(y) <==> x==y'''
         return id(self) == id(other)
@@ -1246,6 +1249,11 @@ class container(base):
 
     def __hash__(self):
         return super(container, self).__hash__() ^ hash(None if self.value is None else tuple(self.value))
+
+    def __contains__(self, instance):
+        if isinstance(instance):
+            return any(item is instance for item in self.value or [])
+        return super(container, self).__contains__(instance)
 
     def instance(self):
         """Returns a minimal string describing the type and it's location"""

@@ -96,7 +96,9 @@ class __array_interface__(ptype.container):
     '''provides the generic features expected out of an array'''
     def __contains__(self, instance):
         '''L.__contains__(x) -> True if L has an item x, else False'''
-        return any(item is instance for item in self.value)
+        if isinstance(instance, integer_types):
+            return 0 <= instance < len(self)
+        return super(__array_interface__, self).__contains__(instance)
 
     def __len__(self):
         '''x.__len__() <==> len(x)'''
