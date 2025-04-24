@@ -51,24 +51,30 @@ Example usage:
     print( repr(instance) )
 """
 import sys, os, builtins, itertools, functools, operator
-import bisect, random as _random
+import abc, bisect, random as _random
 
 from . import config, utils, error
 Config = config.defaults
 Log = config.logging.getLogger('.'.join([Config.log.name, 'provider']))
 
-class base(object):
+class base(object if sys.version_info.major < 3 else abc.ABC):
     '''
     Base provider class.
 
     Intended to be used as a template for a provider implementation.
     '''
+    if sys.version_info.major < 3:
+        __metaclass__ = abc.ABCMeta
+
+    @abc.abstractmethod
     def seek(self, offset):
         '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
         raise error.ImplementationError(self, 'seek', message='User forgot to implement this method')
+    @abc.abstractmethod
     def consume(self, amount):
         '''Read some number of bytes from the current offset. If the first byte wasn't able to be consumed, raise an exception.'''
         raise error.ImplementationError(self, 'consume', message='User forgot to implement this method')
+    @abc.abstractmethod
     def store(self, data):
         '''Write some number of bytes to the current offset. If nothing was able to be written, raise an exception.'''
         raise error.ImplementationError(self, 'store', message='User forgot to implement this method')
@@ -83,6 +89,10 @@ class debuggerbase(memorybase):
 
 class bounded(base):
     '''Base provider class for describing a backing that has boundaries of some kind.'''
+    if sys.version_info.major < 3:
+        __metaclass__ = abc.ABCMeta
+
+    @abc.abstractmethod
     def size(self):
         raise error.ImplementationError(self, 'size', message='User forgot to implement this method')
 
@@ -749,6 +759,7 @@ class remote(bounded):
         # Delete all elements in the cache to avoid re-construction
         del(self.__cache__[:])
 
+    @abc.abstractmethod
     def send(self):
         """Submit the currently committed data to the remote provider.
 
@@ -761,6 +772,7 @@ class remote(bounded):
         buffer, self.__buffer__ = self.__buffer__, self.__buffer__[0 : 0]
         return builtins.bytes(buffer)
 
+    @abc.abstractmethod
     def receive(self, amount):
         """Read some number of bytes from the provider and return it.
 
@@ -1312,23 +1324,30 @@ except OSError:
 
 class WindowsWithHandle(base):
     '''Windows provider base class.'''
+    if sys.version_info.major < 3:
+        __metaclass__ = abc.ABCMeta
+
     def __init__(self, handle=None, address=0):
         self.__handle__ = handle
         self.__address__ = address
 
     @classmethod
+    @abc.abstractmethod
     def read_handle(cls, handle, address, amount):
         raise NotImplementedError("Current provider {!s} does not implement this method.".format(cls))
 
     @classmethod
+    @abc.abstractmethod
     def write_handle(cls, handle, address, data):
         raise NotImplementedError("Current provider {!s} does not implement this method.".format(cls))
 
     @classmethod
+    @abc.abstractmethod
     def close_handle(cls, handle):
         raise NotImplementedError("Current provider {!s} does not implement this method.".format(cls))
 
     @classmethod
+    @abc.abstractmethod
     def seek_handle(cls, handle, old, new):
         raise NotImplementedError("Current provider {!s} does not implement this method.".format(cls))
 
