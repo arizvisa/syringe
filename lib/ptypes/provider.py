@@ -671,12 +671,15 @@ class remote(bounded):
     Base remote provider class.
 
     Intended to be inherited from when defining a remote provider that needs to
-    cache any data that is being read or written. To use this, simply inherit
-    from this class and implement the remote.read(), and the remote.send() methods.
+    cache any data that is being read or written. To use it, simply inherit from
+    this class and implement the both remote.receive(), and remote.send().
 
     Once the provider is instantiated, the user may call the .send() method to
-    submit any committed data, or the .reset() method when it is necessary to
-    reset the data that was cached.
+    submit any committed data. Loading from the provider will consume as many
+    bytes as needed to populate the type being loaded while caching the read
+    data in case another field loads from the same offset. After reading or
+    when it is necessary to reset the cached data, the .reset() method can be
+    used.
     '''
     __cons__ = staticmethod(bytearray)
 
@@ -712,8 +715,9 @@ class remote(bounded):
         if len(cache) >= right:
             self.offset, buffer = right, cache[left : right]
             return builtins.bytes(buffer)
+
         # Otherwise, we need to read some more data from our class.
-        data = self.read(right - len(cache))
+        data = self.receive(right - len(cache))
         cache += data
 
         # If we still don't have enough data, then raise an exception.
@@ -757,12 +761,14 @@ class remote(bounded):
         buffer, self.__buffer__ = self.__buffer__, self.__buffer__[0 : 0]
         return builtins.bytes(buffer)
 
-    def read(self, amount):
+    def receive(self, amount):
         """Read some number of bytes from the provider and return it.
 
         This is required to be implemented and called by a child implementation.
         """
-        raise error.ImplementationError(self, 'read', message='User forgot to implement this method')
+        if hasattr(self, 'read'):
+            return self.read(amount)
+        raise error.ImplementationError(self, 'receive', message='User forgot to implement this method')
 
 class random(base):
     """Provider that returns random data when read from."""
