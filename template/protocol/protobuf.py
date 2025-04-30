@@ -104,6 +104,11 @@ class LENGTH_PREFIXED(pstruct.type):
     def summary(self):
         length = self['length'].int()
         return self['payload'].summary()
+    def alloc(self, **fields):
+        res = super(LENGTH_PREFIXED, self).alloc(**fields)
+        if 'length' not in fields:
+            res['length'].alloc(res['payload'].size())
+        return res
 
 @PROTOBUF_WIRETYPE.define
 class SGROUP(ptype.undefined):
