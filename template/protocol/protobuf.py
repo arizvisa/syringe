@@ -123,11 +123,26 @@ class TAG(VARINT):
     def fieldnumber(self):
         return self.int() // pow(2, 3)
     def alloc(self, *tuple, **attrs):
+
+        # if we were given only attributes, then use them to encode the integer
+        # containing the "fieldnum" and the "wiretype".
         if not(tuple):
-            fieldnumber = attrs.pop('fieldnum', 0)
+            fieldnumber = next((attrs.pop(k) for k in ['field', 'fieldnum', 'fieldnumber'] if k in attrs), 0)
             wiretype = attrs.pop('wiretype', 0)
             integer = fieldnumber * pow(2, 3)
+            bits = 3 + integer.bit_length()
+            septets, extra = divmod(bits, 7)
+            length = septets + 1 if extra else septets
+            attrs.setdefault('length', length)
             return super().alloc(integer | wiretype & 7, **attrs)
+
+        # if we're given some parameters and they're all integers, then use
+        # extract the field number and wiretype for encoding the integer.
+        elif len(tuple) in {1, 2} and all(isinstance(item, ptypes.integer_types) for item in tuple):
+            [fieldnumber, wiretype] = tuple if len(tuple) == 2 else itertools.chain(tuple, [0])
+            attrs.setdefault('fieldnumber', fieldnumber)
+            attrs.setdefault('wiretype', wiretype)
+            return self.alloc(**attrs)
         return super().alloc(*tuple, **attrs)
     def summary(self):
         integer = self.int()
@@ -151,14 +166,16 @@ class TAGVALUE(pstruct.type):
         fieldnum = res.fieldnumber()
         return "tag.fieldnum={:d} tag.wiretype={:s} value={:s}".format(fieldnum, wiretype, self['value'].summary())
     def alloc(self, *values, **fields):
-        if not(values):
-            return super().alloc(*values, **fields)
+        newfields = {fld : value for fld, value in fields.items()}
+        if values:
+            [wired] = values
+            tag = TAG().alloc(fieldnum=fields.pop('fieldnum', 0), wiretype=wired.type)
+            newfields.setdefault('tag', tag), newfields.setdefault('value', wired)
 
-        [wired] = values
-        tag = TAG().alloc(fieldnum=fields.pop('fieldnum', 0), wiretype=wired.type)
-        fields.setdefault('tag', tag)
-        fields.setdefault('value', wired)
-        return super().alloc(**fields)
+        res = super().alloc(**newfields)
+        if not(isinstance(fields.get('tag'), ptype.generic)) and hasattr(res['value'], 'type'):
+            res['tag'].alloc(fieldnum=res['tag'].fieldnumber(), wiretype=res['value'].type)
+        return res
 
 class MESSAGE(parray.block):
     '''only used when deserializing.'''
