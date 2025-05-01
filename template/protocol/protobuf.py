@@ -95,8 +95,8 @@ class LENGTH_PREFIXED(pstruct.type):
     type = 2
     def __payload(self):
         res = self['length'].li
-        #return dyn.clone(MESSAGE, blocksize=lambda _, bs=res.int(): bs)
-        return dyn.block(res.int())
+        default = dyn.block(res.int())
+        return getattr(self, '_object_', default)
     _fields_ = [
         (VARINT, 'length'),
         (__payload, 'payload'),
@@ -135,10 +135,6 @@ class TAG(VARINT):
             fieldnumber = next((attrs.pop(k) for k in ['field', 'fieldnum', 'fieldnumber'] if k in attrs), 0)
             wiretype = attrs.pop('wiretype', 0)
             integer = fieldnumber * pow(2, 3)
-            bits = 3 + integer.bit_length()
-            septets, extra = divmod(bits, 7)
-            length = septets + 1 if extra else septets
-            attrs.setdefault('length', length)
             return super(TAG, self).alloc(integer | wiretype & 7, **attrs)
 
         # if we're given some parameters and they're all integers, then use
