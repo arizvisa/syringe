@@ -73,7 +73,7 @@ class VARINT(pbinary.terminatedarray):
         count = septets + 1 if extra else septets
 
         digits, divisor = [], pow(2, 7)
-        while len(digits) < count:
+        while len(digits) < max(1, count):
             integer, digit = divmod(integer, divisor)
             digits.insert(0, digit)
 
