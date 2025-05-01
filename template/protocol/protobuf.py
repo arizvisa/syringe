@@ -66,7 +66,7 @@ class VARINT(pbinary.terminatedarray):
         return functools.reduce(shift, septets[::-1], 0)
     def alloc(self, *args, **attrs):
         if not(args and isinstance(args[0], builtins.int)):
-            return super().alloc(*args, **attrs)
+            return super(VARINT, self).alloc(*args, **attrs)
         [integer] = args
         bits = integer.bit_length()
         septets, extra = divmod(bits, 7)
@@ -79,7 +79,7 @@ class VARINT(pbinary.terminatedarray):
 
         iterable = ({'bits': digit, 'continue': not(not(index))} for index, digit in enumerate(digits))
         items = [self.new(self._object_).alloc(**fields) for fields in iterable]
-        return super().alloc(items[::-1], **attrs)
+        return super(VARINT, self).alloc(items[::-1], **attrs)
     def summary(self):
         bits, integer = 7 * len(self), self.int()
         count, extra = divmod(bits, 8)
@@ -139,7 +139,7 @@ class TAG(VARINT):
             septets, extra = divmod(bits, 7)
             length = septets + 1 if extra else septets
             attrs.setdefault('length', length)
-            return super().alloc(integer | wiretype & 7, **attrs)
+            return super(TAG, self).alloc(integer | wiretype & 7, **attrs)
 
         # if we're given some parameters and they're all integers, then use
         # extract the field number and wiretype for encoding the integer.
@@ -148,7 +148,7 @@ class TAG(VARINT):
             attrs.setdefault('fieldnumber', fieldnumber)
             attrs.setdefault('wiretype', wiretype)
             return self.alloc(**attrs)
-        return super().alloc(*tuple, **attrs)
+        return super(TAG, self).alloc(*tuple, **attrs)
     def summary(self):
         integer = self.int()
         wiretype = PROTOBUF_WIRETYPE.enum(length=1).set(integer & 7)
@@ -165,7 +165,7 @@ class TAGVALUE(pstruct.type):
     ]
     def summary(self):
         if not(self.initializedQ()):
-            return super().summary()
+            return super(TAGVALUE, self).summary()
         res = self['tag'].li
         wiretype = PROTOBUF_WIRETYPE.enum(length=1).set(res.wiretype())
         fieldnum = res.fieldnumber()
@@ -177,7 +177,7 @@ class TAGVALUE(pstruct.type):
             tag = TAG().alloc(fieldnum=fields.pop('fieldnum', 0), wiretype=wired.type)
             newfields.setdefault('tag', tag), newfields.setdefault('value', wired)
 
-        res = super().alloc(**newfields)
+        res = super(TAGVALUE, self).alloc(**newfields)
         if not(isinstance(fields.get('tag'), ptype.generic)) and hasattr(res['value'], 'type'):
             res['tag'].alloc(fieldnum=res['tag'].fieldnumber(), wiretype=res['value'].type)
         return res
