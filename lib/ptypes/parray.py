@@ -1165,6 +1165,23 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
+    def test_array_alloc_withdict():
+        class member(pstruct.type):
+            _fields_ = [
+                (pint.uint8_t, 'a'),
+                (pint.uint8_t, 'b'),
+            ]
+
+        class argh(parray.type):
+            _object_ = member
+
+        print('-'*40)
+        a = argh().alloc([{'a': 1, 'b': 2}])
+        print('='*40)
+        if len(a) == 1 and (a[0]['a'].int(),a[0]['b'].int()) == (1,2):
+            raise Success
+
+    @TestCase
     def test_array_set_initialized_value():
         a = parray.type(_object_=pint.uint32_t,length=4).a
         a.set((10,10,10,10))

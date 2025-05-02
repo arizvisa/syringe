@@ -967,6 +967,18 @@ if __name__ == '__main__':
         if all(ok for ok in [a_ok, b_ok, c_ok]):
             raise Success
 
+    @TestCase
+    def test_structure_alloc_withdict():
+        class member(pstruct.type):
+            _fields_ = [
+                (pint.uint8_t, 'a'),
+                (pint.uint8_t, 'b'),
+            ]
+
+        x = member().alloc({'a': 1, 'b': 2})
+        if x['a'].int() == 1 and x['b'].int() == 2:
+            raise Success
+
 if __name__ == '__main__':
     import logging
     ptypes.config.defaults.log.setLevel(logging.DEBUG)
