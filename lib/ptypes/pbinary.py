@@ -1126,12 +1126,12 @@ class __array_interface__(container):
             indices = {index : ("{:d}".format(index), value) for index, value in enumerate(fields)}
 
         # create our calculator seeded at the position of the very first member.
-        position = self.value[0].getposition() if len(self.value or []) > 0 else result.getposition()
+        position = result.value[0].getposition() if len(result.value or []) > 0 else result.getposition()
         calculator = Fcalculate(position)
         position = utils.next(calculator)
 
         # Nowe we need to go through our members, and figure out what needs to change.
-        for index, item in enumerate(self.value):
+        for index, item in enumerate(result.value):
             if index in indices:
                 name, value = indices[index]
 
@@ -2319,16 +2319,47 @@ class flags(struct):
         res = utils.operator.getitem(self, field)
         return bool(res > 0)
 
-    def alloc(self, iterable=(), **fields):
-        if iterable:
-            bits, items = self.blockbits(), {fld for fld in iterable}
-            [fields.setdefault(flag, -1) for flag in items]
+    def alloc(self, *args, **fields):
+        if not(args):
+            return super(flags, self).alloc(**fields)
+
+        [iterable] = args
+
+        # if we were given a dictionary, then use each key-value pair to update
+        # the fields. if any values from those pairs are a boolean, then use -1
+        # to ensure the whole field gets all of its bits set.
+        if isinstance(iterable, dict):
+            iterable = ((field, value, isinstance(value, bool)) for field, value in iterable.items())
+            mapped = {field: [0, -1][1 if value else 0] if boolQ else value for field, value, boolQ in iterable}
+            fields.update(mapped)
+            return super(flags, self).alloc(**fields)
+
+        # otherwise, we have an iterable of flags that requires us to convert
+        # each field to -1 so that it looks like we're setting the whole flag.
+        bits, items = self.blockbits(), {fld for fld in iterable}
+        [fields.setdefault(flag, -1) for flag in items]
         return super(flags, self).alloc(**fields)
 
-    def set(self, iterable=(), **fields):
-        if iterable:
-            bits, items = self.blockbits(), {fld for fld in iterable}
-            [fields.setdefault(flag, -1) for flag in items]
+    def set(self, *args, **fields):
+        if not(args):
+            return super(flags, self).set(**fields)
+
+        [iterable] = args
+
+        # if we were given a dictionary, then we need to apply them to the
+        # fields, giving priority to the dictionary. prior to applying the
+        # dictionary, we convert any detected booleans into -1 to ensure the
+        # entirety of the field gets set (like a flag).
+        if isinstance(iterable, dict):
+            iterable = ((field, value, isinstance(value, bool)) for field, value in iterable.items())
+            mapped = {field: [0, -1][1 if value else 0] if boolQ else value for field, value, boolQ in iterable}
+            fields.update(mapped)
+            return super(flags, self).set(**fields)
+
+        # otherwise, we were given an iterable of flags to set, and so we need
+        # to convert each one to -1 so that it looks like we're setting flags.
+        bits, items = self.blockbits(), {fld for fld in iterable}
+        [fields.setdefault(flag, -1) for flag in items]
         return super(flags, self).set(**fields)
 
 ## binary type conversion/generation
@@ -4357,6 +4388,54 @@ if __name__ == '__main__':
 
         fields = zip(itertools.chain('aaaa', 'bbbb'), itertools.cycle(range(4)))
         if [a[i][fld] for fld, i in fields] == [x for x in range(8)]:
+            raise Success
+
+    @TestCase
+    def test_pbinary_flags_set_dict_98():
+        class member(pbinary.flags):
+            _fields_ = [
+                (4, 'a'),
+                (4, 'b'),
+            ]
+
+        a = member().a.set({'a': 2, 'b': 4})
+        if a['a'] == 2 and a['b'] == 4:
+            raise Success
+
+    @TestCase
+    def test_pbinary_flags_set_dict_99():
+        class member(pbinary.flags):
+            _fields_ = [
+                (4, 'a'),
+                (4, 'b'),
+            ]
+
+        a = member().a.set({'a': True, 'b': False})
+        if a['a'] == 15 and a['b'] == 0:
+            raise Success
+
+    @TestCase
+    def test_pbinary_flags_alloc_dict_100():
+        class member(pbinary.flags):
+            _fields_ = [
+                (4, 'a'),
+                (4, 'b'),
+            ]
+
+        a = member().alloc({'a': 2, 'b': 4})
+        if a['a'] == 2 and a['b'] == 4:
+            raise Success
+
+    @TestCase
+    def test_pbinary_flags_alloc_dict_101():
+        class member(pbinary.flags):
+            _fields_ = [
+                (4, 'a'),
+                (4, 'b'),
+            ]
+
+        a = member().alloc({'a': True, 'b': False})
+        if a['a'] == 15 and a['b'] == 0:
             raise Success
 
 if __name__ == '__main__':
