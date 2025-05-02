@@ -4034,6 +4034,8 @@ if __name__ == '__main__':
                 Ftake = lambda length: lambda iterable: bytearray(map(lambda items: next(*items), zip(length * [iter(iterable)], length * [0])))
                 F, self.offset = Ftake(amount), self.offset + amount
                 return bytes(F(self.data))
+            def store(self, data):
+                raise NotImplementedError
 
         class t(pbinary.struct):
             _fields_ = [
@@ -4062,6 +4064,8 @@ if __name__ == '__main__':
                 Ftake = lambda length: lambda iterable: bytearray(map(lambda items: next(*items), zip(length * [iter(iterable)], length * [0])))
                 F, self.offset = Ftake(amount), self.offset + amount
                 return bytes(F(self.data))
+            def store(self, data):
+                raise NotImplementedError
 
         class t(pbinary.struct):
             _fields_ = [
@@ -4090,6 +4094,8 @@ if __name__ == '__main__':
                 Ftake = lambda length: lambda iterable: bytearray(map(lambda items: next(*items), zip(length * [iter(iterable)], length * [0])))
                 F, self.offset = Ftake(amount), self.offset + amount
                 return bytes(F(self.data))
+            def store(self, data):
+                raise NotImplementedError
 
         class t(pbinary.struct):
             def __b(self):
@@ -4122,6 +4128,8 @@ if __name__ == '__main__':
                 Ftake = lambda length: lambda iterable: bytearray(map(lambda items: next(*items), zip(length * [iter(iterable)], length * [0])))
                 F, self.offset = Ftake(amount), self.offset + amount
                 return bytes(F(self.data))
+            def store(self, data):
+                raise NotImplementedError
 
         class t(pbinary.struct):
             _fields_ = [
