@@ -1107,7 +1107,7 @@ class container(type):
 
 ### generics
 class __array_interface__(container):
-    length = 0
+    length = None
 
     def __contains__(self, instance):
         if isinstance(instance, integer_types):
@@ -1323,49 +1323,50 @@ class __structure_interface__(container):
         super(__structure_interface__, self).__init__(*args, **kwds)
         self.__fastindex__ = {}
 
-    def alloc(self, **fields):
-        result = super(__structure_interface__, self).alloc()
-        if fields:
-            # we need to iterate through all of the fields first
-            # in order to consolidate any aliases that were specified.
-            # this is a hack, and really we should first be sorting our
-            # fields that were provided by the fields in the structure.
-            names = [name for _, name in self._fields_ or []]
-            fields = {names[self.__getindex__(name)] : item for name, item in fields.items()}
+    def alloc(self, *args, **fields):
+        if not fields:
+            return super(__structure_interface__, self).alloc(*args)
+        result = super(__structure_interface__, self).alloc(*args)
 
-            # as we're going to be assigning everything, figure out a calculator to use.
-            p = self.getparent(partial, default=None)
-            Fcalculate = (lambda _: utils.byteorder_calculator(1)) if p is None else p.__calculate__
+        # we need to iterate through all of the fields first
+        # in order to consolidate any aliases that were specified.
+        # this is a hack, and really we should first be sorting our
+        # fields that were provided by the fields in the structure.
+        names = [name for _, name in self._fields_ or []]
+        fields = {names[self.__getindex__(name)] : item for name, item in fields.items()}
 
-            position = self.value[0].getposition() if len(self.value or []) > 0 else result.getposition()
-            calculator = Fcalculate(position)
-            position = utils.next(calculator)
+        # as we're going to be assigning everything, figure out a calculator to use.
+        p = self.getparent(partial, default=None)
+        Fcalculate = (lambda _: utils.byteorder_calculator(1)) if p is None else p.__calculate__
 
-            # now we can iterate through our structure fields to allocate them using
-            # the fields that were actually given to us by the caller.
-            for idx, (t, name) in enumerate(self._fields_ or []):
-                if name not in fields:
-                    if ptype.isresolveable(t):
-                        result.value[idx] = item = result.new(t, __name__=name, position=position).a
-                        position = calculator.send(item.bits())
-                    continue
+        position = self.value[0].getposition() if len(self.value or []) > 0 else result.getposition()
+        calculator = Fcalculate(position)
+        position = utils.next(calculator)
 
-                item = fields[name]
-                #if any((istype(item), isinstance(item, type), ptype.isresolveable(item))):
-                if istype(item) or ptype.isresolveable(item):
-                    result.value[idx] = item = result.new(item, __name__=name, position=position).a
-                elif isinstance(item, type):
-                    result.value[idx] = item = result.new(item, __name__=name, position=position)
-                elif bitmap.isinstance(item):
-                    result.value[idx] = item = result.new(integer, __name__=name, position=position).__setvalue__(item)
-                elif isinstance(item, dict):
-                    item, _ = result.value[idx], result.value[idx].alloc(**item)
-                else:
-                    item, _ = result.value[idx], result.value[idx].alloc(item)  # type.alloc falls back to object.set
+        # now we can iterate through our structure fields to allocate them using
+        # the fields that were actually given to us by the caller.
+        for idx, (t, name) in enumerate(self._fields_ or []):
+            if name not in fields:
+                if ptype.isresolveable(t):
+                    result.value[idx] = item = result.new(t, __name__=name, position=position).a
+                    position = calculator.send(item.bits())
+                continue
 
-                # update our calculator with the item was just processed.
-                position = calculator.send(item.bits())
-            return result
+            item = fields[name]
+            #if any((istype(item), isinstance(item, type), ptype.isresolveable(item))):
+            if istype(item) or ptype.isresolveable(item):
+                result.value[idx] = item = result.new(item, __name__=name, position=position).a
+            elif isinstance(item, type):
+                result.value[idx] = item = result.new(item, __name__=name, position=position)
+            elif bitmap.isinstance(item):
+                result.value[idx] = item = result.new(integer, __name__=name, position=position).__setvalue__(item)
+            elif isinstance(item, dict):
+                item, _ = result.value[idx], result.value[idx].alloc(**item)
+            else:
+                item, _ = result.value[idx], result.value[idx].alloc(item)  # type.alloc falls back to object.set
+
+            # update our calculator with the item was just processed.
+            position = calculator.send(item.bits())
         return result
 
     def __append__(self, object):
@@ -1629,8 +1630,6 @@ class __structure_interface__(container):
     #    super(__structure_interface__, self).__setstate__(state)
 
 class array(__array_interface__):
-    length = 0
-
     def copy(self, **attrs):
         """Performs a deep-copy of self repopulating the new instance if self is initialized"""
         result = super(array, self).copy(**attrs)
@@ -1645,7 +1644,7 @@ class array(__array_interface__):
 
         # Define a generator that yields each element that gets created.
         def elements(position, object=getattr(self, '_object_', 0)):
-            for index in range(self.length):
+            for index in range(self.length or 0):
                 item = self.new(object, __name__=str(index), position=position)
                 yield item
             return
@@ -1672,6 +1671,15 @@ class array(__array_interface__):
         else:
             raise error.InitializationError(self, 'array.blockbits')
         return size * len(self)
+
+    def alloc(self, *fields, **attrs):
+        if not fields:
+            return super(array, self).alloc(*fields, **attrs)
+
+        [elements] = fields
+        if getattr(self, 'length', None) is None:
+            attrs.setdefault('length', len(elements))
+        return super(array, self).alloc(elements, **attrs)
 
     #def __getstate__(self):
     #    return super(array, self).__getstate__(), self._object_, self.length
@@ -1729,8 +1737,6 @@ class struct(__structure_interface__):
     #    super(struct, self).__setstate__(state)
 
 class terminatedarray(__array_interface__):
-    length = None
-
     def alloc(self, fields=(), **attrs):
         attrs.setdefault('length', len(fields))
         attrs.setdefault('isTerminator', lambda value: False)
@@ -1738,7 +1744,7 @@ class terminatedarray(__array_interface__):
 
     def __deserialize_consumer__(self, consumer):
         self.value = []
-        forever = itertools.count() if self.length is None else range(self.length)
+        forever = itertools.count() if getattr(self, 'length', None) is None else range(self.length)
 
         # Figure out our current position that we're going to start at.
         position = consumer.position
@@ -1791,7 +1797,7 @@ class terminatedarray(__array_interface__):
 
         # Otherwise, we need to calculate this ourselves. We do this by taking
         # the product of our length and our element size.
-        return 0 if self.length is None else self.new(self._object_).blockbits() * len(self)
+        return 0 if getattr(self, 'length', None) is None else self.new(self._object_).blockbits() * len(self)
 
 class blockarray(terminatedarray):
     length = None
@@ -1807,7 +1813,7 @@ class blockarray(terminatedarray):
     def __deserialize_consumer__(self, consumer):
         total = self.blockbits()
         value = self.value = []
-        forever = itertools.count() if self.length is None else range(self.length)
+        forever = itertools.count() if getattr(self, 'length', None) is None else range(self.length)
 
         # Figure out our position from the consumer, and assign it to each
         # member so they start out where we're currently at.
@@ -4317,6 +4323,40 @@ if __name__ == '__main__':
         try:
             x['missing']
         except KeyError:
+            raise Success
+
+    @TestCase
+    def test_pbinary_structure_alloc_withdict_96():
+        class member(pbinary.struct):
+            _fields_ = [
+                (4, 'a'),
+                (4, 'b'),
+            ]
+
+        a = member().alloc({'a':1, 'b':2})
+        if a['a'] == 1 and a['b'] == 2:
+            raise Success
+
+    @TestCase
+    def test_pbinary_array_alloc_withlist_97():
+        class member(pbinary.struct):
+            _fields_ = [
+                (4, 'a'),
+                (4, 'b'),
+            ]
+
+        class argh(pbinary.array):
+            _object_ = member
+
+        a = argh().alloc([
+            {'a': 0, 'b': 4},
+            {'a': 1, 'b': 5},
+            {'a': 2, 'b': 6},
+            {'a': 3, 'b': 7},
+        ])
+
+        fields = zip(itertools.chain('aaaa', 'bbbb'), itertools.cycle(range(4)))
+        if [a[i][fld] for fld, i in fields] == [x for x in range(8)]:
             raise Success
 
 if __name__ == '__main__':
