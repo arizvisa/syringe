@@ -111,10 +111,11 @@ class LENGTH_PREFIXED(pstruct.type):
     _fields_ = [
         (VARINT, 'length'),
         (__payload, 'payload'),
+        (ptype.block, 'extra'),
     ]
     def summary(self):
         length = self['length'].int()
-        return self['payload'].summary()
+        return "length={:d} : (payload) {:s}".format(length, self['payload'].summary())
     def alloc(self, **fields):
         res = super(LENGTH_PREFIXED, self).alloc(**fields)
         if 'length' not in fields:
