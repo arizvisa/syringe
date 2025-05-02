@@ -64,22 +64,33 @@ class VARINT(pbinary.terminatedarray):
         septets = [item['bits'] for item in self]
         shift = lambda res, integer: res * pow(2, 7) + integer
         return functools.reduce(shift, septets[::-1], 0)
+
     def alloc(self, *args, **attrs):
-        if not(args and isinstance(args[0], builtins.int)):
-            return super(VARINT, self).alloc(*args, **attrs)
-        [integer] = args
-        bits = integer.bit_length()
-        septets, extra = divmod(bits, 7)
-        count = septets + 1 if extra else septets
+        if len(args) == 1 and isinstance(args[0], ptypes.integer_types):
+            [integer] = args
+            bits = integer.bit_length()
+            septets, extra = divmod(bits, 7)
+            count = septets + 1 if extra else septets
 
-        digits, divisor = [], pow(2, 7)
-        while len(digits) < max(1, count):
-            integer, digit = divmod(integer, divisor)
-            digits.insert(0, digit)
+            digits, divisor = [], pow(2, 7)
+            while len(digits) < max(1, count):
+                integer, digit = divmod(integer, divisor)
+                digits.insert(0, digit)
 
-        iterable = ({'bits': digit, 'continue': not(not(index))} for index, digit in enumerate(digits))
-        items = [self.new(self._object_).alloc(**fields) for fields in iterable]
-        return super(VARINT, self).alloc(items[::-1], **attrs)
+            iterable = ({'bits': digit, 'continue': not(not(index))} for index, digit in enumerate(digits))
+            items = [self.new(self._object_).alloc(**fields) for fields in iterable]
+            return super(VARINT, self).alloc(items[::-1], **attrs)
+
+        elif len(args) == 1 and all(isinstance(item, ptypes.integer_types) for item in args[0]):
+            [integers] = args
+
+            items = []
+            items.extend({'bits': item, 'continue': 1} for item in integers[:-1])
+            items.extend({'bits': item, 'continue': 0} for item in integers[-1:])
+            return super(VARINT, self).alloc(items)
+
+        return super(VARINT, self).alloc(*args, **attrs)
+
     def summary(self):
         bits, integer = 7 * len(self), self.int()
         count, extra = divmod(bits, 8)
@@ -137,14 +148,16 @@ class TAG(VARINT):
             integer = fieldnumber * pow(2, 3)
             return super(TAG, self).alloc(integer | wiretype & 7, **attrs)
 
-        # if we're given some parameters and they're all integers, then use
-        # extract the field number and wiretype for encoding the integer.
+        # if we're given some parameters and they're all integers, then use the
+        # extracted field number and wiretype for encoding the integer.
         elif len(tuple) in {1, 2} and all(isinstance(item, ptypes.integer_types) for item in tuple):
             [fieldnumber, wiretype] = tuple if len(tuple) == 2 else itertools.chain(tuple, [0])
             attrs.setdefault('fieldnumber', fieldnumber)
             attrs.setdefault('wiretype', wiretype)
             return self.alloc(**attrs)
+
         return super(TAG, self).alloc(*tuple, **attrs)
+
     def summary(self):
         integer = self.int()
         wiretype = PROTOBUF_WIRETYPE.enum(length=1).set(integer & 7)
