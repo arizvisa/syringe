@@ -73,7 +73,7 @@ class MethodBaseWithMessage(MethodBase):
     def __str__(self):
         res = super(MethodBaseWithMessage, self).__str__()
         if self.__message:
-            return ' : '.join((res, self.__message))
+            return ' : '.join([res, "{}".format(self.__message)])
         return res
 
 ### errors that are caused by a provider
