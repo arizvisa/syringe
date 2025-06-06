@@ -300,10 +300,15 @@ IMAGE_DEBUG_TYPE_VC_FEATURE = IMAGE_DEBUG_DATA_VC_FEATURE
 ## IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS
 class IMAGE_DLLCHARACTERISTICS_EX_(pbinary.flags):
     _fields_ = [
-        (9, 'UNKNOWN'),
-        (1, 'FORWARD_CFI_COMPAT'),
-        (5, 'RESERVED'),
-        (1, 'CET_COMPAT'),
+        (8, 'RESERVED'),
+        (1, 'HOTPATCH_COMPATIBLE'),                         # Image can be modified while in use, hotpatch-compatible
+        (1, 'FORWARD_CFI_COMPAT'),                          # All branch targets in all image code sections are annotated with forward-edge control flow integrity guard instructions
+        (1, 'CET_RESERVED_2'),
+        (1, 'CET_RESERVED_1'),
+        (1, 'CET_DYNAMIC_APIS_ALLOW_IN_PROC'),              # Use of dynamic APIs is restricted to processes only
+        (1, 'CET_SET_CONTEXT_IP_VALIDATION_RELAXED_MODE'),  # Relaxed mode for Context IP Validation under CET is allowed
+        (1, 'CET_COMPAT_STRICT_MODE'),                      # CET is enforced in strict mode
+        (1, 'CET_COMPAT'),                                  # Image is Control-flow Enforcement Technology Shadow Stack compatible
     ]
 
 @IMAGE_DEBUG_DIRECTORY_DATA.define
