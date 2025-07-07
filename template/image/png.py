@@ -282,6 +282,44 @@ class xSCL(ptype.block):
 class ySCL(ptype.block):
     type = b'ySCL'
 
+@Chunks.define
+class acTL(pstruct.type):
+    type = b'acTL'
+    _fields_ = [
+        (pint.uint32_t, 'num_frames'),  # Number of frames
+        (pint.uint32_t, 'num_plays'),   # Number of times to loop this APNG.  0 indicates infinite looping.
+    ]
+
+@Chunks.define
+class fcTL(pstruct.type):
+    type = b'fcTL'
+    class APNG_DISPOSE_OP_(pint.enum, pint.uint8_t):
+        _values_ = [
+            (0, 'NONE'),
+            (1, 'BACKGROUND'),
+            (2, 'PREVIOUS'),
+        ]
+    class APNG_BLEND_OP_(pint.enum, pint.uint8_t):
+        _values_ = [
+            (0, 'SOURCE'),
+            (1, 'OVER'),
+        ]
+    _fields_ = [
+        (pint.uint32_t, 'sequence_number'),     # Sequence number of the animation chunk, starting from 0
+        (pint.uint32_t, 'width'),               # Width of the following frame
+        (pint.uint32_t, 'height'),              # Height of the following frame
+        (pint.uint32_t, 'x_offset'),            # X position at which to render the following frame
+        (pint.uint32_t, 'y_offset'),            # Y position at which to render the following frame
+        (pint.uint16_t, 'delay_num'),           # Frame delay fraction numerator
+        (pint.uint16_t, 'delay_den'),           # Frame delay fraction denominator
+        (pint.uint8_t, 'dispose_op'),           # Type of frame area disposal to be done after rendering this frame
+        (pint.uint8_t, 'blend_op'),             # Type of frame area rendering for this frame
+    ]
+
+@Chunks.define
+class fdAT(ptype.block):
+    type = b'fdAT'
+
 if __name__ == '__main__':
     import sys
     import ptypes, image.png
