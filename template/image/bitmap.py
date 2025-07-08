@@ -18,6 +18,7 @@ class bfType(pint.enum, WORD):
         ('CP', 0x5043),
         ('IC', 0x4349),
         ('PT', 0x5450),
+        ('DDB', 0x0002),
     ]
 
 class biCompression(pint.enum, DWORD):
@@ -93,6 +94,12 @@ class BitmapInfoHeader(pstruct.type):
     def Height(self): return self['bmHeader'].Height()
     def Bits(self): return self['bmHeader'].Bits()
 
+    def alloc(self, **fields):
+        res = super(BitmapInfoHeader, self).alloc(**fields)
+        if 'biSize' not in fields:
+            res['biSize'].set(res['bmHeader'].size())
+        return res
+
 @InfoHeaderType.define(type=12)
 class BitmapCore(pstruct.type):
     _fields_ = [
@@ -124,10 +131,12 @@ class BitmapInfo(pstruct.type):
 
     def Width(self): return self['biWidth'].int()
     def Height(self): return self['biHeight'].int()
-    def Bits(self): return self['biBitcount'].int()
+    def Bits(self): return self['biBitCount'].int()
     def Colors(self):
         res = self['biClrUsed'].int()
-        return pow(2, self.Bits()) if res or self.Bits() < 24 else res
+        if self.Bits() < 24:
+            return res if res else pow(2, self.Bits())
+        return 0
 
 # FIXME: this might not be complete
 class DIB(pstruct.type):
@@ -158,14 +167,14 @@ class File(pstruct.type):
         return dyn.array(RGBQUAD, res.Colors())
 
     def __bmiExtra(self):
-        res = self['bmfh'].li
-        cb = self['bmfh'].li.size() + self['bmih'].li.size() + self['bmiColors'].li.size()
-        return dyn.block(res['bfOffBits'].li.int() - cb)
+        res, fields = self['bmfh'].li, ['bmfh', 'bmih', 'bmiColors']
+        cb = sum(self[fld].li.size() for fld in fields)
+        return dyn.block(max(0, res['bfOffBits'].li.int() - cb))
 
     def __bmData(self):
-        res = self['bmfh'].li
-        cb = self['bmfh'].li.size() + self['bmih'].li.size() + self['bmiColors'].li.size() + self['bmiExtra'].li.size()
-        return dyn.block(res['bfSize'].li.int() - cb)
+        res, fields = self['bmfh'].li, ['bmfh', 'bmih', 'bmiColors', 'bmiExtra']
+        cb = sum(self[fld].li.size() for fld in fields)
+        return dyn.block(max(0, res['bfSize'].li.int() - cb))
 
     _fields_ = [
         (BITMAPFILEHEADER, 'bmfh'),
@@ -174,6 +183,16 @@ class File(pstruct.type):
         (__bmiExtra, 'bmiExtra'),
         (__bmData, 'bmData'),
     ]
+
+    def alloc(self, **fields):
+        res = super(File, self).alloc(**fields)
+        if 'bmfh' in fields:
+            return res
+
+        bmfh = res['bmfh']
+        bmfh['bfOffBits'].set(res['bmData'].getoffset() - res['bmfh'].getoffset())
+        bmfh['bfSize'].set(res.size())
+        return res
 
 if __name__ == '__main__':
     import sys
