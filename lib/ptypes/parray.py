@@ -718,9 +718,19 @@ class block(uninitialized):
         return False
 
     def load(self, **attrs):
-        # fallback to regular loading if user has hardcoded the length
-        if attrs.get('length', self.length) is not None:
-            return super(block, self).load(**attrs)
+        length = attrs.get('length', self.length)
+
+        # demote to loading a regular array if the "length" is hardcoded.
+        if length is not None:
+            try:
+                return super(block, self).load(**attrs)
+
+            # if we caught a loading error, then we log an error and re-raise
+            # the exception. the intent is to simulate the regular load error
+            # that you get from being unable to load a regular array.
+            except error.LoadError as E:
+                Log.warning("block.load : {:s} : LoadError raised while trying to load a block array that has been demoted due to an explicit length ({:d}).".format(self.instance(), length))
+                raise
 
         with utils.assign(self, **attrs):
             forever = itertools.count() if self.length is None else range(len(self))
