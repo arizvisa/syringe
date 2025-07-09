@@ -1,5 +1,4 @@
-import builtins, operator, os, math, functools, itertools, sys, types
-import ptypes
+import functools, ptypes
 from ptypes import *
 
 pint.setbyteorder('little')
@@ -215,29 +214,3 @@ class EXIF(ptype.block):
 @ChunkType.define
 class XMP(ptype.block):
     type = b'XMP '
-
-class File(Chunk):
-    def alloc(self, **fields):
-        fields.setdefault('data', RIFF)
-        res = super(File, self).alloc(**fields)
-        if 'id' not in fields:
-            res['id'].set(RIFF.type)
-        return res
-
-if __name__ == '__main__':
-    import sys
-    import ptypes, image.webp as webp
-
-    if len(sys.argv) != 2:
-        print("Usage: {:s} file".format(sys.argv[0] if len(sys.argv) else __file__))
-        sys.exit(0)
-
-    ptypes.setsource(ptypes.prov.file(sys.argv[1], mode='rb'))
-
-    z = webp.File()
-    z = z.l
-    print(z.size() == z.source.size(), z.size(), z.source.size())
-
-    print(z)
-
-    sys.exit(0 if z.size() == z.source.size() else 1)
