@@ -1,0 +1,133 @@
+import builtins, operator, os, math, functools, itertools, sys, types
+import ptypes
+from ptypes import *
+
+class u0(pint.uint_t): pass
+class u8(pint.uint8_t): pass
+class u16(pint.uint16_t): pass
+class u32(pint.uint32_t): pass
+class s0(pint.sint_t): pass
+class s8(pint.sint8_t): pass
+class s16(pint.sint16_t): pass
+class s32(pint.sint32_t): pass
+
+class ChunkType(ptype.definition):
+    attribute, cache = 'type', {}
+
+    @classmethod
+    def to_integer(self, key):
+        if isinstance(key, ptypes.integer_types):
+            integer = key
+        elif isinstance(key, (bytes, bytearray)):
+            integer = functools.reduce(lambda agg, item: agg * 0x100 + item, bytearray(key), 0)
+        elif isinstance(key, ptypes.string_types):
+            encoded = key.encode('latin1')
+            integer = functools.reduce(lambda agg, item: agg * 0x100 + item, bytearray(encoded), 0)
+        else:
+            raise TypeError(key)
+        return integer
+
+    @classmethod
+    def __set__(cls, key, object, **kwargs):
+        integer = cls.to_integer(key)
+        return super(ChunkType, cls).__set__(integer, object, **kwargs)
+
+    @classmethod
+    def __get__(cls, key, default, **kwargs):
+        integer = cls.to_integer(key)
+        return super(ChunkType, cls).__get__(integer, default, **kwargs)
+
+    @pint.bigendian
+    class _enum_(pint.enum, u32):
+        pass
+
+class Id(ChunkType.enum):
+    pass
+
+class Chunk(pstruct.type):
+    def __data(self):
+        res, length = (self[fld].li for fld in ['id', 'size'])
+        data_t = self._object_ if hasattr(self, '_object_') else ChunkType.withdefault(res.serialize(), type=res.serialize(), length=length.int())
+        if isinstance(data_t, parray.block):
+            return dyn.clone(data_t, blocksize=lambda self, size=length.int(): size)
+        elif isinstance(data_t, ptype.block):
+            return dyn.clone(data_t, length=length.int()) if length.int() else data_t
+        return data_t
+    def __extra(self):
+        res, fields = self['size'].li, ['data']
+        length = max(0, res.int() - sum(self[fld].li.size() for fld in fields))
+        _, odd = divmod(length, 2)
+        if odd and length:
+            return dyn.block(1 + length)
+        return dyn.block(length) if length else ptype.block
+    _fields_ = [
+        (Id, 'id'),
+        (u32, 'size'),
+        (__data, 'data'),
+        (__extra, 'extra'),
+    ]
+    def alloc(self, **fields):
+        res = super(Chunk, self).alloc(**fields)
+        if 'size' not in fields:
+            res['size'].set(sum(res[fld].size() for fld in ['data', 'extra']))
+        if 'id' not in fields and hasattr(res['data'], ChunkType.attribute):
+            res['id'].set(getattr(res['data'], ChunkType.attribute))
+        return res
+
+class SizedChunkArray(parray.block):
+    _object_ = Chunk
+
+class ChunkArray(parray.type):
+    _object_ = Chunk
+
+@ChunkType.define
+class RIFF(pstruct.type):
+    type = b'RIFF'
+    def __Chunks(self):
+        if not(self.parent) or not(isinstance(self.parent, Chunk)):
+            return dyn.clone(ChunkArray, length=0)
+        sig = self['Signature'].li
+        return dyn.clone(SizedChunkArray, length=max(0, self.parent['size'].int() - sig.size()))
+    _fields_ = [
+        (Id, 'Signature'),
+        (__Chunks, 'Chunks'),
+    ]
+    def alloc(self, *values, **fields):
+        fields.setdefault('Signature', b'RIFF')
+        if not(values):
+            fields.setdefault('Chunks', ChunkArray)
+            return super(RIFF, self).alloc(**fields)
+        [chunks] = values
+        fields['Chunks'] = chunks
+        return super(RIFF, self).alloc(**fields)
+
+@ChunkType.define
+class VP8(ptype.block):
+    type = b'VP8 '
+
+class File(Chunk):
+    _object_ = ChunkArray
+    def alloc(self, **fields):
+        fields.setdefault('data', RIFF)
+        res = super(File, self).alloc(**fields)
+        if 'id' not in fields:
+            res['id'].set(RIFF.type)
+        return res
+
+if __name__ == '__main__':
+    import sys
+    import ptypes, image.webp as webp
+
+    if len(sys.argv) != 2:
+        print("Usage: {:s} file".format(sys.argv[0] if len(sys.argv) else __file__))
+        sys.exit(0)
+
+    ptypes.setsource(ptypes.prov.file(sys.argv[1], mode='rb'))
+
+    z = webp.File()
+    z = z.l
+    print(z.size() == z.source.size(), z.size(), z.source.size())
+
+    print(z)
+
+    sys.exit(0 if z.size() == z.source.size() else 1)
