@@ -2,6 +2,8 @@ import builtins, operator, os, math, functools, itertools, sys, types
 import ptypes
 from ptypes import *
 
+pint.setbyteorder('little')
+
 class u0(pint.uint_t): pass
 class u8(pint.uint8_t): pass
 class u16(pint.uint16_t): pass
@@ -10,6 +12,14 @@ class s0(pint.sint_t): pass
 class s8(pint.sint8_t): pass
 class s16(pint.sint16_t): pass
 class s32(pint.sint32_t): pass
+
+class ColorBGRA(pstruct.type):
+    _fields_ = [
+        (u8, 'B'),
+        (u8, 'G'),
+        (u8, 'R'),
+        (u8, 'A'),
+    ]
 
 class ChunkType(ptype.definition):
     attribute, cache = 'type', {}
@@ -42,7 +52,9 @@ class ChunkType(ptype.definition):
         pass
 
 class Id(ChunkType.enum):
-    pass
+    def summary(self):
+        res = self.serialize()
+        return "{:#x} {!r}".format(self, res.decode('latin1'))
 
 class Chunk(pstruct.type):
     def __data(self):
@@ -85,18 +97,22 @@ class RIFF(pstruct.type):
     type = b'RIFF'
     def __Chunks(self):
         if not(self.parent) or not(isinstance(self.parent, Chunk)):
-            return dyn.clone(ChunkArray, length=0)
+            return ChunkArray
         sig = self['Signature'].li
-        return dyn.clone(SizedChunkArray, length=max(0, self.parent['size'].int() - sig.size()))
+        length = max(0, self.parent['size'].int() - sig.size())
+        return dyn.clone(SizedChunkArray, blocksize=lambda self, size=length: size) if length else ChunkArray
+
     _fields_ = [
         (Id, 'Signature'),
         (__Chunks, 'Chunks'),
     ]
+
     def alloc(self, *values, **fields):
         fields.setdefault('Signature', b'RIFF')
         if not(values):
             fields.setdefault('Chunks', ChunkArray)
             return super(RIFF, self).alloc(**fields)
+
         [chunks] = values
         fields['Chunks'] = chunks
         return super(RIFF, self).alloc(**fields)
@@ -105,8 +121,102 @@ class RIFF(pstruct.type):
 class VP8(ptype.block):
     type = b'VP8 '
 
+@ChunkType.define
+class VP8L(ptype.block):
+    type = b'VP8L'
+
+@ChunkType.define
+class ICCP(pstruct.type):
+    type = b'ICCP'
+
+    def __ColorProfile(self):
+        if not(self.parent) or not(isinstance(self.parent, Chunk)):
+            return ptype.block
+        res, fields = self.parent['size'].int(), ['Bits']
+        length = max(0, res - sum(self[fld].li.size() for fld in fields))
+        return dyn.block(length) if length else ptype.block
+
+    # FIXME: we should be able to decode the color profile here too...
+    _fields_ = [
+        (__ColorProfile, 'ColorProfile'),
+    ]
+
+@ChunkType.define
+class ANIM(pstruct.type):
+    type = b'ANIM'
+    _fields_ = [
+        (ColorBGRA, 'BackgroundColor'),
+        (u16, 'LoopCount'),
+    ]
+
+@ChunkType.define
+class ANMF(pstruct.type):
+    type = b'ANMF'
+
+    class _methodBits(pbinary.flags):
+        _fields_ = [
+            (6, 'Reserved'),
+            (1, 'NOBLEND'),
+            (1, 'DISPOSE'),
+        ]
+
+    def __FrameData(self):
+        if not(self.parent) or not(isinstance(self.parent, Chunk)):
+            return ChunkArray
+        res, fields = self.parent['size'].int(), ['X', 'Y', 'Width', 'Height', 'Duration']
+        length = max(0, res - sum(self[fld].li.size() for fld in fields))
+        return dyn.clone(SizedChunkArray, blocksize=lambda self, size=length: size) if length else ChunkArray
+
+    _fields_ = [
+        (u32, 'X'),
+        (u32, 'Y'),
+        (u32, 'Width'),
+        (u32, 'Height'),
+        (u32, 'Duration'),
+        (_methodBits, 'Method'),
+        (__FrameData, 'FrameData'),
+    ]
+
+@ChunkType.define
+class Alpha(pstruct.type):
+    type = b'ALPH'
+
+    class _Bits(pbinary.flags):
+        class _FilteringMethod(pbinary.enum):
+            length, _values_ = 2, [
+                ('None', 0),
+                ('Horizontal', 1),
+                ('Vertical', 2),
+                ('Gradient', 3),
+            ]
+        _fields_ = [
+            (2, 'Reserved'),
+            (2, 'Preprocessing'),
+            (_FilteringMethod, 'FilteringMethod'),
+            (2, 'CompressionMethod'),
+        ]
+
+    def __Bitstream(self):
+        if not(self.parent) or not(isinstance(self.parent, Chunk)):
+            return ptype.block
+        res, fields = self.parent['size'].int(), ['Bits']
+        length = max(0, res - sum(self[fld].li.size() for fld in fields))
+        return dyn.block(length) if length else ptype.block
+
+    _fields_ = [
+        (_Bits, 'Bits'),
+        (__Bitstream, 'Bitstream'),
+    ]
+
+@ChunkType.define
+class EXIF(ptype.block):
+    type = b'EXIF'
+
+@ChunkType.define
+class XMP(ptype.block):
+    type = b'XMP '
+
 class File(Chunk):
-    _object_ = ChunkArray
     def alloc(self, **fields):
         fields.setdefault('data', RIFF)
         res = super(File, self).alloc(**fields)
