@@ -23,174 +23,210 @@ def L(n):
 
 ### VP8 boolean entropy data
 default_coef_probs = [
-  [ # Block Type ( 0 )
-    [ # Coeff Band ( 0 )
-      bytearray([128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128]),
-      bytearray([128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128]),
-      bytearray([128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128]),
+    # Block Type (0)
+    [
+        # Coeff Band (0)
+        [
+            bytearray(b'\x80\x80\x80\x80\x80\x80\x80\x80\x80\x80\x80'),
+            bytearray(b'\x80\x80\x80\x80\x80\x80\x80\x80\x80\x80\x80'),
+            bytearray(b'\x80\x80\x80\x80\x80\x80\x80\x80\x80\x80\x80'),
+        ],
+        # Coeff Band (1)
+        [
+            bytearray(b'\xFD\x88\xFE\xFF\xE4\xDB\x80\x80\x80\x80\x80'),
+            bytearray(b'\xBD\x81\xF2\xFF\xE3\xD5\xFF\xDB\x80\x80\x80'),
+            bytearray(b'\x6A\x7E\xE3\xFC\xD6\xD1\xFF\xFF\x80\x80\x80'),
+        ],
+        # Coeff Band (2)
+        [
+            bytearray(b'\x01\x62\xF8\xFF\xEC\xE2\xFF\xFF\x80\x80\x80'),
+            bytearray(b'\xB5\x85\xEE\xFE\xDD\xEA\xFF\x9A\x80\x80\x80'),
+            bytearray(b'\x4E\x86\xCA\xF7\xC6\xB4\xFF\xDB\x80\x80\x80'),
+        ],
+        # Coeff Band (3)
+        [
+            bytearray(b'\x01\xB9\xF9\xFF\xF3\xFF\x80\x80\x80\x80\x80'),
+            bytearray(b'\xB8\x96\xF7\xFF\xEC\xE0\x80\x80\x80\x80\x80'),
+            bytearray(b'\x4D\x6E\xD8\xFF\xEC\xE6\x80\x80\x80\x80\x80'),
+        ],
+        # Coeff Band (4)
+        [
+            bytearray(b'\x01\x65\xFB\xFF\xF1\xFF\x80\x80\x80\x80\x80'),
+            bytearray(b'\xAA\x8B\xF1\xFC\xEC\xD1\xFF\xFF\x80\x80\x80'),
+            bytearray(b'\x25\x74\xC4\xF3\xE4\xFF\xFF\xFF\x80\x80\x80'),
+        ],
+        # Coeff Band (5)
+        [
+            bytearray(b'\x01\xCC\xFE\xFF\xF5\xFF\x80\x80\x80\x80\x80'),
+            bytearray(b'\xCF\xA0\xFA\xFF\xEE\x80\x80\x80\x80\x80\x80'),
+            bytearray(b'\x66\x67\xE7\xFF\xD3\xAB\x80\x80\x80\x80\x80'),
+        ],
+        # Coeff Band (6)
+        [
+            bytearray(b'\x01\x98\xFC\xFF\xF0\xFF\x80\x80\x80\x80\x80'),
+            bytearray(b'\xB1\x87\xF3\xFF\xEA\xE1\x80\x80\x80\x80\x80'),
+            bytearray(b'\x50\x81\xD3\xFF\xC2\xE0\x80\x80\x80\x80\x80'),
+        ],
+        # Coeff Band (7)
+        [
+            bytearray(b'\x01\x01\xFF\x80\x80\x80\x80\x80\x80\x80\x80'),
+            bytearray(b'\xF6\x01\xFF\x80\x80\x80\x80\x80\x80\x80\x80'),
+            bytearray(b'\xFF\x80\x80\x80\x80\x80\x80\x80\x80\x80\x80'),
+        ],
     ],
-    [ # Coeff Band ( 1 )
-      bytearray([253, 136, 254, 255, 228, 219, 128, 128, 128, 128, 128]),
-      bytearray([189, 129, 242, 255, 227, 213, 255, 219, 128, 128, 128]),
-      bytearray([106, 126, 227, 252, 214, 209, 255, 255, 128, 128, 128]),
+    # Block Type (1)
+    [
+        # Coeff Band (0)
+        [
+            bytearray(b'\xC6\x23\xED\xDF\xC1\xBB\xA2\xA0\x91\x9B\x3E'),
+            bytearray(b'\x83\x2D\xC6\xDD\xAC\xB0\xDC\x9D\xFC\xDD\x01'),
+            bytearray(b'\x44\x2F\x92\xD0\x95\xA7\xDD\xA2\xFF\xDF\x80'),
+        ],
+        # Coeff Band (1)
+        [
+            bytearray(b'\x01\x95\xF1\xFF\xDD\xE0\xFF\xFF\x80\x80\x80'),
+            bytearray(b'\xB8\x8D\xEA\xFD\xDE\xDC\xFF\xC7\x80\x80\x80'),
+            bytearray(b'\x51\x63\xB5\xF2\xB0\xBE\xF9\xCA\xFF\xFF\x80'),
+        ],
+        # Coeff Band (2)
+        [
+            bytearray(b'\x01\x81\xE8\xFD\xD6\xC5\xF2\xC4\xFF\xFF\x80'),
+            bytearray(b'\x63\x79\xD2\xFA\xC9\xC6\xFF\xCA\x80\x80\x80'),
+            bytearray(b'\x17\x5B\xA3\xF2\xAA\xBB\xF7\xD2\xFF\xFF\x80'),
+        ],
+        # Coeff Band (3)
+        [
+            bytearray(b'\x01\xC8\xF6\xFF\xEA\xFF\x80\x80\x80\x80\x80'),
+            bytearray(b'\x6D\xB2\xF1\xFF\xE7\xF5\xFF\xFF\x80\x80\x80'),
+            bytearray(b'\x2C\x82\xC9\xFD\xCD\xC0\xFF\xFF\x80\x80\x80'),
+        ],
+        # Coeff Band (4)
+        [
+            bytearray(b'\x01\x84\xEF\xFB\xDB\xD1\xFF\xA5\x80\x80\x80'),
+            bytearray(b'\x5E\x88\xE1\xFB\xDA\xBE\xFF\xFF\x80\x80\x80'),
+            bytearray(b'\x16\x64\xAE\xF5\xBA\xA1\xFF\xC7\x80\x80\x80'),
+        ],
+        # Coeff Band (5)
+        [
+            bytearray(b'\x01\xB6\xF9\xFF\xE8\xEB\x80\x80\x80\x80\x80'),
+            bytearray(b'\x7C\x8F\xF1\xFF\xE3\xEA\x80\x80\x80\x80\x80'),
+            bytearray(b'\x23\x4D\xB5\xFB\xC1\xD3\xFF\xCD\x80\x80\x80'),
+        ],
+        # Coeff Band (6)
+        [
+            bytearray(b'\x01\x9D\xF7\xFF\xEC\xE7\xFF\xFF\x80\x80\x80'),
+            bytearray(b'\x79\x8D\xEB\xFF\xE1\xE3\xFF\xFF\x80\x80\x80'),
+            bytearray(b'\x2D\x63\xBC\xFB\xC3\xD9\xFF\xE0\x80\x80\x80'),
+        ],
+        # Coeff Band (7)
+        [
+            bytearray(b'\x01\x01\xFB\xFF\xD5\xFF\x80\x80\x80\x80\x80'),
+            bytearray(b'\xCB\x01\xF8\xFF\xFF\x80\x80\x80\x80\x80\x80'),
+            bytearray(b'\x89\x01\xB1\xFF\xE0\xFF\x80\x80\x80\x80\x80'),
+        ],
     ],
-    [ # Coeff Band ( 2 )
-      bytearray([1, 98, 248, 255, 236, 226, 255, 255, 128, 128, 128]),
-      bytearray([181, 133, 238, 254, 221, 234, 255, 154, 128, 128, 128]),
-      bytearray([78, 134, 202, 247, 198, 180, 255, 219, 128, 128, 128]),
+    # Block Type (2)
+    [
+        # Coeff Band (0)
+        [
+            bytearray(b'\xFD\x09\xF8\xFB\xCF\xD0\xFF\xC0\x80\x80\x80'),
+            bytearray(b'\xAF\x0D\xE0\xF3\xC1\xB9\xF9\xC6\xFF\xFF\x80'),
+            bytearray(b'\x49\x11\xAB\xDD\xA1\xB3\xEC\xA7\xFF\xEA\x80'),
+        ],
+        # Coeff Band (1)
+        [
+            bytearray(b'\x01\x5F\xF7\xFD\xD4\xB7\xFF\xFF\x80\x80\x80'),
+            bytearray(b'\xEF\x5A\xF4\xFA\xD3\xD1\xFF\xFF\x80\x80\x80'),
+            bytearray(b'\x9B\x4D\xC3\xF8\xBC\xC3\xFF\xFF\x80\x80\x80'),
+        ],
+        # Coeff Band (2)
+        [
+            bytearray(b'\x01\x18\xEF\xFB\xDA\xDB\xFF\xCD\x80\x80\x80'),
+            bytearray(b'\xC9\x33\xDB\xFF\xC4\xBA\x80\x80\x80\x80\x80'),
+            bytearray(b'\x45\x2E\xBE\xEF\xC9\xDA\xFF\xE4\x80\x80\x80'),
+        ],
+        # Coeff Band (3)
+        [
+            bytearray(b'\x01\xBF\xFB\xFF\xFF\x80\x80\x80\x80\x80\x80'),
+            bytearray(b'\xDF\xA5\xF9\xFF\xD5\xFF\x80\x80\x80\x80\x80'),
+            bytearray(b'\x8D\x7C\xF8\xFF\xFF\x80\x80\x80\x80\x80\x80'),
+        ],
+        # Coeff Band (4)
+        [
+            bytearray(b'\x01\x10\xF8\xFF\xFF\x80\x80\x80\x80\x80\x80'),
+            bytearray(b'\xBE\x24\xE6\xFF\xEC\xFF\x80\x80\x80\x80\x80'),
+            bytearray(b'\x95\x01\xFF\x80\x80\x80\x80\x80\x80\x80\x80'),
+        ],
+        # Coeff Band (5)
+        [
+            bytearray(b'\x01\xE2\xFF\x80\x80\x80\x80\x80\x80\x80\x80'),
+            bytearray(b'\xF7\xC0\xFF\x80\x80\x80\x80\x80\x80\x80\x80'),
+            bytearray(b'\xF0\x80\xFF\x80\x80\x80\x80\x80\x80\x80\x80'),
+        ],
+        # Coeff Band (6)
+        [
+            bytearray(b'\x01\x86\xFC\xFF\xFF\x80\x80\x80\x80\x80\x80'),
+            bytearray(b'\xD5\x3E\xFA\xFF\xFF\x80\x80\x80\x80\x80\x80'),
+            bytearray(b'\x37\x5D\xFF\x80\x80\x80\x80\x80\x80\x80\x80'),
+        ],
+        # Coeff Band (7)
+        [
+            bytearray(b'\x80\x80\x80\x80\x80\x80\x80\x80\x80\x80\x80'),
+            bytearray(b'\x80\x80\x80\x80\x80\x80\x80\x80\x80\x80\x80'),
+            bytearray(b'\x80\x80\x80\x80\x80\x80\x80\x80\x80\x80\x80'),
+        ],
     ],
-    [ # Coeff Band ( 3 )
-      bytearray([1, 185, 249, 255, 243, 255, 128, 128, 128, 128, 128]),
-      bytearray([184, 150, 247, 255, 236, 224, 128, 128, 128, 128, 128]),
-      bytearray([77, 110, 216, 255, 236, 230, 128, 128, 128, 128, 128]),
+    # Block Type (3)
+    [
+        # Coeff Band (0)
+        [
+            bytearray(b'\xCA\x18\xD5\xEB\xBA\xBF\xDC\xA0\xF0\xAF\xFF'),
+            bytearray(b'\x7E\x26\xB6\xE8\xA9\xB8\xE4\xAE\xFF\xBB\x80'),
+            bytearray(b'\x3D\x2E\x8A\xDB\x97\xB2\xF0\xAA\xFF\xD8\x80'),
+        ],
+        # Coeff Band (1)
+        [
+            bytearray(b'\x01\x70\xE6\xFA\xC7\xBF\xF7\x9F\xFF\xFF\x80'),
+            bytearray(b'\xA6\x6D\xE4\xFC\xD3\xD7\xFF\xAE\x80\x80\x80'),
+            bytearray(b'\x27\x4D\xA2\xE8\xAC\xB4\xF5\xB2\xFF\xFF\x80'),
+        ],
+        # Coeff Band (2)
+        [
+            bytearray(b'\x01\x34\xDC\xF6\xC6\xC7\xF9\xDC\xFF\xFF\x80'),
+            bytearray(b'\x7C\x4A\xBF\xF3\xB7\xC1\xFA\xDD\xFF\xFF\x80'),
+            bytearray(b'\x18\x47\x82\xDB\x9A\xAA\xF3\xB6\xFF\xFF\x80'),
+        ],
+        # Coeff Band (3)
+        [
+            bytearray(b'\x01\xB6\xE1\xF9\xDB\xF0\xFF\xE0\x80\x80\x80'),
+            bytearray(b'\x95\x96\xE2\xFC\xD8\xCD\xFF\xAB\x80\x80\x80'),
+            bytearray(b'\x1C\x6C\xAA\xF2\xB7\xC2\xFE\xDF\xFF\xFF\x80'),
+        ],
+        # Coeff Band (4)
+        [
+            bytearray(b'\x01\x51\xE6\xFC\xCC\xCB\xFF\xC0\x80\x80\x80'),
+            bytearray(b'\x7B\x66\xD1\xF7\xBC\xC4\xFF\xE9\x80\x80\x80'),
+            bytearray(b'\x14\x5F\x99\xF3\xA4\xAD\xFF\xCB\x80\x80\x80'),
+        ],
+        # Coeff Band (5)
+        [
+            bytearray(b'\x01\xDE\xF8\xFF\xD8\xD5\x80\x80\x80\x80\x80'),
+            bytearray(b'\xA8\xAF\xF6\xFC\xEB\xCD\xFF\xFF\x80\x80\x80'),
+            bytearray(b'\x2F\x74\xD7\xFF\xD3\xD4\xFF\xFF\x80\x80\x80'),
+        ],
+        # Coeff Band (6)
+        [
+            bytearray(b'\x01\x79\xEC\xFD\xD4\xD6\xFF\xFF\x80\x80\x80'),
+            bytearray(b'\x8D\x54\xD5\xFC\xC9\xCA\xFF\xDB\x80\x80\x80'),
+            bytearray(b'\x2A\x50\xA0\xF0\xA2\xB9\xFF\xCD\x80\x80\x80'),
+        ],
+        # Coeff Band (7)
+        [
+            bytearray(b'\x01\x01\xFF\x80\x80\x80\x80\x80\x80\x80\x80'),
+            bytearray(b'\xF4\x01\xFF\x80\x80\x80\x80\x80\x80\x80\x80'),
+            bytearray(b'\xEE\x01\xFF\x80\x80\x80\x80\x80\x80\x80\x80'),
+        ],
     ],
-    [ # Coeff Band ( 4 )
-      bytearray([1, 101, 251, 255, 241, 255, 128, 128, 128, 128, 128]),
-      bytearray([170, 139, 241, 252, 236, 209, 255, 255, 128, 128, 128]),
-      bytearray([37, 116, 196, 243, 228, 255, 255, 255, 128, 128, 128]),
-    ],
-    [ # Coeff Band ( 5 )
-      bytearray([1, 204, 254, 255, 245, 255, 128, 128, 128, 128, 128]),
-      bytearray([207, 160, 250, 255, 238, 128, 128, 128, 128, 128, 128]),
-      bytearray([102, 103, 231, 255, 211, 171, 128, 128, 128, 128, 128]),
-    ],
-    [ # Coeff Band ( 6 )
-      bytearray([1, 152, 252, 255, 240, 255, 128, 128, 128, 128, 128]),
-      bytearray([177, 135, 243, 255, 234, 225, 128, 128, 128, 128, 128]),
-      bytearray([80, 129, 211, 255, 194, 224, 128, 128, 128, 128, 128]),
-    ],
-    [ # Coeff Band ( 7 )
-      bytearray([1, 1, 255, 128, 128, 128, 128, 128, 128, 128, 128]),
-      bytearray([246, 1, 255, 128, 128, 128, 128, 128, 128, 128, 128]),
-      bytearray([255, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128]),
-    ]
-  ],
-  [ # Block Type ( 1 )
-    [ # Coeff Band ( 0 )
-      bytearray([198, 35, 237, 223, 193, 187, 162, 160, 145, 155, 62]),
-      bytearray([131, 45, 198, 221, 172, 176, 220, 157, 252, 221, 1]),
-      bytearray([68, 47, 146, 208, 149, 167, 221, 162, 255, 223, 128]),
-    ],
-    [ # Coeff Band ( 1 )
-      bytearray([1, 149, 241, 255, 221, 224, 255, 255, 128, 128, 128]),
-      bytearray([184, 141, 234, 253, 222, 220, 255, 199, 128, 128, 128]),
-      bytearray([81, 99, 181, 242, 176, 190, 249, 202, 255, 255, 128]),
-    ],
-    [ # Coeff Band ( 2 )
-      bytearray([1, 129, 232, 253, 214, 197, 242, 196, 255, 255, 128]),
-      bytearray([99, 121, 210, 250, 201, 198, 255, 202, 128, 128, 128]),
-      bytearray([23, 91, 163, 242, 170, 187, 247, 210, 255, 255, 128]),
-    ],
-    [ # Coeff Band ( 3 )
-      bytearray([1, 200, 246, 255, 234, 255, 128, 128, 128, 128, 128]),
-      bytearray([109, 178, 241, 255, 231, 245, 255, 255, 128, 128, 128]),
-      bytearray([44, 130, 201, 253, 205, 192, 255, 255, 128, 128, 128]),
-    ],
-    [ # Coeff Band ( 4 )
-      bytearray([1, 132, 239, 251, 219, 209, 255, 165, 128, 128, 128]),
-      bytearray([94, 136, 225, 251, 218, 190, 255, 255, 128, 128, 128]),
-      bytearray([22, 100, 174, 245, 186, 161, 255, 199, 128, 128, 128]),
-    ],
-    [ # Coeff Band ( 5 )
-      bytearray([1, 182, 249, 255, 232, 235, 128, 128, 128, 128, 128]),
-      bytearray([124, 143, 241, 255, 227, 234, 128, 128, 128, 128, 128]),
-      bytearray([35, 77, 181, 251, 193, 211, 255, 205, 128, 128, 128]),
-    ],
-    [ # Coeff Band ( 6 )
-      bytearray([1, 157, 247, 255, 236, 231, 255, 255, 128, 128, 128]),
-      bytearray([121, 141, 235, 255, 225, 227, 255, 255, 128, 128, 128]),
-      bytearray([45, 99, 188, 251, 195, 217, 255, 224, 128, 128, 128]),
-    ],
-    [ # Coeff Band ( 7 )
-      bytearray([1, 1, 251, 255, 213, 255, 128, 128, 128, 128, 128]),
-      bytearray([203, 1, 248, 255, 255, 128, 128, 128, 128, 128, 128]),
-      bytearray([137, 1, 177, 255, 224, 255, 128, 128, 128, 128, 128]),
-    ]
-  ],
-  [ # Block Type ( 2 )
-    [ # Coeff Band ( 0 )
-      bytearray([253, 9, 248, 251, 207, 208, 255, 192, 128, 128, 128]),
-      bytearray([175, 13, 224, 243, 193, 185, 249, 198, 255, 255, 128]),
-      bytearray([73, 17, 171, 221, 161, 179, 236, 167, 255, 234, 128]),
-    ],
-    [ # Coeff Band ( 1 )
-      bytearray([1, 95, 247, 253, 212, 183, 255, 255, 128, 128, 128]),
-      bytearray([239, 90, 244, 250, 211, 209, 255, 255, 128, 128, 128]),
-      bytearray([155, 77, 195, 248, 188, 195, 255, 255, 128, 128, 128]),
-    ],
-    [ # Coeff Band ( 2 )
-      bytearray([1, 24, 239, 251, 218, 219, 255, 205, 128, 128, 128]),
-      bytearray([201, 51, 219, 255, 196, 186, 128, 128, 128, 128, 128]),
-      bytearray([69, 46, 190, 239, 201, 218, 255, 228, 128, 128, 128]),
-    ],
-    [ # Coeff Band ( 3 )
-      bytearray([1, 191, 251, 255, 255, 128, 128, 128, 128, 128, 128]),
-      bytearray([223, 165, 249, 255, 213, 255, 128, 128, 128, 128, 128]),
-      bytearray([141, 124, 248, 255, 255, 128, 128, 128, 128, 128, 128]),
-    ],
-    [ # Coeff Band ( 4 )
-      bytearray([1, 16, 248, 255, 255, 128, 128, 128, 128, 128, 128]),
-      bytearray([190, 36, 230, 255, 236, 255, 128, 128, 128, 128, 128]),
-      bytearray([149, 1, 255, 128, 128, 128, 128, 128, 128, 128, 128]),
-    ],
-    [ # Coeff Band ( 5 )
-      bytearray([1, 226, 255, 128, 128, 128, 128, 128, 128, 128, 128]),
-      bytearray([247, 192, 255, 128, 128, 128, 128, 128, 128, 128, 128]),
-      bytearray([240, 128, 255, 128, 128, 128, 128, 128, 128, 128, 128]),
-    ],
-    [ # Coeff Band ( 6 )
-      bytearray([1, 134, 252, 255, 255, 128, 128, 128, 128, 128, 128]),
-      bytearray([213, 62, 250, 255, 255, 128, 128, 128, 128, 128, 128]),
-      bytearray([55, 93, 255, 128, 128, 128, 128, 128, 128, 128, 128]),
-    ],
-    [ # Coeff Band ( 7 )
-      bytearray([128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128]),
-      bytearray([128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128]),
-      bytearray([128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128]),
-    ]
-  ],
-  [ # Block Type ( 3 )
-    [ # Coeff Band ( 0 )
-      bytearray([202, 24, 213, 235, 186, 191, 220, 160, 240, 175, 255]),
-      bytearray([126, 38, 182, 232, 169, 184, 228, 174, 255, 187, 128]),
-      bytearray([61, 46, 138, 219, 151, 178, 240, 170, 255, 216, 128]),
-    ],
-    [ # Coeff Band ( 1 )
-      bytearray([1, 112, 230, 250, 199, 191, 247, 159, 255, 255, 128]),
-      bytearray([166, 109, 228, 252, 211, 215, 255, 174, 128, 128, 128]),
-      bytearray([39, 77, 162, 232, 172, 180, 245, 178, 255, 255, 128]),
-    ],
-    [ # Coeff Band ( 2 )
-      bytearray([1, 52, 220, 246, 198, 199, 249, 220, 255, 255, 128]),
-      bytearray([124, 74, 191, 243, 183, 193, 250, 221, 255, 255, 128]),
-      bytearray([24, 71, 130, 219, 154, 170, 243, 182, 255, 255, 128]),
-    ],
-    [ # Coeff Band ( 3 )
-      bytearray([1, 182, 225, 249, 219, 240, 255, 224, 128, 128, 128]),
-      bytearray([149, 150, 226, 252, 216, 205, 255, 171, 128, 128, 128]),
-      bytearray([28, 108, 170, 242, 183, 194, 254, 223, 255, 255, 128]),
-    ],
-    [ # Coeff Band ( 4 )
-      bytearray([1, 81, 230, 252, 204, 203, 255, 192, 128, 128, 128]),
-      bytearray([123, 102, 209, 247, 188, 196, 255, 233, 128, 128, 128]),
-      bytearray([20, 95, 153, 243, 164, 173, 255, 203, 128, 128, 128]),
-    ],
-    [ # Coeff Band ( 5 )
-      bytearray([1, 222, 248, 255, 216, 213, 128, 128, 128, 128, 128]),
-      bytearray([168, 175, 246, 252, 235, 205, 255, 255, 128, 128, 128]),
-      bytearray([47, 116, 215, 255, 211, 212, 255, 255, 128, 128, 128]),
-    ],
-    [ # Coeff Band ( 6 )
-      bytearray([1, 121, 236, 253, 212, 214, 255, 255, 128, 128, 128]),
-      bytearray([141, 84, 213, 252, 201, 202, 255, 219, 128, 128, 128]),
-      bytearray([42, 80, 160, 240, 162, 185, 255, 205, 128, 128, 128]),
-    ],
-    [ # Coeff Band ( 7 )
-      bytearray([1, 1, 255, 128, 128, 128, 128, 128, 128, 128, 128]),
-      bytearray([244, 1, 255, 128, 128, 128, 128, 128, 128, 128, 128]),
-      bytearray([238, 1, 255, 128, 128, 128, 128, 128, 128, 128, 128]),
-    ]
-  ]
 ]
 
 ### VP8 bitstream utilities
