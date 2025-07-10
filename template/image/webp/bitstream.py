@@ -248,7 +248,7 @@ COEF_BANDS = 8
 PREV_COEF_CONTEXTS = 3
 ENTROPY_NODES = 11
 
-class token_prob_update(pbinary.array):
+class token_prob_update_nested(pbinary.array):
     length = BLOCK_TYPES
     class _object_(pbinary.array):
         length = COEF_BANDS
@@ -256,6 +256,14 @@ class token_prob_update(pbinary.array):
             length = PREV_COEF_CONTEXTS
             class _object_(pbinary.array):
                 length, _object_ = ENTROPY_NODES, coeff_prob_update
+
+    def summary(self):
+        res = self.bits()
+        return "...{:d} bit{:s}...".format(res, '' if res == 1 else 's')
+
+class token_prob_update(pbinary.array):
+    length = BLOCK_TYPES * COEF_BANDS * PREV_COEF_CONTEXTS * ENTROPY_NODES
+    _object_ = coeff_prob_update
 
     def summary(self):
         res = self.bits()
