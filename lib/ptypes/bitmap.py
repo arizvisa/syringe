@@ -722,7 +722,10 @@ class RBitmap(object):
         '''Consume the specified number of bits from the object.'''
         leftover = 8 - self.offset
 
-        if self.offset and bits < leftover:
+        if not(self.data):
+            raise StopIteration
+
+        elif self.offset and bits < leftover:
             shift, mask = pow(2, leftover - bits), pow(2, bits) - 1
             result = self.data[0] // shift
             self.offset, self.data[0] = self.offset + bits, self.data[0] & (2 * shift - 1)
