@@ -235,6 +235,198 @@ def bitstream_condition_field(field, key, nokey):
         return key if self[field] else nokey
     return is_set
 
+# FIXME: should probably be using rational numbers instead.
+def arithmetic_encoder_floating(data, probabilities):
+    assert(isinstance(probabilities, dict))
+    probabilities.clear()
+
+    counts, ordered = {}, sorted({symbol for symbol in data})
+    for symbol in ordered:
+        counts[symbol] = data.count(symbol)
+    probabilities.update({symbol : count / len(data) for symbol, count in counts.items()})
+
+    # cumulative probabilities.
+    iterable = (probabilities[symbol] for symbol in ordered)
+    ranges = functools.reduce(lambda acc, probability: acc + [(acc[-1][-1], acc[-1][-1] + probability)], iterable, [(0., 0.)])
+    ranges.pop(0)
+    cumulative = {symbol : range for symbol, range in zip(ordered, ranges)}
+
+    # start consuming our data and preserving the fraction.
+    lo, hi = 0., 1.
+    for symbol in data:
+        symbol_lo, symbol_hi = cumulative[symbol]
+        minimal, range = lo, hi - lo
+        hi = minimal + (range * symbol_hi)
+        lo = minimal + (range * symbol_lo)
+    return (hi - lo) / 2 + lo
+
+def arithmetic_decoder_floating(state, probabilities):
+    assert(isinstance(probabilities, dict))
+
+    # cumulative probabilities.
+    ordered = sorted(probabilities)
+    iterable = (probabilities[symbol] for symbol in ordered)
+    ranges = functools.reduce(lambda acc, probability: acc + [(acc[-1][-1], acc[-1][-1] + probability)], iterable, [(0., 0.)])
+    ranges.pop(0)
+    cumulative = {symbol : range for symbol, range in zip(ordered, ranges)}
+
+    # now we can do the actual decoding...
+    while True:
+        iterable = (symbol for symbol, (lower, upper) in cumulative.items() if lower <= state < upper)
+        symbol = next(iterable)
+
+        # use the symbol to get the bounds to adjust our state with.
+        lo, hi = cumulative[symbol]
+        base, range = lo, hi - lo
+
+        # remove our fractional part for the symbol from our state.
+        state = (state - base) / range
+        yield symbol
+    return
+
+def arithmetic_encoder_bits(bits, data, state):
+    assert(isinstance(state, dict))
+    quarters = [pow(2, bits - 2), pow(2, bits - 1), pow(2, bits) - 1]
+    scale = pow(2, bits)
+
+    # get the frequency of each symbol the the data we were given.
+    counts = {}
+    for symbol in data:
+        counts[symbol] = counts.get(symbol, 0) + 1
+
+    # convert the count of each symbol into a probability.
+    probabilities = {symbol : count / len(data) for symbol, count in counts.items()}
+    scaled_probabilities = {symbol : count * scale for symbol, count in probabilities.items()}
+    probabilities = {symbol: math.trunc(probability) for symbol, probability in scaled_probabilities.items()}
+
+    # calculate the cumulative probabilities
+    state.clear(), state.update(probabilities)
+    first, ordered = [(0, 0)], sorted(probabilities)
+    iterable = (probabilities[symbol] for symbol in ordered)
+    cumulative = functools.reduce(lambda acc, probability: acc + [(acc[-1][-1], acc[-1][-1] + probability)], iterable, first)[len(first):]
+    cumulative_probabilities = {symbol : cumulative[index] for index, symbol in enumerate(ordered)}
+
+    # set the starting range to 0..1 multiplied by the scale, and then enter our
+    # loop that encodes each symbol from our data.
+    pending, lo, hi = 0, 0, quarters[-1]
+    for symbol in data:
+        base, range = lo, hi - lo + 1
+        probability_lo, probability_hi = cumulative_probabilities[symbol]
+
+        # use the boundaries from the current symbol to update our range.
+        # FIXME: should prolly divmod here to avoid fp-precision issues.
+        hi = base + (range * probability_hi / scale) - 1
+        lo = base + (range * probability_lo / scale)
+
+        # figure out what bit is within our current range, yield it along with
+        # any pending bits, and normalize the current boundaries,
+        while True:
+            if hi < quarters[1]:
+                yield 0
+                for index in builtins.range(pending):
+                    yield 1
+                pending = 0
+
+            elif lo >= quarters[1]:
+                yield 1
+                for index in builtins.range(pending):
+                    yield 0
+                pending = 0
+                lo -= quarters[1]
+                hi -= quarters[1]
+
+            elif lo >= quarters[0] and hi < (quarters[-1] - quarters[0]):
+                pending += 1
+                lo -= quarters[0]
+                hi -= quarters[0]
+
+            else:
+                break
+
+            lo = lo * pow(2, 1) + 0
+            hi = hi * pow(2, 1) + 1
+            hi = min(hi, quarters[-1])
+        continue
+
+    # now to finish up, we yield anything that is still pending.
+    bit = 0 if lo < quarters[0] else 1
+    yield bit
+
+    for index in builtins.range(1 + pending):
+        yield 1 - bit
+    return
+
+def arithmetic_decoder_bits(bits, bitstream, probabilities):
+    assert(isinstance(probabilities, dict))
+    quarters = [pow(2, bits - 2), pow(2, bits - 1), pow(2, bits) - 1]
+    scale = pow(2, bits)
+
+    # calculate the cumulative probabilities from the ones we were given.
+    first, ordered = [(0, 0)], sorted(probabilities)
+    iterable = (probabilities[symbol] for symbol in ordered)
+    cumulative = functools.reduce(lambda acc, probability: acc + [(acc[-1][-1], acc[-1][-1] + probability)], iterable, first)[len(first):]
+    cumulative_probabilities = {symbol : cumulative[index] for index, symbol in enumerate(ordered)}
+
+    # seed the decoder with some undetermined number of bits...
+    state = 0
+    for index in builtins.range(bits):
+        state *= pow(2, 1)
+        state |= next(bitstream)
+
+    # set our starting range from 0..1 * scale and then enter the decoding loop.
+    lo, hi = 0, quarters[-1]
+    while True:
+        base, range = lo, hi - lo + 1
+
+        # figure out the value that we'll use to search the cumulative
+        # probability ranges and determine the symbol that was encoded.
+        res = state - base + 1
+        numerator, denominator = res * scale - 1, range
+        value = numerator / denominator
+
+        # search through all the probability ranges in O(n) time...
+        # XXX: can probably use a segment tree here instead.
+        for symbol in sorted(cumulative_probabilities):
+            probability_lo, probability_hi = cumulative_probabilities[symbol]
+            if probability_lo <= value < probability_hi:
+                yield symbol
+                break
+            continue
+
+        # error out if we couldn't find the symbol from the frequency.
+        else:
+            raise ValueError(value, cumulative_probabilities)
+
+        # use the boundaries from the found symbol to update our current range.
+        # FIXME: should prolly divmod here to avoid potential precision issues.
+        hi = base + (range * probability_hi / scale) - 1
+        lo = base + (range * probability_lo / scale)
+
+        # now we just need to normalize our boundaries in the exact same way as
+        # the encoder does it.
+        while True:
+            if hi < quarters[1]:
+                pass
+            elif lo >= quarters[1]:
+                lo -= quarters[1]
+                hi -= quarters[1]
+                state -= quarters[1]
+            elif lo >= quarters[0] and hi < (quarters[-1] - quarters[0]):
+                lo -= quarters[0]
+                hi -= quarters[0]
+                state -= quarters[0]
+            else:
+                break
+
+            lo = lo * pow(2, 1) + 0
+            hi = hi * pow(2, 1) + 1
+            hi = min(hi, quarters[-1])
+
+            # add the next bit from the bitstream to our current state.
+            state = state * pow(2, 1) + next(bitstream, 0)
+        continue
+    return
+
 ### these structures are boolean-encoded into a stream
 start_code = f(24)
 @pbinary.littleendian
@@ -562,3 +754,41 @@ class frame_header(pbinary.struct):
     def summary(self):
         res = self.bits()
         return "...{:d} bit{:s}...".format(res, '' if res == 1 else 's')
+
+if __name__ == '__main__':
+    import sys, random
+
+    # using floating-point to store probabilities.
+    probabilities, data = {}, bytearray(random.randbytes(8))
+    encoded = arithmetic_encoder_floating(data, probabilities)
+    print("{:g}".format(encoded))
+    I = arithmetic_decoder_floating(encoded, probabilities)
+
+    decoded = [next(I) for i in range(len(data))]
+    if isinstance(data, (bytes, bytearray)):
+        print(bytearray(data).hex())
+        print(bytearray(decoded).hex())
+        print(bytearray(data) == bytearray(decoded))
+    else:
+        print(str().join(data))
+        print(str().join(decoded))
+        print(str().join(data) == str().join(decoded))
+
+    # using bits to store probabilities.
+    bits, probabilities = 8, {}
+    data = bytearray(random.randbytes(pow(2, bits - 2)))
+    I = arithmetic_encoder_bits(bits, data, probabilities)
+    encoded = list(I)
+
+    I = arithmetic_decoder_bits(bits, (bit for bit in encoded), probabilities)
+    decoded = [next(I) for i in range(len(data))]
+    if isinstance(data, (bytes, bytearray)):
+        print(bytearray(data).hex())
+        print(bytearray(decoded).hex())
+        print(bytearray(data) == bytearray(decoded))
+    else:
+        print(str().join(data))
+        print(str().join(decoded))
+        print(str().join(data) == str().join(decoded))
+
+    sys.exit(0)
