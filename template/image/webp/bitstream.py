@@ -514,6 +514,38 @@ def rfc_boolean_entropy_decoder(bytestream):
         continue
     return
 
+def boolean_entropy_decoder(bitstream, seedbits=16):
+    scale = pow(2, 8)
+    range = scale - 1
+
+    # seed the decoder with 16 bits as per RFC6386.
+    state = 0
+    for index in builtins.range(seedbits):
+        state *= pow(2, 1)
+        state |= next(bitstream)
+
+    prob = (yield)
+    while True:
+        res = (range - 1) * prob
+        split = 1 + res // pow(2, 8)
+        SPLIT = split * pow(2, 8)
+
+        if state >= SPLIT:
+            prob = (yield 1)
+            range -= split
+            state -= SPLIT
+
+        else:
+            prob = (yield 0)
+            range = split
+
+        while range < 128:
+            state <<= 1
+            range <<= 1
+            state |= next(bitstream, 0)
+        continue
+    return
+
 ### these structures are boolean-encoded into a stream
 start_code = f(24)
 @pbinary.littleendian
