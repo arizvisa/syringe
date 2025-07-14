@@ -427,6 +427,93 @@ def arithmetic_decoder_bits(bits, bitstream, probabilities):
         continue
     return
 
+def rfc_boolean_entropy_encoder(bitstream, output):
+    scale = pow(2, 8)
+    bottom, range, bit_count = 0, scale - 1, 24
+
+    try:
+        while True:
+            prob = (yield)
+            split = 1 + (((range - 1) * prob) >> 8);
+            if next(bitstream):
+                bottom += split
+                range -= split
+            else:
+                range = split
+
+            while range < 128:
+                range <<= 1
+
+                # the rfc implementation of this algorithm is fucking stupid.
+                # you're backtracking and zeroing bytes? like really? how about
+                # you just fucking correct your math.
+                if bottom & (1 << 31):
+                    iterable = (index for index in builtins.range(len(output)) if output[-1 - index] != 0xFF)
+                    fuckingstupid = next(iterable)
+                    output[:] = output[:-fuckingstupid] if fuckingstupid else output
+
+                bottom <<= 1
+                bit_count -= 1
+                if not(bit_count):
+                    output.append(bottom >> 24)
+                    bottom &= (1 << 24) - 1
+                    bit_count = 8
+                continue
+            continue
+
+    except GeneratorExit:
+        pass
+
+    c = bit_count
+    v = bottom;
+
+    if (v & (1 << (32 - c))):
+        iterable = (index for index in builtins.range(len(output)) if output[-1 - index] != 0xFF)
+        fuckingstupid = next(iterable)
+        output[:] = output[:-fuckingstupid] if fuckingstupid else output
+
+    v <<= c & 7;
+    c >>= 3;
+    for i in builtins.range(c):
+        v <<= 8;
+    for i in builtins.range(4):
+        output.append((v >> 24) & 0xFF)
+        v <<= 8;
+    return
+
+def rfc_boolean_entropy_decoder(bytestream):
+    count, range = 0, 255
+
+    value = next(bytestream)
+    value*= pow(2, 8)
+    value|= next(bytestream)
+
+    prob = (yield)
+    while True:
+        res = (range - 1) * prob
+        split = 1 + res // pow(2, 8)
+        SPLIT = split * pow(2, 8)
+
+        if value >= SPLIT:
+            prob = (yield 1)
+            range -= split
+            value -= SPLIT
+
+        else:
+            prob = (yield 0)
+            range = split
+
+        while range < 128:
+            value <<= 1
+            range <<= 1
+            count += 1
+            if count == 8:
+                count = 0
+                value |= next(bytestream)
+            continue
+        continue
+    return
+
 ### these structures are boolean-encoded into a stream
 start_code = f(24)
 @pbinary.littleendian
