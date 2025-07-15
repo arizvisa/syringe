@@ -884,6 +884,62 @@ class token_prob_update(pbinary.array):
         res = self.bits()
         return "...{:d} bit{:s}...".format(res, '' if res == 1 else 's')
 
+    # we have to cheat here in order to decode the probabilities correctly.
+    def __deserialize_consumer__(self, consumer):
+        self.value = []
+        position = consumer.position
+        self.__position__ = position // 8, position % 8
+
+        class codingconsumer(object):
+            def __init__(self, consumer, decoder=None):
+                self.consumer = consumer
+                if decoder is None:
+                    iterable = (consumer.consume(1) for _ in itertools.count())
+                    decoder = boolean_entropy_decoder(iterable); next(decoder)
+                self.decoder = decoder
+                self.probabilities = []
+
+            @property
+            def position(self):
+                return self.consumer.position
+
+            def get_probabilities(self):
+                while self.probabilities:
+                    yield self.probabilities.pop(0)
+                while True:
+                    yield 128
+                return
+
+            def consume(self, amount):
+                iterable = self.get_probabilities()
+                decodable = itertools.islice(iterable, amount)
+                bits = [self.decoder.send(probability) for probability in decodable]
+                return functools.reduce(lambda agg, bit: agg * 2 + bit, bits, 0)
+
+        decoder = codingconsumer(consumer)
+        for i in builtins.range(BLOCK_TYPES):
+            for j in builtins.range(COEF_BANDS):
+                for k in builtins.range(PREV_COEF_CONTEXTS):
+                    for l in builtins.range(ENTROPY_NODES):
+                        index = ','.join(map("{:d}".format, [i, j, k, l]))
+                        instance = self.new(self._object_, __name__="{!s}".format(index), position=self.__position__)
+                        item = self.__append__(instance)
+
+                        probability = default_coef_probs[i][j][k][l]
+                        if hasattr(item, '__decode_consumer__'):
+                            item.__decode_consumer__(decoder, probability=probability)
+                            assert(not(decoder.probabilities))
+                        else:
+                            decoder.probabilities[:] = [probability]
+                            item.__deserialize_consumer__(decoder)
+                            assert(not(decoder.probabilities))
+
+                        self.__position__ = min(self.__position__, item.__position__)
+                    continue
+                continue
+            continue
+        return self
+
 mv_prob_update_flag = L(1)
 prob = L(7)
 class mv_prob_update(pbinary.array):
@@ -955,15 +1011,15 @@ class frame_header(pbinary.struct):
         # FIXME: this next field is entropy-coded using `default_coef_probs`.
         (token_prob_update, 'token_prob_update'),
         (mb_no_skip_coeff, 'mb_no_skip_coeff'),
-        #(bitstream_condition_field('mb_no_skip_coeff', prob_skip_false, 0), 'prob_skip_false'),
-        #(__condition_keyframe(0, prob_intra), 'prob_intra'),
-        #(__condition_keyframe(0, prob_last), 'prob_last'),
-        #(__condition_keyframe(0, prob_gf), 'prob_gf'),
-        #(__condition_keyframe(0, intra_16x16_prob_update_flag), 'intra_16x16_prob_update_flag'),
-        #(bitstream_condition_field('intra_16x16_prob_update_flag', dyn.clone(pbinary.array, _object_=intra_16x16_prob, length=4), 0), 'intra_16x16_prob'),
-        #(__condition_keyframe(0, intra_chroma_prob_update_flag), 'intra_chroma_prob_update_flag'),
-        #(bitstream_condition_field('intra_chroma_prob_update_flag', dyn.clone(pbinary.array, _object_=intra_chroma_prob, length=3), 0), 'intra_chroma_prob'),
-        #(mv_prob_update, 'mv_prob_update'),
+        (bitstream_condition_field('mb_no_skip_coeff', prob_skip_false, 0), 'prob_skip_false'),
+        (__condition_keyframe(0, prob_intra), 'prob_intra'),
+        (__condition_keyframe(0, prob_last), 'prob_last'),
+        (__condition_keyframe(0, prob_gf), 'prob_gf'),
+        (__condition_keyframe(0, intra_16x16_prob_update_flag), 'intra_16x16_prob_update_flag'),
+        (bitstream_condition_field('intra_16x16_prob_update_flag', dyn.clone(pbinary.array, _object_=intra_16x16_prob, length=4), 0), 'intra_16x16_prob'),
+        (__condition_keyframe(0, intra_chroma_prob_update_flag), 'intra_chroma_prob_update_flag'),
+        (bitstream_condition_field('intra_chroma_prob_update_flag', dyn.clone(pbinary.array, _object_=intra_chroma_prob, length=3), 0), 'intra_chroma_prob'),
+        (mv_prob_update, 'mv_prob_update'),
     ]
 
     def summary(self):
