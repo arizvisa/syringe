@@ -1172,6 +1172,17 @@ class macroblock(pstruct.type):
         (residual_data, 'data'),
     ]
 
+class uncompressed(pstruct.type):
+    '''19.1 Uncompressed Data Chunk'''
+    _fields_ = [
+        (frame_tag, 'tag'),
+        (frame_header, 'header'),
+        (ptype.block, 'data'),
+    ]
+
+class File(uncompressed):
+    pass
+
 if __name__ == '__main__':
     import sys, random
 
