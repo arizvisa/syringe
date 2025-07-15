@@ -588,6 +588,60 @@ def old_boolean_entropy_encoder(bitstream, output):
         bottom <<= 1
     return
 
+def boolean_entropy_encoder(output):
+    scale, seedbits = pow(2, 8), 16
+    bottom, range, count = 0, scale - 1, 0
+    highestbit = pow(2, seedbits - 1)
+
+    # we pulled this (yield) out of the loop in case we want to yield each bit
+    # individually rather than append it to the list in the "output" parameter.
+    bit, prob = (yield)
+
+    # start reading the first 8 bits to get our scaled fraction.
+    while count < 8:
+        res = (range - 1) * prob
+        split = 1 + (res >> 8)
+
+        # adjust our range and state with the information from the bit.
+        range, bottom = (range - split, bottom + split) if bit else (split, bottom)
+
+        while range < 128:
+            range <<= 1
+            bottom <<= 1
+            count += 1
+
+        # now we can read the next bit to process.
+        bit, prob = (yield)
+
+    # we've finished seeding our state, and can now start pulling bits from it.
+    try:
+        while True:
+            res = (range - 1) * prob
+            split = 1 + (res // scale)
+
+            # adjust both the range and lower bounds.
+            range, bottom = (range - split, bottom + split) if bit else (split, bottom)
+
+            # here we add the bit that was decoded to the "output" parameter.
+            while range < 128:
+                range <<= 1
+                bit = bottom & highestbit
+                output.append(1 if bit else 0)
+                bottom <<= 1
+
+            # ask the caller for another bit and its probability.
+            bit, prob = (yield)
+
+    except GeneratorExit:
+        pass
+
+    # now we can go through and empty the bits remaining in the lower bound and
+    # append each of them to the output. that should finally finish it.
+    for i in builtins.range(seedbits + 8):
+        bottom <<= 1
+        output.append(1 if bottom & highestbit else 0)
+    return
+
 ### these structures are boolean-encoded into a stream
 start_code = f(24)
 @pbinary.littleendian
