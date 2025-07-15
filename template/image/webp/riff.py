@@ -6,10 +6,12 @@ pint.setbyteorder('little')
 class u0(pint.uint_t): pass
 class u8(pint.uint8_t): pass
 class u16(pint.uint16_t): pass
+class u24(pint.uint_t): length = 3
 class u32(pint.uint32_t): pass
 class s0(pint.sint_t): pass
 class s8(pint.sint8_t): pass
 class s16(pint.sint16_t): pass
+class s24(pint.sint_t): length = 3
 class s32(pint.sint32_t): pass
 
 class ColorBGRA(pstruct.type):
@@ -167,11 +169,11 @@ class ANMF(pstruct.type):
         return dyn.clone(SizedChunkArray, blocksize=lambda self, size=length: size) if length else ChunkArray
 
     _fields_ = [
-        (u32, 'X'),
-        (u32, 'Y'),
-        (u32, 'Width'),
-        (u32, 'Height'),
-        (u32, 'Duration'),
+        (u24, 'X'),
+        (u24, 'Y'),
+        (u24, 'Width'),
+        (u24, 'Height'),
+        (u24, 'Duration'),
         (_methodBits, 'Method'),
         (__FrameData, 'FrameData'),
     ]
