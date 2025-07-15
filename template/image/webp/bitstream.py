@@ -18,8 +18,9 @@ def f(n):
     return n
 def L(n):
     return Lit(n)
-#def B(p):
-#    return Bool(p)
+def B(p):
+    return Bool(p)
+T = 0   # tree-coded token
 
 ### VP8 boolean entropy data
 default_coef_probs = [
@@ -233,6 +234,12 @@ default_coef_probs = [
 def bitstream_condition_field(field, key, nokey):
     def is_set(self):
         return key if self[field] else nokey
+    return is_set
+
+def bitstream_condition_case(field, case, key, nokey):
+    def is_set(self):
+        res = self.field(field)
+        return key if res[case] else nokey
     return is_set
 
 # FIXME: should probably be using rational numbers instead.
@@ -1025,6 +1032,145 @@ class frame_header(pbinary.struct):
     def summary(self):
         res = self.bits()
         return "...{:d} bit{:s}...".format(res, '' if res == 1 else 's')
+
+extra_bits = L
+sign = L(1)
+token = T   # FIXME: RFC6386 says this is tree-coded which is documented at 8.1.
+class residual_block(pbinary.struct):
+    # FIXME: this entire block is encoded and will require some work to decode.
+
+    def __extra_bits(self):
+        token = self['token'].li
+        if token.is_eob():
+            return 0
+        elif token.has_extra_bits():
+            n = token.get_extra_bits()
+            return extra_bits(n)
+        return 0
+
+    def __coefficient_sign(self):
+        token = self['token'].li
+        coefficient = token.get_coefficient()
+        if token.is_eob():
+            return 0
+        elif coefficient:
+            return sign
+        return 0
+
+    _fields_ = [
+        (token, 'token'),
+        (__extra_bits, 'extra_bits'),
+        (__coefficient_sign, 'sign'),
+    ]
+
+class residual_data(pbinary.struct):
+    def __has_mb_skip_coeff(true, false):
+        def has_mb_skip_coeff_and_more(self):
+            p = self.parent.parent
+            if not isinstance(p, pstruct.type):
+                return nokey
+            header = p.value[1]
+            res = header['mb_no_skip_coeff'].li
+            if not(res):
+                return nokey
+            is_inter_mb, mv_mode, intra_y_mode = (header.field(fld) for fld in ['is_inter_mb', 'mv_mode', 'intra_y_mode'])
+            if is_inter_mb.int() and not(mv_mode['SPLITMV']):
+                return key
+            elif not(is_inter_mb.int()) and not(intra_y_mode['B_PRED']):
+                return key
+            return nokey
+        return has_mb_skip_coeff_and_more
+
+    _fields_ = [
+        (__has_mb_skip_coeff(residual_block, 0), 'Y2'),
+        (dyn.clone(pbinary.array, _object_=residual_block, length=24), 'YUV'),
+    ]
+
+segment_id = T
+mb_skip_coeff = B
+is_inter_mb = B
+mb_ref_frame_sel1 = B
+mb_ref_frame_sel2 = B
+mv_mode = T
+mv_split_mode = T
+sub_mv_mode = T
+intra_y_mode = T
+intra_b_mode = T
+intra_uv_mode = T
+
+sub_mv_mode = T
+
+# FIXME: this is wrong too.
+class read_mv(pbinary.struct):
+    '''RFC6386: 17.1 Coding of each component'''
+    _fields_ = [
+        (0, 'y'),
+        (0, 'x'),
+    ]
+
+class mv_component_entry(pbinary.struct):
+    _fields_ = [
+        (sub_mv_mode, 'sub_mv_mode'),
+        (bitstream_condition_case('sub_mv_mode', 'NEWMV4x4', read_mv, 0), 'mv_component'),
+    ]
+
+numMvs = 0
+class mv_components(pbinary.array):
+    _object_ = mv_component_entry
+
+    # FIXME: this length actually depends on the mv_mode
+    length = numMvs
+
+class macroblock_header(pbinary.struct):
+    def __is_keyframe(keyt, nokey):
+        def is_keyframe(self):
+            p = self.parent.parent
+            if not isinstance(p, pstruct.type):
+                return nokey
+            tag = p.value[0]
+            res = tag['frame_tag'].li
+            return key if res['key_frame'] else nokey
+        return is_keyframe
+
+    def __frameheader_field(field, true, false):
+        def frameheader_field(self):
+            p = self.parent.parent
+            if not isinstance(p, pstruct.type):
+                return false
+            header = p.value[1]
+            return false
+        return frameheader_field
+
+    # FIXME: need to know the number of components here
+    def __mv_components(self):
+        res = self['mv_mode'].li
+        if res['SPLITMV']:
+            return dyn.clone(mv_components, length=0)   # XXX: and here
+        elif res['NEWMV']:
+            return read_mv
+        return dyn.clone(mv_components, length=0)
+
+    _fields_ = [
+        (__frameheader_field('update_mb_segmentation_map', segment_id, 0), 'segment_id'),
+        (__frameheader_field('mb_no_skip_coeff', mb_skip_coeff, 0), 'mb_skip_coeff'),
+        (__is_keyframe(0, is_inter_mb), 'is_inter_mb'),
+        (bitstream_condition_field('is_inter_mb', mb_ref_frame_sel1, 0), 'mb_ref_frame_sel1'),
+        (bitstream_condition_field('mb_ref_frame_sel1', mb_ref_frame_sel2, 0), 'mb_frame_sel2'),
+        (bitstream_condition_field('is_inter_mb', mv_mode, 0), 'mv_mode'),
+        (bitstream_condition_case('mv_mode', 'SPLITMV', mv_split_mode, 0), 'mv_split_mode'),
+        #(bitstream_condition_case('mv_mode', 'SPLITMV', mv_components, dyn.clone(mv_components, length=0)), 'splitmv_components'),
+        #(bitstream_condition_case('mv_mode', 'NEWMV', read_mv, 0), 'newmv_component'),
+        (__mv_components, 'mv_components'),
+        (bitstream_condition_field('is_inter_mb', 0, intra_y_mode), 'intra_y_mode'),
+        (bitstream_condition_case('intra_y_mode', 'B_PRED', dyn.clone(pbinary.array, length=16, _object_=intra_b_mode), 0), 'intra_y_mode'),
+        (bitstream_condition_field('is_inter_mb', 0, intra_uv_mode), 'intra_uv_mode'),
+    ]
+
+class macroblock(pstruct.type):
+    _fields_ = [
+        (macroblock_header, 'header'),
+        (residual_data, 'data'),
+    ]
 
 if __name__ == '__main__':
     import sys, random
