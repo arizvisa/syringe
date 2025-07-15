@@ -127,6 +127,26 @@ class VP8L(ptype.block):
     type = b'VP8L'
 
 @ChunkType.define
+class VP8X(pstruct.type):
+    type = b'VP8X'
+    class _Flags(pbinary.flags):
+        _fields_ = [
+            (2, 'Rsv'),         # Reserved (Rsv)
+            (1, 'I'),           # ICC profile (I)
+            (1, 'L'),           # Alpha (L)
+            (1, 'E'),           # Exif metadata (E)
+            (1, 'X'),           # XMP metadata (X)
+            (1, 'A'),           # Animation (A)
+            (1, 'R'),           # Reserved (R)
+        ]
+    _fields_ = [
+        (_Flags, 'Flags'),
+        (u24, 'Reserved'),      # Reserved
+        (u24, 'WidthMinus1'),   # Canvas Width Minus One
+        (u24, 'HeightMinus1'),  # Canvas Height Minus One
+    ]
+
+@ChunkType.define
 class ICCP(pstruct.type):
     type = b'ICCP'
 
