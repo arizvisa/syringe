@@ -1,6 +1,11 @@
 import builtins, sys, math, random
 import functools, operator, itertools, types
 
+# Just some logging stuff.
+from . import config
+Config = config.defaults
+Log = config.logging.getLogger('.'.join([Config.log.name, __name__]))
+
 # Setup some version-agnostic types that we can perform checks with
 string_types = (str, unicode) if sys.version_info[0] < 3 else (str,)
 text_types = (unicode,) if sys.version_info[0] < 3 else (str,)
@@ -101,7 +106,7 @@ def position_calculator(length, base=0, position=(0, 0)):
     # Finally we can actually discard the bits and recalculate our offset and suboffset.
     offset, suboffset = coro.send(bits)
     translated = base + offset, suboffset
-    assert translated == position
+    assert(translated == position), (translated, position)
 
     # This is doing 2 additions and a comparison for every single iteration...
     while True:
@@ -494,8 +499,6 @@ def memoize(*kargs, **kattrs):
     return prepare_callable(kargs.pop(0)) if not kattrs and len(kargs) == 1 and callable(kargs[0]) else prepare_callable
 
 if not any(hasattr(memoize, __attribute__) for __attribute__ in ['func_code', '__code__']):
-    import logging
-    Log = logging.getLogger(__name__)
     Log.warning("{:s} : Memoization will be disabled due to the current implementation of python{:s} not allowing access of a function's code attributes (performance will be affected).".format(__name__, " ({:s})".format(sys.implementation.name) if hasattr(sys, 'implementation') else ''))
     memoize = fakedecorator
 
@@ -630,8 +633,6 @@ def memoize_method(*karguments, **kattributes):
     return prepare
 
 if not any(hasattr(memoize_method, __attribute__) for __attribute__ in ['func_code', '__code__']):
-    import logging
-    Log = logging.getLogger(__name__)
     Log.warning("{:s} : Memoization (method) will be disabled due to the current implementation of python{:s} not allowing access of a function's code attributes (performance will be affected).".format(__name__, " ({:s})".format(sys.implementation.name) if hasattr(sys, 'implementation') else ''))
     memoize_method = fakedecorator
 
@@ -721,8 +722,6 @@ class fakeoperator(object):
         return a + b
 
 if not all(hasattr(operator, __attribute__) for __attribute__ in ['itemgetter', 'methodcaller', 'setitem', 'getitem', 'add']):
-    import logging
-    Log = logging.getLogger(__name__)
     Log.info("{:s} : Using custom implementation of `{:s}` module due to the current implementation of python{:s} not defining required callables (performance will be affected).".format(__name__, 'operator', " ({:s})".format(sys.implementation.name) if hasattr(sys, 'implementation') else ''))
     operator = fakeoperator
 
