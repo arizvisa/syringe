@@ -546,6 +546,48 @@ def boolean_entropy_decoder(bitstream, seedbits=16):
         continue
     return
 
+def old_boolean_entropy_encoder(bitstream, output):
+    scale, seedbits = pow(2, 8), 16
+    bottom, range, bit_count = 0, scale - 1, 24
+
+    count = 0
+    while count < 8:
+        bit, prob = (yield)
+        res = (range - 1) * prob
+        split = 1 + (res >> 8)
+
+        range, bottom = (range - split, bottom + split) if bit else (split, bottom)
+
+        while range < 128:
+            range <<= 1
+            bit = bottom & pow(2, seedbits)
+            bottom <<= 1
+            count += 1
+        continue
+
+    try:
+        while True:
+            bit, prob = (yield)
+            res = (range - 1) * prob
+            split = 1 + (res // scale)
+
+            range, bottom = (range - split, bottom + split) if bit else (split, bottom)
+
+            while range < 128:
+                range <<= 1
+                bit = bottom & pow(2, seedbits - 1)
+                output.append(1 if bit else 0)
+                bottom <<= 1
+            continue
+
+    except GeneratorExit:
+        pass
+
+    for i in builtins.range(seedbits + 8):
+        output.append((bottom >> 15) & 1)
+        bottom <<= 1
+    return
+
 ### these structures are boolean-encoded into a stream
 start_code = f(24)
 @pbinary.littleendian
