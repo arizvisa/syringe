@@ -1174,10 +1174,19 @@ class macroblock(pstruct.type):
 
 class uncompressed(pstruct.type):
     '''19.1 Uncompressed Data Chunk'''
+    def __data(self):
+        if not(isinstance(self.source, ptypes.provider.bounded)):
+            return ptype.block
+        res, fields = self.source.size(), ['tag', 'header']
+        res = max(0, res - sum(self[fld].li.size() for fld in fields))
+        if res:
+            return dyn.clone(ptype.block, length=res)
+        return ptype.block
+
     _fields_ = [
         (frame_tag, 'tag'),
         (frame_header, 'header'),
-        (ptype.block, 'data'),
+        (__data, 'data'),
     ]
 
 class File(uncompressed):
