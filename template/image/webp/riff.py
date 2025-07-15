@@ -107,7 +107,7 @@ class RIFF(pstruct.type):
     ]
 
     def alloc(self, *values, **fields):
-        fields.setdefault('Signature', b'RIFF')
+        fields.setdefault('Signature', b'WEBP')
         if not(values):
             fields.setdefault('Chunks', ChunkArray)
             return super(RIFF, self).alloc(**fields)
