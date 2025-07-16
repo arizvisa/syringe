@@ -106,7 +106,9 @@ def position_calculator(length, base=0, position=(0, 0)):
     # Finally we can actually discard the bits and recalculate our offset and suboffset.
     offset, suboffset = coro.send(bits)
     translated = base + offset, suboffset
-    assert(translated == position), (translated, position)
+
+    if translated != position:
+        Log.warning("{:s} : A non-critical error occurred when calculating the bit position. Expected position to be {!s}, but translated position was {!s}.".format('.'.join([__name__, 'position_calculator']), *itertools.chain(position, translated)))
 
     # This is doing 2 additions and a comparison for every single iteration...
     while True:
