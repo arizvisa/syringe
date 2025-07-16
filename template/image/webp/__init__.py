@@ -1,4 +1,4 @@
-from . import riff, bitstream
+from . import riff, vp8
 
 class File(riff.Chunk):
     def alloc(self, **fields):
