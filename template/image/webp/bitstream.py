@@ -1,3 +1,4 @@
+''' RFC6386: VP8 Data Format and Decoding Guide '''
 import builtins, operator, os, math, functools, itertools, sys, types
 import ptypes
 from ptypes import *
@@ -5,22 +6,22 @@ from ptypes import *
 pbinary.setbyteorder('big')
 
 ### VP8 bitstream types
-#def Bool(p):
-#    return p
+def Bool(p):
+    return p
 Flag = 1
 def Lit(n):
     return n
 def SignedLit(n):
     return -n
-#def P(n):
-#    return n
+def P(n):
+    return n
 def f(n):
     return n
 def L(n):
     return Lit(n)
 def B(p):
     return Bool(p)
-T = 0   # tree-coded token
+T = 0   # FIXME: tree-coded token
 
 ### VP8 boolean entropy data
 default_coef_probs = [
