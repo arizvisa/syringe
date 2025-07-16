@@ -191,8 +191,8 @@ class ANMF(pstruct.type):
     _fields_ = [
         (u24, 'X'),
         (u24, 'Y'),
-        (u24, 'Width'),
-        (u24, 'Height'),
+        (u24, 'WidthMinus1'),
+        (u24, 'HeightMinus1'),
         (u24, 'Duration'),
         (_methodBits, 'Method'),
         (__FrameData, 'FrameData'),
