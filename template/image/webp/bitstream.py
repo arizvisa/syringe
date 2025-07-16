@@ -1171,6 +1171,7 @@ class macroblock(pstruct.type):
     _fields_ = [
         (macroblock_header, 'header'),
         (residual_data, 'data'),
+        (ptype.block, 'extra'),
     ]
 
 class uncompressed(pstruct.type):
@@ -1188,6 +1189,7 @@ class uncompressed(pstruct.type):
         (frame_tag, 'tag'),
         (frame_header, 'header'),
         (__data, 'data'),
+        (ptype.block, 'extra'),
     ]
 
 class File(uncompressed):
