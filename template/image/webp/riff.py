@@ -121,10 +121,14 @@ class RIFF(pstruct.type):
 @ChunkType.define
 class VP8(ptype.block):
     type = b'VP8 '
+    # FIXME: this should probably be connected to the vp8 templates whenever
+    #        the rest of the decoder gets completed.
 
 @ChunkType.define
 class VP8L(ptype.block):
     type = b'VP8L'
+    # FIXME: this should probably be connected to the vp8l templates whenever
+    #        the rest of the decoder gets completed.
 
 @ChunkType.define
 class VP8X(pstruct.type):
