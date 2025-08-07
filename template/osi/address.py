@@ -238,6 +238,20 @@ class ethaddr(parray.type):
 
     length, _object_ = 6, lambda self: u_char if self.value else oui_prefix
 
+    def is_local(self):
+        oui = self[0]
+        return True if oui['local'] else False
+
+    def is_multicast(self):
+        oui = self[0]
+        return True if oui['multicast'] else False
+
+    def is_global(self):
+        return not(self.is_local())
+
+    def is_unicast(self):
+        return not(self.is_multicast())
+
     def summary(self):
         oui = self[0]
         scope = 'local' if oui['local'] else 'global'
