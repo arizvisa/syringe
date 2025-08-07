@@ -5,7 +5,7 @@ class layer(ptype.definition):
     cache = {}
     class contents(ptype.block):
         pass
-    _default_ = contents
+    default = contents
 
 class stackable(object):
     _layer_ = layer
@@ -136,6 +136,7 @@ class layers(parray.terminated):
         field.set(layer.type)
         return super(layers, self).append(layer)
 
+# just a default type to use in case the caller doesn't want to look it up.
 default = packet = dynamic.clone(layers, protocol=datalink.ethernet.header)
 
 if __name__ == '__main__':

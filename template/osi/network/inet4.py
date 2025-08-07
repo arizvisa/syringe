@@ -70,7 +70,7 @@ class IP4_OPT_UNPACKED:
 
 class ip4_option(ptype.definition):
     cache = {}
-    _default_ = ptype.block
+    default = ptype.block
     class _object_(pbinary.flags):
         _fields_ = [
             (1, 'copied'),
