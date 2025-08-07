@@ -1,5 +1,5 @@
 import sys, logging, itertools, functools, math, fractions, datetime
-import ptypes
+import ptypes, osi
 from ptypes import *
 
 class guint32(pint.uint32_t): pass
@@ -8,10 +8,23 @@ class gint32(pint.int32_t): pass
 class gint32(pint.int32_t): pass
 
 class version(pstruct.type):
+    def __guint16(self):
+        if not(hasattr(self, 'pcap_byteorder')):
+            return guint16
+        elif self.pcap_byteorder == ptypes.config.byteorder.littleendian:
+            return pint.littleendian(guint16)
+        elif self.pcap_byteorder == ptypes.config.byteorder.bigendian:
+            return pint.bigendian(guint16)
+        return guint16
+
     _fields_ = [
-        (guint16, 'major'),
-        (guint16, 'minor')
+        (__guint16, 'major'),
+        (__guint16, 'minor')
     ]
+
+    def summary(self):
+        iterable = (self[fld] for fld in ['major', 'minor'])
+        return "{!s} : major={:#x} minor={:#x}".format('.'.join(map("{:d}".format, iterable)), self['major'], self['minor'])
 
     def set(self, *args, **fields):
         if args:
@@ -35,25 +48,73 @@ class version(pstruct.type):
             return self.set(**fields)
         return super(version, self).set(**fields)
 
+@pint.bigendian
+class magic_number(pint.enum, guint32):
+    _values_ = [
+        ('big/microseconds', 0xA1B2C3D4),
+        ('little/microseconds', 0xD4C3B2A1),
+        ('big/nanoseconds', 0xA1B23C4D),
+        ('little/nanoseconds', 0x4D3CB2A1),
+    ]
+
+    def order(self):
+        if any(self[fld] for fld in ['big/microseconds', 'big/nanoseconds']):
+            return 'big'
+        elif any(self[fld] for fld in ['little/microseconds', 'little/nanoseconds']):
+            return 'little'
+        data = self.serialize()
+        logging.warning("Assuming host order ({:s}) due to being unable to determine byteorder : {:s}".format(sys.byteorder, data.hex().upper()))
+        return sys.byteorder
+
 class pcap_hdr_t(pstruct.type):
+    class _linktype(osi.datalink.LINKTYPE_, guint16):
+        pass
+
+    class _fcs(pbinary.flags):
+        _fields_ = [
+            (3, 'number'),
+            (1, 'f'),
+            (12, 'unknown'),
+        ]
     def __byteorder(self):
-        magic_number = self['magic_number'].li.serialize()
-        if magic_number == b'\xa1\xb2\xc3\xd4':
+        magic_number = self['magic_number'].li
+
+        # seconds/microseconds
+        if magic_number['big/microseconds']:
             self.attributes['pcap_byteorder'] = ptypes.config.byteorder.bigendian
-        elif magic_number == b'\xd4\xc3\xb2\xa1':
+        elif magic_number['little/microseconds']:
             self.attributes['pcap_byteorder'] = ptypes.config.byteorder.littleendian
+
+        # seconds/nanoseconds
+        elif magic_number['big/nanoseconds']:
+            self.attributes['pcap_byteorder'] = ptypes.config.byteorder.bigendian
+        elif magic_number['little/nanoseconds']:
+            self.attributes['pcap_byteorder'] = ptypes.config.byteorder.littleendian
+
         else:
             logging.warning("Unable to determine byteorder : {!r}".format(magic_number))
         return ptype.undefined
 
+    def __order(type):
+        def reorder(self):
+            res = self['magic_number'].li
+            order = res.order()
+            if order == 'big':
+                return pint.bigendian(type)
+            elif order == 'little':
+                return pint.littleendian(type)
+            return type
+        return reorder
+
     _fields_ = [
-        (dyn.block(4), 'magic_number'),
+        (magic_number, 'magic_number'),
         (__byteorder, 'byteorder'),
         (version, 'version'),
-        (gint32, 'thiszone'),
-        (guint32, 'sigfigs'),
-        (guint32, 'snaplen'),
-        (guint32, 'network'),
+        (__order(gint32), 'thiszone'),
+        (__order(guint32), 'sigfigs'),
+        (__order(guint32), 'snaplen'),
+        (__order(_linktype), 'linktype'),
+        (_fcs, 'fcs'),
     ]
 
     def timezone(self):
@@ -78,6 +139,18 @@ class timestamp(pstruct.type):
         return res.isoformat()
 
 class pcaprec_hdr_s(pstruct.type):
+    def __order(type):
+        def reorder(self):
+            if not(hasattr(self, 'pcap_byteorder')):
+                return type
+
+            order = self.pcap_byteorder
+            if order == ptypes.config.byteorder.bigendian:
+                return pint.bigendian(type)
+            elif order == ptypes.config.byteorder.littlendian:
+                return pint.littleendian(type)
+            return type
+        return reorder
     _fields_ = [
         (timestamp, 'ts'),
         (guint32, 'incl_len'),
@@ -96,9 +169,25 @@ class Packet(pstruct.type):
         res = pcaprec_hdr_s
         return dyn.clone(res, recurse=dict(byteorder=self.pcap_byteorder))
 
+    def __data(self):
+        header = self['header'].li
+        length = header['incl_len']
+        if hasattr(self, '_object_'):
+            return self._object_
+        return dyn.block(length.int())
+
+    def __padding(self):
+        header, data = (self[fld].li for fld in ['header', 'data'])
+        length = header['incl_len'].int()
+        padding = length - header.size()
+        if max(0, padding):
+            return dyn.block(max(0, padding))
+        return ptype.block
+
     _fields_ = [
         (__header, 'header'),
-        (lambda self: dyn.block(self['header']['incl_len'].li.int()), 'data'),
+        (__data, 'data'),
+        (ptype.block, 'padding'),
     ]
 
 class List(parray.infinite):
@@ -114,7 +203,12 @@ class List(parray.infinite):
 
 class File(pstruct.type):
     def __packets(self):
+        header = self['header'].li
         self.attributes.update(self['header'].attributes)
+        linktype = header['linktype']
+        if osi.layer.has(linktype.int()):
+            layers_t = dyn.clone(osi.layers, protocol=osi.layer.lookup(header['linktype'].int()))
+            return dyn.clone(List, _object_=dyn.clone(Packet, _object_=layers_t))
         return List
 
     def blocksize(self):
