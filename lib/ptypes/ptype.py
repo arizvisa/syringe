@@ -2210,7 +2210,9 @@ class definition(object):
             def get_filtered_values(values):
                 unique_values = {self.bytes_or_whatever(result, key): object.__name__ for key, object in type.cache.items()}
                 unique_values.update({key : name for name, key in values})
+                oldvalues = {name : key for name, key in values}
                 newvalues = {name : key for key, name in unique_values.items()}
+                newvalues.update({name : key for name, key in oldvalues.items() if name not in newvalues})
                 if all(builtins.isinstance(key, bitmap.integer_types) for _, key in newvalues.items()):
                     return [(name, integer) for name, integer in newvalues.items()]
 
