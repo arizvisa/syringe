@@ -612,7 +612,9 @@ class File(pstruct.type):
 
     def __AssignByteOrder(self):
         body = self['Body'].li
-        if body['Magic']['big']:
+        if not(isinstance(body, SectionHeader)):
+            pass
+        elif body['Magic']['big']:
             self.attributes['pcap_byteorder'] = self.pcap_byteorder = 'big'
         elif body['Magic']['little']:
             self.attributes['pcap_byteorder'] = self.pcap_byteorder = 'little'
@@ -633,7 +635,7 @@ class File(pstruct.type):
         return dyn.block(remaining) if remaining else ptype.block
 
     def __Options(self):
-        order = self.attributes['pcap_byteorder']
+        order = self.attributes.get('pcap_byteorder', sys.byteorder)
         length = self['Length'].li
         size = length[order].int()
 
