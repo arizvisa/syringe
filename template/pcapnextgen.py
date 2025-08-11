@@ -67,12 +67,15 @@ class Block(pstruct.type):
         return dyn.block(size) if size else ptype.block
 
     def __Options(self):
-        length, fields = self['Length'].li, ['Type', 'Length', 'Body', 'Padding', 'Length']
+        res, length, fields = self['Type'].li, self['Length'].li, ['Type', 'Length', 'Body', 'Padding', 'Length']
         total = sum(self[fld].li.size() for fld in fields)
         size = max(0, length.int() - total)
+
+        definition = BlockOptionType.withdefault(res.int())
+        opt_record = dyn.clone(OptionRecord, _definition_=definition)
         if size:
-            return OptionList
-        return dyn.clone(parray.type, _object_=OptionRecord)
+            return dyn.clone(OptionList, _object_=opt_record)
+        return dyn.clone(parray.type, _object_=opt_record)
 
     _fields_ = [
         (BlockType.enum, 'Type'),
@@ -83,17 +86,21 @@ class Block(pstruct.type):
         (u32, 'SuffixLength')
     ]
 
-class Option(ptype.definition):
-    cache = {}
+class OptionType(ptype.definition):
+    cache, default = {}, ptype.block
     class _enum_(pint.enum, u16):
         pass
 
+class BlockOptionType(ptype.definition):
+    cache, default = {}, OptionType
+
 class OptionRecord(pstruct.type):
+    _definition_ = None
     def __Value(self):
         code, res = (self[fld].li for fld in ['Code', 'Length'])
-        res = Option.withdefault(code.int())
-        if isinstance(res, ptype.block):
-            return dyn.clone(res, length=res.int())
+        object_t = (self._definition_ or OptionType).withdefault(code.int())
+        if issubclass(object_t, (ptype.block, pstr.string)):
+            return dyn.clone(object_t, length=res.int())
         return res
 
     def __Padding(self):
@@ -105,22 +112,22 @@ class OptionRecord(pstruct.type):
         return dyn.block(padding) if padding else ptype.block
 
     _fields_ = [
-        (Option.enum, 'Code'),
+        (lambda self: OptionType.enum, 'Code'),
         (u16, 'Length'),
         (__Value, 'Value'),
         (__Padding, 'Padding'),
     ]
 
 # FIXME: these options exist for all block types
-@Option.define
+@OptionType.define
 class opt_endofopt(ptype.block):
     type = 0
-@Option.define
+@OptionType.define
 class opt_comment(ptype.block):
     type = 1
 
 class OptionList(parray.terminated):
-    _object_ = OptionRecord
+    #_object_ = OptionRecord
     def isTerminator(self, opt):
         return opt['Code'].int() == 0
 
@@ -196,6 +203,21 @@ class SectionHeader(pstruct.type):
         (Version, 'Version'),
         (u64, 'SectionLength'),
     ]
+
+@BlockOptionType.define
+class SectionHeaderOptionType(OptionType):
+    type = SectionHeader.type
+    cache = { name : field for name, field in OptionType.cache.items() }
+
+@SectionHeaderOptionType.define
+class shb_hardware(pstr.string):
+    type = 2
+@SectionHeaderOptionType.define
+class shb_os(pstr.string):
+    type = 3
+@SectionHeaderOptionType.define
+class shb_userappl(pstr.string):
+    type = 4
 
 # FIXME: We need to track everytime we decode one of these records so that we
 #        can figure out which link type is needed to decode a captured packet.
@@ -300,13 +322,18 @@ class nrb_record_ipv6(osi.address.in6_addr):
     type = 0x0002
 
 # FIXME: these options are specific to the NameResolution block.
-@Option.define
+@BlockOptionType.define
+class NameServiceOptionType(OptionType):
+    type = NameResolution.type
+    cache = { name : field for name, field in OptionType.cache.items() }
+
+@NameServiceOptionType.define
 class ns_dnsname(ptype.block):
     type = 2
-@Option.define
+@NameServiceOptionType.define
 class ns_dnsIP4addr(osi.address.in4_addr):
     type = 3
-@Option.define
+@NameServiceOptionType.define
 class ns_dnsIP6addr(osi.address.in6_addr):
     type = 4
 
@@ -319,25 +346,30 @@ class InterfaceStatistics(pstruct.type):
     ]
 
 # FIXME: these options are specific to the InterfaceStatistics block.
-@Option.define
+@BlockOptionType.define
+class InterfaceStatisticsOptionType(OptionType):
+    type = InterfaceStatistics.type
+    cache = { name : field for name, field in OptionType.cache.items() }
+
+@InterfaceStatisticsOptionType.define
 class isb_starttime(u64):
     type = 2 
-@Option.define
+@InterfaceStatisticsOptionType.define
 class isb_endtime(u64):
     type = 3 
-@Option.define
+@InterfaceStatisticsOptionType.define
 class isb_ifrecv(u64):
     type = 4 
-@Option.define
+@InterfaceStatisticsOptionType.define
 class isb_ifdrop(u64):
     type = 5 
-@Option.define
+@InterfaceStatisticsOptionType.define
 class isb_filteraccept(u64):
     type = 6 
-@Option.define
+@InterfaceStatisticsOptionType.define
 class isb_osdrop(u64):
     type = 7 
-@Option.define
+@InterfaceStatisticsOptionType.define
 class isb_usrdeliv(u64):
     type = 8 
 
@@ -369,7 +401,12 @@ class EnhancedPacket(pstruct.type):
     ]
 
 # FIXME: these options are specific to the EnhancedPacket block.
-@Option.define
+@BlockOptionType.define
+class EnhancedPacketOptionType(OptionType):
+    type = EnhancedPacket.type
+    cache = { name : field for name, field in OptionType.cache.items() }
+
+@EnhancedPacketOptionType.define
 class epb_flags(pbinary.flags):
     type = 2
     _fields_ = [
@@ -382,7 +419,7 @@ class epb_flags(pbinary.flags):
         (3, 'reception_type'),
         (2, 'inbound_outbound'),
     ]
-@Option.define
+@EnhancedPacketOptionType.define
 class epb_hash(pstruct.type):
     type = 3
     def __value(self):
@@ -401,16 +438,16 @@ class epb_hash(pstruct.type):
         (u8, 'algorithm'),
         (__value, 'value'),
     ]
-@Option.define
+@EnhancedPacketOptionType.define
 class epb_dropcount(u64):
     type = 4
-@Option.define
+@EnhancedPacketOptionType.define
 class epb_packetid(ptype.block):
     type = 5
-@Option.define
+@EnhancedPacketOptionType.define
 class epb_queue(ptype.block):
     type = 6
-@Option.define
+@EnhancedPacketOptionType.define
 class epb_verdict(ptype.block):
     type = 7
 
@@ -557,7 +594,7 @@ class File(pstruct.type):
         res = self['Length'].li
         size = res[order].int()
 
-        fields = ['Type', 'Length', 'Length', 'Body']
+        fields = ['Type', 'Length', 'Length', 'Body', 'Options']
         used = sum(self[fld].li.size() for fld in fields)
         remaining = max(0, size - used)
         return dyn.block(remaining) if remaining else ptype.block
@@ -566,12 +603,16 @@ class File(pstruct.type):
         order = self.attributes['pcap_byteorder']
         length = self['Length'].li
         size = length[order].int()
-        fields = ['Type', 'Type', 'Length', 'Body']
+
+        fields = ['Type', 'Length', 'Body', 'Order', 'Length']
         total = sum(self[fld].li.size() for fld in fields)
         size = max(0, size - total)
+
+        definition = BlockOptionType.withdefault(self['Type'].li.int())
+        opt_record = dyn.clone(OptionRecord, _definition_=definition)
         if size:
-            return OptionList
-        return dyn.clone(parray.type, _object_=OptionRecord)
+            return dyn.clone(OptionList, _object_=opt_record)
+        return dyn.clone(parray.type, _object_=opt_record)
 
     def __SuffixLength(self):
         order = self.attributes['pcap_byteorder']
