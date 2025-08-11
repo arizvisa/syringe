@@ -424,9 +424,7 @@ class terminated(type):
     '''
     length = None
     def isTerminator(self, value):
-        '''intended to be overloaded. should return True if element /value/ represents the end of the array.'''
-        if self.length is None:
-            raise error.ImplementationError(self, 'terminated.isTerminator')
+        '''intended to be overloaded (but not required). should return True if element /value/ represents the end of the array.'''
         return False
 
     def __len__(self):
