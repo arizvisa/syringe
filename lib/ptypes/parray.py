@@ -439,8 +439,11 @@ class terminated(type):
 
     def alloc(self, *fields, **attrs):
         if not fields:
-            attrs.setdefault('length', 0)
+            attrs.setdefault('length', getattr(self, 'length', 0) or 0)
             return super(terminated, self).alloc(**attrs)
+
+        # If some fields were explicitly specified, then take the length from
+        # them unless the caller gave us a length to use.
         [items] = fields
         attrs.setdefault('length', len(items))
         return super(terminated, self).alloc(items, **attrs)
@@ -1547,6 +1550,30 @@ if __name__ == '__main__':
         offsets = [item.getoffset() for item in expected]
         res = argh().alloc([pint.uint8_t] + [0 for offset in offsets][1:])
         if all(item.getoffset() == offset for item, offset in zip(res[2:], offsets[2:])):
+            raise Success
+
+    @TestCase
+    def test_array_alloc_terminated_length_1():
+        class t(parray.terminated):
+            _object_ = pint.uint32_t
+        x = t().a
+        if len(x) == 0:
+            raise Success
+
+    @TestCase
+    def test_array_alloc_terminated_length_2():
+        class t(parray.terminated):
+            _object_ = pint.uint32_t
+        x = t(length=2).a
+        if len(x) == 2:
+            raise Success
+
+    @TestCase
+    def test_array_alloc_terminated_length_3():
+        class t(parray.terminated):
+            _object_ = pint.uint32_t
+        x = t().alloc(length=2)
+        if len(x) == 2:
             raise Success
 
 if __name__ == '__main__':
