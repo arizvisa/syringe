@@ -379,11 +379,20 @@ class EnhancedPacket(pstruct.type):
     def __Data(self):
         id = self['InterfaceID'].li
         length = self['CapturedPacketLength'].li
-        # FIXME: we should be using the interface id to determine the link type
-        #        needed to decode the data of this packet.
-        if not(self.parent) or not(isinstance(self.parent.parent, (BlockArray, Blocks))):
-            return dyn.block(length.int()) if length.int() else ptype.block
+        unknown = dyn.block(length.int()) if length.int() else ptype.block
 
+        # If this instance is not attached to a BlockArray or Blocks type, then
+        # there isn't a way to determine how to decode the EnahancedPacket body.
+        if not(self.parent) or not(isinstance(self.parent.parent, (BlockArray, Blocks))):
+            return unknown
+
+        # If there's no interfaces that have been enumerated yet, then we have
+        # no way to know how we're supposed to decode the EnhancedPacket body.
+        elif not(self.parent.parent.InterfaceCount()):
+            return unknown
+
+        # Otherwise, we can grab the parent and use it to find the descriptor
+        # for the "InterfaceId". Then we can use that to get the datalink type.
         else:
             parent = self.parent.parent
 
@@ -391,7 +400,7 @@ class EnhancedPacket(pstruct.type):
         linktype = descriptor['Body']['LinkType']
         if osi.layer.has(linktype.int()):
             return dyn.clone(osi.layers, protocol=osi.layer.lookup(linktype.int()))
-        return dyn.block(length.int()) if length.int() else ptype.block
+        return unknown
 
     def __Padding(self):
         length, data = (self[fld].li for fld in ['CapturedPacketLength', 'Data'])
@@ -592,6 +601,9 @@ class BlockArray(parray.terminated):
         if value['Type']['InterfaceDescription']:
             self._interfaces_.append(index)
         return super(BlockArray, self).isTerminator(value)
+
+    def InterfaceCount(self):
+        return len(self._interfaces_)
 
     def InterfaceDescriptor(self, Id):
         index = self._interfaces_[Id]
