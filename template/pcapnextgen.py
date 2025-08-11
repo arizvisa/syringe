@@ -579,13 +579,19 @@ class EndianlessLength(dynamic.union):
         (pint.littleendian(pint.uint32_t), 'little'),
     ]
 
-class BlockArray(parray.type):
+class BlockArray(parray.terminated):
     _object_ = Block
 
     _interfaces_ = None
     def load(self, **attrs):
         self._interfaces_ = []
-        return super(Blocks, self).load(**attrs)
+        return super(BlockArray, self).load(**attrs)
+
+    def isTerminator(self, value):
+        index = len(self.value)
+        if value['Type']['InterfaceDescription']:
+            self._interfaces_.append(index)
+        return super(BlockArray, self).isTerminator(value)
 
     def InterfaceDescriptor(self, Id):
         index = self._interfaces_[Id]
