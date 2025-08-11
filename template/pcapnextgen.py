@@ -377,7 +377,7 @@ class isb_usrdeliv(u64):
 class EnhancedPacket(pstruct.type):
     type = 0x00000006
     def __Data(self):
-        id = self['InterfaceID'].li
+        id = self['InterfaceID'].li.int()
         length = self['CapturedPacketLength'].li
         unknown = dyn.block(length.int()) if length.int() else ptype.block
 
@@ -388,7 +388,7 @@ class EnhancedPacket(pstruct.type):
 
         # If there's no interfaces that have been enumerated yet, then we have
         # no way to know how we're supposed to decode the EnhancedPacket body.
-        elif not(self.parent.parent.InterfaceCount()):
+        elif not(self.parent.parent.HasInterfaceDescriptor(id)):
             return unknown
 
         # Otherwise, we can grab the parent and use it to find the descriptor
@@ -396,7 +396,7 @@ class EnhancedPacket(pstruct.type):
         else:
             parent = self.parent.parent
 
-        descriptor = parent.InterfaceDescriptor(id.int())
+        descriptor = parent.GetInterfaceDescriptor(id)
         linktype = descriptor['Body']['LinkType']
         if osi.layer.has(linktype.int()):
             return dyn.clone(osi.layers, protocol=osi.layer.lookup(linktype.int()))
@@ -602,10 +602,10 @@ class BlockArray(parray.terminated):
             self._interfaces_.append(index)
         return super(BlockArray, self).isTerminator(value)
 
-    def InterfaceCount(self):
-        return len(self._interfaces_)
+    def HasInterfaceDescriptor(self, Id):
+        return Id < len(self._interfaces_)
 
-    def InterfaceDescriptor(self, Id):
+    def GetInterfaceDescriptor(self, Id):
         index = self._interfaces_[Id]
         return self[index - 1]
 
