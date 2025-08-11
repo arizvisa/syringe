@@ -381,7 +381,17 @@ class EnhancedPacket(pstruct.type):
         length = self['CapturedPacketLength'].li
         # FIXME: we should be using the interface id to determine the link type
         #        needed to decode the data of this packet.
-        return dyn.block(length.int())
+        if not(self.parent) or not(isinstance(self.parent.parent, (BlockArray, Blocks))):
+            return dyn.block(length.int()) if length.int() else ptype.block
+
+        else:
+            parent = self.parent.parent
+
+        descriptor = parent.InterfaceDescriptor(id.int())
+        linktype = descriptor['Body']['LinkType']
+        if osi.layer.has(linktype.int()):
+            return dyn.clone(osi.layers, protocol=osi.layer.lookup(linktype.int()))
+        return dyn.block(length.int()) if length.int() else ptype.block
 
     def __Padding(self):
         length, data = (self[fld].li for fld in ['CapturedPacketLength', 'Data'])
@@ -569,6 +579,29 @@ class EndianlessLength(dynamic.union):
         (pint.littleendian(pint.uint32_t), 'little'),
     ]
 
+class BlockArray(parray.type):
+    _object_ = Block
+
+    _interfaces_ = None
+    def load(self, **attrs):
+        self._interfaces_ = []
+        return super(Blocks, self).load(**attrs)
+
+    def InterfaceDescriptor(self, Id):
+        index = self._interfaces_[Id]
+        return self[index - 1]
+
+class Blocks(parray.block, BlockArray):
+    def load(self, **attrs):
+        self._interfaces_ = []
+        return super(Blocks, self).load(**attrs)
+
+    def isTerminator(self, value):
+        index = len(self.value)
+        if value['Type']['InterfaceDescription']:
+            self._interfaces_.append(index)
+        return super(Blocks, self).isTerminator(value)
+
 class File(pstruct.type):
     def __Body(self):
         type = self['Type'].li
@@ -622,11 +655,11 @@ class File(pstruct.type):
 
     def __Blocks(self):
         if not(isinstance(self.source, ptypes.provider.bounded)):
-            return dyn.clone(parray.type, Block)
+            return BlockArray
         size = self.source.size()
         fields = ['Type', 'Length', 'Body', 'Order', 'Options', 'Padding', 'SuffixLength']
         blocksize = size - sum(self[fld].li.size() for fld in fields)
-        return dyn.blockarray(Block, max(0, blocksize))
+        return dyn.clone(Blocks, blocksize=lambda _, bs=max(0, blocksize): bs)
 
     _fields_ = [
         (BlockType.enum, 'Type'),
