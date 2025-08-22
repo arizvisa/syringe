@@ -1,7 +1,7 @@
 '''
 https://www.ietf.org/archive/id/draft-ietf-opsawg-pcapng-03.txt
 '''
-import sys, logging, itertools, functools, math, fractions, datetime
+import sys, logging, itertools, functools, math, fractions, datetime, operator
 import ptypes, osi
 from ptypes import *
 
@@ -608,6 +608,14 @@ class BlockArray(parray.terminated):
     def GetInterfaceDescriptor(self, Id):
         index = self._interfaces_[Id]
         return self[index - 1]
+
+    def enumerate(self, Type=''):
+        F = (lambda item: True) if not(Type) else operator.itemgetter(Type) if isinstance(Type, (''.__class__, u''.__class__, (0).__class__)) else Type if callable(Type) else (lambda item: Type)
+        for index, block in enumerate(self):
+            if F(block['Type']):
+                yield index, block
+            continue
+        return
 
 class Blocks(parray.block, BlockArray):
     def load(self, **attrs):
