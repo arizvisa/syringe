@@ -259,15 +259,21 @@ class Extension(pstruct.type):
     def __data(self):
         res = self['type'].li
         try:
-            return TLSExtension.lookup(res.int())
+            res = TLSExtension.lookup(res.int())
         except KeyError:
-            pass
-        return dyn.block(self['size'].li.int())
+            return dyn.block(self['size'].li.int())
+        return dyn.clone(res, length=self['size'].li.int()) if issubclass(res, ptype.block) else res
+
+    def __padding(self):
+        res, fields = self['size'].li, ['data']
+        size = max(0, res.int() - sum(self[fld].li.size() for fld in fields))
+        return dyn.block(size) if size else ptype.block
 
     _fields_ = [
         (ExtensionType, 'type'),
         (uint16, 'size'),
         (__data, 'data'),
+        (__padding, 'padding'),
     ]
 
     def summary(self):
