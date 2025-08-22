@@ -208,6 +208,8 @@ class NamedCurveList(pstruct.type):
 class ECPointFormat(pint.enum, uint8):
     _values_ = [
         ('uncompressed', 0),
+        ('ansiX962_compressed_prime', 1),
+        ('ansiX962_compressed_char2', 2),
     ]
 
 @TLSExtension.define
@@ -246,6 +248,94 @@ class SignatureAndHashAlgorithm(pstruct.type):
 class SignatureAndHashAlgorithmList(List16):
     type = 13
     _object_ = SignatureAndHashAlgorithm
+
+@TLSExtension.define
+class Padding(ptype.block):
+    type = 21
+
+@TLSExtension.define
+class SupportedVersions(pstruct.type):
+    type = 43
+    class _versions(parray.block):
+        _object_ = uint16
+        def summary(self):
+            iterable = map("{:#x}".format, self)
+            return "[{:s}]".format(', '.join(iterable))
+    _fields_ = [
+        (uint8, 'size'),
+        (lambda self: dyn.clone(self._versions, blocksize=lambda _, cb=self['size'].li.int(): cb), 'versions'),
+    ]
+    def summary(self):
+        return "size={:d} versions={:s}".format(self['size'].int(), self['versions'].summary())
+
+class PskKeyExchangeMode(pint.enum, uint8):
+    _values_ = [
+        ('psk_ke', 0),
+        ('psk_dhe_ke', 1),
+    ]
+
+@TLSExtension.define
+class PskKeyExchangeModes(pstruct.type):
+    type = 45
+    class _ke_modes(parray.type):
+        _object_ = PskKeyExchangeMode
+        def summary(self):
+            iterable = (item.summary() for item in self)
+            return "[{:s}]".format(', '.join(iterable))
+    _fields_ = [
+        (uint8, 'size'),
+        (lambda self: dyn.clone(self._ke_modes, length=self['size'].li.int()), 'ke_modes'),
+    ]
+    def summary(self):
+        return "size={:d} ke_modes={:s}".format(self['size'].int(), self['ke_modes'].summary())
+
+class NamedGroup(pint.enum, uint16):
+    _values_ = [
+        ('unallocated_RESERVED', 0x0000),
+        ('secp256r1', 0x0017),
+        ('secp384r1', 0x0018),
+        ('secp521r1', 0x0019),
+        ('x25519', 0x001D),
+        ('x448', 0x001E),
+        ('ffdhe2048', 0x0100),
+        ('ffdhe3072', 0x0101),
+        ('ffdhe4096', 0x0102),
+        ('ffdhe6144', 0x0103),
+        ('ffdhe8192', 0x0104),
+    ]
+
+class opaque(pstruct.type):
+    _fields_ = [
+        (uint16, 'length'),
+        (lambda self: dyn.block(self['length'].li.int()), 'data'),
+    ]
+    def __format__(self, spec):
+        return format(self['data'], spec)
+    def summary(self):
+        return "({:d}) {:s}".format(self['length'], self['data'].serialize().hex())
+
+class KeyShareEntry(pstruct.type):
+    _fields_ = [
+        (NamedGroup, 'group'),
+        (opaque, 'key_exchange'),
+    ]
+    def summary(self):
+        return "group={:s} key_exchange={:x}".format(self['group'], self['key_exchange'])
+
+@TLSExtension.define
+class KeyShare(pstruct.type):
+    type = 51
+    class _shares(parray.block):
+        _object_ = KeyShareEntry
+        def summary(self):
+            iterable = ("{:#s}({:x})".format(item['group'], item['key_exchange']) for item in self)
+            return "[{:s}]".format(', '.join(iterable))
+    _fields_ = [
+        (uint16, 'size'),
+        (lambda self: dyn.clone(self._shares, blocksize=lambda _, cb=self['size'].li.int(): cb), 'shares'),
+    ]
+    def summary(self):
+        return "size={:d} shares={:s}".format(self['size'].int(), self['shares'].summary())
 
 @TLSExtension.define
 class RenegotiationInfo(pstruct.type):
