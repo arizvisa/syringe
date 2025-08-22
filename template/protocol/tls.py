@@ -15,14 +15,17 @@ class uint24(pint.uint_t): length = 3
 class uint32(pint.uint32_t): pass
 class uint64(pint.uint64_t): pass
 
-class ProtocolVersion(pstruct.type):
-    _fields_ = [
-        (uint8, 'major'),
-        (uint8, 'minor'),
+class ProtocolVersion(pint.enum, uint16):
+    _values_ = [
+        ('SSL3.0', 0x0300),
+        ('TLS1.0', 0x0301),
+        ('TLS1.1', 0x0302),
+        ('TLS1.2', 0x0303),
+        ('TLS1.3', 0x0304),
+        ('DTLS1.0', 0xFEFF),
+        ('DTLS1.1', 0xFEFE),
+        ('DTLS1.2', 0xFEFD),
     ]
-
-    def summary(self):
-        return "major={:d} minor={:d}".format(self['major'].int(), self['minor'].int())
 
 class ContentType(pint.enum, uint8):
     _values_ = [
