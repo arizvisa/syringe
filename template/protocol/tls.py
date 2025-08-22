@@ -43,14 +43,16 @@ class Record(pstruct.type):
         res, cb = (self[fld].li for fld in ['type', 'length'])
         try:
             t = TLSRecord.lookup(res.int())
-            return dyn.blockarray(t, cb.int())
         except KeyError:
-            pass
-        return dyn.block(cb.int())
+            return dyn.block(cb.int())
+        if cb.int():
+            return dyn.blockarray(t, cb.int())
+        return dyn.clone(parray.type, _object_=t)
 
     def __unparsed(self):
         res = self['length'].li
-        return dyn.block(res.int() - self['fragment'].li.size())
+        size = max(0, res.int() - self['fragment'].li.size())
+        return dyn.block(size) if size else ptype.block
 
     _fields_ = [
         (ContentType, 'type'),
@@ -671,7 +673,8 @@ class HandshakeFinishedRecord(Record):
 
     def __unparsed(self):
         res = self['length'].li
-        return dyn.block(res.int() - self['fragment'].li.size())
+        size = max(0, res.int() - self['fragment'].li.size())
+        return dyn.block(size) if size else ptype.block
 
     _fields_ = [
         (ContentType, 'type'),
