@@ -184,6 +184,21 @@ class Timestamp(pstruct.type):
         (u32, 'Low'),
     ]
 
+    def int(self):
+        lo, hi = (self[fld].li for fld in ['Low', 'High'])
+        return hi.int() * pow(2, 32) + lo.int()
+
+    def float(self):
+        divisor = 1E6
+        return self.int() / divisor
+
+    def datetime(self):
+        return datetime.datetime.fromtimestamp(self.float())
+
+    def summary(self):
+        res = self.datetime()
+        return "High={:#x} Low={:#x} ({:#x}) :> {:s}".format(self['High'], self['Low'], self.int(), res.isoformat())
+
 @BlockType.define
 class SectionHeader(pstruct.type):
     type = 0x0A0D0D0A
