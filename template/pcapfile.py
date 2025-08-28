@@ -214,7 +214,7 @@ class File(pstruct.type):
     def blocksize(self):
         if isinstance(self.source, ptypes.provider.bounded):
             return self.source.size()
-        return sys.maxint
+        return sys.maxsize
 
     _fields_ = [
         (pcap_hdr_t, 'header'),
