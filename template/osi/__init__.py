@@ -34,7 +34,7 @@ class layers(parray.terminated):
         # If we decoded an element that's a "terminal", but there's still some bytes remaining, then
         # we're not done yet. Our next element will be the last one that consumes the remaining, and
         # due to not being an instance of "stackable" will terminate the array due to the last case.
-        if isinstance(value, terminal) and self._remaining:
+        if isinstance(value, terminal) and remaining:
             return False
 
         # If we encountered a "terminal" element and remaining is false-y,
@@ -73,12 +73,14 @@ class layers(parray.terminated):
 
         # If there's some bytes remaining as specified by one of the previous layers and
         # the last layer changed the remaining bytes, then log an error and return a type
-        # that consumes the remaining octets. The only time this should happen is if the
-        # layers are not linked together properly and our previous layer was wrong.
+        # that honors the number of octets specified by the previous layer and consumes
+        # only that amount. The only time this should happen is if the last layer has
+        # been fragmented by an earlier layer.
         if self._remaining is not None and remaining is not None and expected != remaining:
-            maximum = max(expected, remaining)
+            minimum = remaining if expected is None else min(expected, remaining)
             logging.error("{:s} : Previous layer {:s} suggested {:d} byte{:s} remaining, but an earlier layer specified that {:d} byte{:s} should be left.".format(self.instance(), previous.instance(), remaining, '' if remaining == 1 else 's', expected, '' if expected == 1 else 's'))
-            return dynamic.clone(end, length=maximum)
+            self._remaining = 0 if expected is None else expected - minimum
+            return dynamic.clone(end, length=minimum)
 
         # If we consumed more bytes than the remaining bytes suggested by a previous
         # layer (<0), then it was wrong and we need to log an error before aborting.

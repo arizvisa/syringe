@@ -21,5 +21,6 @@ class header(pstruct.type, stackable):
 
     def layer(self):
         layer, id, remaining = super(header, self).layer()
-        res = self['length'].li
-        return layer, id, max(0, res.int() - sum(self[fld].li.size() for fld in ['source port', 'dest port', 'length', 'checksum']))
+        res, fields = self['length'].li, ['source port', 'dest port', 'length', 'checksum']
+        length = res.int() if remaining is None else min(remaining, res.int())
+        return layer, id, max(0, length - sum(self[fld].li.size() for fld in fields))
