@@ -425,7 +425,7 @@ class ip4_hdr(pstruct.type, stackable):
 
 header = ip4_hdr
 
-def reassemble(result):
+def reassemble(result, **kwds):
     """Coroutine that receives packets and reassembles any discovered v4 fragments.
 
     This coroutine takes an output list as a parameter, and consumes a tuple
@@ -566,5 +566,18 @@ def reassemble(result):
         continue
 
     # Now go through and append each assembled stream to the results array
-    # using the order that was collected when we were reading packets.
-    [ result.append((key, assembled_streams[key])) for key in order ]
+    # using the order that was collected when we were reading packets. If we
+    # were given a packet layers type, then use it with the assembled streams to
+    # instantiate the packet for each connection.
+    if 'layer' not in kwds:
+        return [ result.append((key, assembled_streams[key])) for key in order ]
+
+    # If we were given a "layer" keyword parameter, then use it to instantiate
+    # the packet for each assembled stream.
+    packet_t, layer = __import__('osi').layers, kwds['layer']
+    for key in order:
+        _, _, _, protocol = key
+        data = assembled_streams[key]
+        packet = packet_t(protocol=layer.lookup(protocol), source=ptypes.prov.bytes(data))
+        result.append((key, packet.li))
+    return
