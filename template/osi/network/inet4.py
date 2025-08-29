@@ -581,3 +581,169 @@ def reassemble(result, **kwds):
         packet = packet_t(protocol=layer.lookup(protocol), source=ptypes.prov.bytes(data))
         result.append((key, packet.li))
     return
+
+def fragments(result, **kwds):
+    """Coroutine that receives packets for a single stream and reassembles any discovered v4 fragments.
+
+    This coroutine takes an output list as a parameter, and consumes a tuple
+    composed of a unique id and an `osi.layers` packet. Upon closing the
+    coroutine, all submitted fragments will be reassembled and appended to the
+    output list in the order the fragments were initially received.
+    """
+    if not(isinstance(result, [].__class__)):
+        raise TypeError(u"Expected type {!s}, got {!s}.".format([].__class__, result.__class__))
+
+    # Define an anonymous function that formats all the fields composing the
+    # ipv4 stream identification key. We also assign the default header type
+    # that we'll be searching for within each packet layer.
+    streamkey_to_descriptions = lambda key: (lambda id, src, dst, proto: tuple(itertools.chain(["{:#0{:d}x}".format(id, 2 + 4)], ["{:#0{:d}x}".format(v4, 2 + 8) for v4 in [src, dst]], ["{:d}".format(proto)])))(*key)
+    layer_t = ip4_hdr
+
+    # Collect the first packet and then use it to determine the key that will be
+    # used to identify valid matching fragments. We also assign two variables
+    # that will contain the points and index for the stream's segment tree.
+    key, tree, index = (), [], {}
+    while True:
+        (id, packet) = (yield)
+
+        # Scan the packet that we received for the IPv4 layer.
+        iterable = (v4index for v4index, packet in enumerate(packet) if isinstance(packet, layer_t))
+        v4index = next(iterable, -1)
+
+        # If we actually found a matching layer, then go ahead and figure out
+        # the key to use for uniquely identifying the stream and exit the loop.
+        if v4index >= 0:
+            break
+
+        logging.warning(u"Skipping packet #{:d} due to missing {:s} layer: {}".format(id, '.'.join([layer_t.__module__, layer_t.__name__]), packet))
+
+    # Unpack the key into some fields that we can use for logging things.
+    # Now we can use the v4 index to grab the IPv4 layer, and then extract the
+    # unique key representing the fragmented stream that we're reassembling.
+    layer = packet[v4index]
+    fields = ['ip_id', 'ip_src', 'ip_dst', 'ip_protocol']
+
+    key = tuple(layer[fld].int() for fld in fields)
+    ip_id, ip_src, ip_dst, ip_proto = descriptions = streamkey_to_descriptions(key)
+
+    # Enter main loop for collecting packets and extracting the fragment
+    # information that is within the IPv4 layer of each collected packet.
+    packets = {id : packet}
+    try:
+        while True:
+            fragoff = layer['ip_fragoff']
+            offset, length = 8 * fragoff['offset'], max(0, layer['ip_len'].int() - 4 * layer['ip_h']['hlen'])
+            fragmented = fragoff['morefragments'] or offset > 0
+
+            # Initialize the segment tree for the packet fragment.
+            start, stop = bounds = offset, offset + length
+            index.setdefault(start, []), index.setdefault(stop, [])
+
+            # If the start and stop indices are equivalent or if they are
+            # odd-numbered, then the segment we're going to insert will be
+            # overlapping. This is because we always insert the points for each
+            # segment into the tree as a pair of points.
+            start_index, stop_index = bisect.bisect_left(tree, start), bisect.bisect_right(tree, stop)
+
+            if start_index % 2 or stop_index % 2 or start_index != stop_index:
+                tree[start_index : stop_index] = [start, stop]
+                index[start].insert(0, (bounds, id))
+                index[stop].insert(0, (bounds, id))
+
+            elif not(start_index % 2 and stop_index % 2):
+                tree[start_index : stop_index] = [start, stop]
+                index[start].append((bounds, id))
+                index[stop].append((bounds, id))
+
+            elif start_index % 2:
+                tree[start_index : stop_index] = [stop]
+                index[start].append((bounds, id))
+                index[stop].append((bounds, id))
+
+            elif stop_index % 2:
+                tree[start_index : stop_index] = [start]
+                index[start].append((bounds, id))
+                index[stop].append((bounds, id))
+
+            # If this packet turns out to not be fragmented, then we're done
+            # building the segment tree. Despite this, we don't bother exiting
+            # the loop since our caller is supposed to close the coroutine.
+            if not(fragmented):
+                logging.debug(u"Found non-fragmented packet #{:d} for IPv4 ID {!s} ({!s} -> {!s}) protocol {!s}: {}".format(id, ip_id, ip_src, ip_dst, ip_proto, packet))
+
+            # Grab the next packet and then stash it into our lookup table.
+            while True:
+                (id, packet) = (yield)
+
+                # Scan the packet that we received for the IPv4 layer. If we
+                # found one, then we can exit the loop. Otherwise, log a warning
+                # and then try again with the next submitted packet.
+                iterable = (v4index for v4index, packet in enumerate(packet) if isinstance(packet, layer_t))
+                v4index = next(iterable, -1)
+                if v4index >= 0:
+                    break
+
+                logging.warning(u"Skipping packet #{:d} due to missing {:s} layer: {}".format(id, '.'.join([layer_t.__module__, layer_t.__name__]), packet))
+
+            # We got a valid fragmented packet, so first check if we have one
+            # already (overwriting the old one if so), and then continue to the
+            # next iteration where we try to extract the fragment information.
+            if id in packets:
+                logging.warning(u"Overwriting packet #{:d} ({:d} byte{:s}): {}".format(id, packets[id].size(), '' if packets[id].size() == 1 else 's', packet))
+            packets[id] = packet
+            layer = packet[v4index]
+
+    # Once the generator has been exited, we can start assembling each of
+    # the streams that we discovered and append them to our results.
+    except GeneratorExit:
+        pass
+
+    # Iterate through all of the points in our segment tree, and grab the most
+    # recent fragment inside it. We copy this into the "contiguous" variable
+    # since this will contain the data that we'll actually be flattening.
+    tree, contiguous = tree, {}
+    for point in tree:
+        fragments = index[point]
+        if len(fragments) > 1:
+            overlaps = [bounds for bounds in {bounds for bounds, _ in fragments}]
+            logging.info(u"Found {:d} overlapping IP fragment{:s} for IPv4 ID {!s} ({!s} -> {!s}) protocol {:s} : [{:s}]".format(len(fragments), '' if len(fragments) == 1 else 's', ip_id, ip_src, ip_dst, ip_proto, ', '.join("{:#x}..{:#x}".format(start, stop) for start, stop in overlaps)))
+            for bounds, id in fragments:
+                logging.debug(u"Packet contents: {}".format(packets[id]))
+            contiguous[point] = fragments[0]
+        else:
+            contiguous[point] = fragments[0]
+        continue
+
+    # Now we can go through and flatten all of the contiguous packet data into
+    # the "assembled" bytes so that we can write it to our output list.
+    offset, assembled = 0, bytearray()
+    for point in tree:
+        (start, stop), id = contiguous[point]
+        if offset != start and len(contiguous) > 2:
+            count = abs(start - offset)
+            left, right = sorted([offset, start])
+            logging.warning(u"Found gap from {:#x}..{:#x} ({:d}) for IPv4 ID {!s} ({!s} -> {!s}) protocol {!s}.".format(left, right, count, ip_id, ip_src, ip_dst, ip_proto))
+
+        # Grab the packet by its id and then scan it for the matching IPv4
+        # layer. Once finding the correct index, we can then verify that the
+        # fragment size is correct, and then slice up the relevant bytes and
+        # update the current assembled bytestream.
+        packet = packets[id]
+        payload = next(1 + v4index for v4index, packet in enumerate(packet) if isinstance(packet, layer_t))
+        assert(abs(stop - start) == packet[payload:].size())
+        assembled[start : stop] = packet[payload:].serialize()
+        offset = stop
+
+    # Now go through and append each assembled stream to the results array
+    # using the order that was collected when we were reading packets. If we
+    # were given a packet layers type, then use it with the assembled streams to
+    # instantiate the packet for each connection.
+    if 'layer' not in kwds:
+        return result.append((key, assembled))
+
+    # If we were given a "layer" keyword parameter, then use it to instantiate
+    # the packet using the data from the assembled bytestream.
+    packet_t, layer = __import__('osi').layers, kwds['layer']
+    _, _, _, protocol = key
+    packet = packet_t(protocol=layer.lookup(protocol), source=ptypes.prov.bytes(assembled))
+    result.append((key, packet.li))
