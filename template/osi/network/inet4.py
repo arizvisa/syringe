@@ -423,6 +423,10 @@ class ip4_hdr(pstruct.type, stackable):
         logging.warning(u"{:s} : Error decoding the IP4 header. The size specified in the header ({:d}) does not match the size ({:d}) of the header with its options ({:d}).".format(self.instance(), hlen, hsize, optsize))
         return layer, self['ip_protocol'].li, max(0, self['ip_len'].li.int() - 4 * header['hlen'])
 
+    def fragmented(self):
+        fragoff = self['ip_fragoff']
+        return True if fragoff['morefragments'] or fragoff['offset'] > 0 else False
+
 header = ip4_hdr
 
 def reassemble(result, **kwds):
