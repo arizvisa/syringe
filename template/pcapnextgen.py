@@ -5,6 +5,8 @@ import sys, logging, itertools, functools, math, fractions, datetime, operator
 import ptypes, osi
 from ptypes import *
 
+# FIXME: need to do some tcp reassembly...somewhere..
+
 # just a function for automatically customizing the byteorder
 def order(type):
     def reorder(self):
@@ -628,8 +630,13 @@ class BlockArray(parray.terminated):
         F = (lambda item: True) if not(Type) else operator.itemgetter(Type) if isinstance(Type, (''.__class__, u''.__class__, (0).__class__)) else Type if callable(Type) else (lambda item: Type)
         for index, block in enumerate(self):
             if F(block['Type']):
-                yield index, block
+                yield index, block['Body']
             continue
+        return
+
+    def enumeratedata(self, *args, **kwargs):
+        for index, block in self.enumerate(*args, **kwargs):
+            yield index, block['Data']
         return
 
 class Blocks(parray.block, BlockArray):
