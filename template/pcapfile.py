@@ -190,7 +190,7 @@ class Packet(pstruct.type):
         (ptype.block, 'padding'),
     ]
 
-class List(parray.infinite):
+class List(parray.type):
     _object_ = Packet
 
     def within(self, start, end):
@@ -201,20 +201,36 @@ class List(parray.infinite):
             continue
         return
 
+class BlockList(parray.block, List):
+    pass
+
+class ForeverList(parray.infinite, List):
+    pass
+
 class File(pstruct.type):
     def __packets(self):
         header = self['header'].li
         self.attributes.update(self['header'].attributes)
+
         linktype = header['linktype']
         if osi.layer.has(linktype.int()):
             layers_t = dyn.clone(osi.layers, protocol=osi.layer.lookup(header['linktype'].int()))
-            return dyn.clone(List, _object_=dyn.clone(Packet, _object_=layers_t))
-        return List
+        else:
+            layers_t = None
 
-    def blocksize(self):
-        if isinstance(self.source, ptypes.provider.bounded):
-            return self.source.size()
-        return sys.maxsize
+        if isinstance(self.source, ptypes.provider.bounded) and osi.layer.has(linktype.int()):
+            size = max(0, self.source.size() - header.size())
+            layers_t = dyn.clone(osi.layers, protocol=osi.layer.lookup(header['linktype'].int()))
+            return dyn.clone(BlockList, _object_=dyn.clone(Packet, _object_=layers_t), blocksize=lambda _, sz=size: sz)
+
+        elif isinstance(self.source, ptypes.provider.bounded):
+            size = max(0, self.source.size() - header.size())
+            return dyn.clone(BlockList, blocksize=lambda _, sz=size: sz)
+
+        elif osi.layer.has(linktype.int()):
+            layers_t = dyn.clone(osi.layers, protocol=osi.layer.lookup(header['linktype'].int()))
+            return dyn.clone(ForeverList, _object_=dyn.clone(Packet, _object_=layers_t))
+        return ForeverList
 
     _fields_ = [
         (pcap_hdr_t, 'header'),
