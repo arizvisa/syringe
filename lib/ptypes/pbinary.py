@@ -474,9 +474,8 @@ class integer(type):
         return utils.callable_eq(self, self.blockbits, cls, cls.blockbits) and utils.callable_eq(cls, cls.blockbits, integer, integer.blockbits)
     def blockbits(self):
         if self.value is None:
-            return 0
-        item = self.__getvalue__()
-        _, res = item
+            return getattr(self, 'length', 0)
+        _, res = self.__getvalue__()
         return res
 
     def summary(self):
