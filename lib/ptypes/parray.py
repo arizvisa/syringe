@@ -102,7 +102,7 @@ class __array_interface__(ptype.container):
 
     def __len__(self):
         '''x.__len__() <==> len(x)'''
-        if not self.initializedQ():
+        if self.value is None:
             return self.length
         return len(self.value)
 
