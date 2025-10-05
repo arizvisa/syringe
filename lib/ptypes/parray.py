@@ -791,8 +791,13 @@ class block(uninitialized):
             pass
         return self
 
+    def blocksize(self):
+        return super(block, self).blocksize()
+
     def alloc(self, *args, **attrs):
-        return super(block if args else terminated, self).alloc(*args, **attrs)
+        if self.__blocksize_originalQ__():
+            return super(block if args else terminated, self).alloc(*args, **attrs)
+        return super(terminated if args else type, self).alloc(*args, **attrs)
 
     def initializedQ(self):
         length = self.length
@@ -1572,6 +1577,200 @@ if __name__ == '__main__':
             _object_ = pint.uint32_t
         x = t().alloc(length=2)
         if len(x) == 2:
+            raise Success
+
+    @TestCase
+    def test_array_block_alloc_1():
+        class t(parray.block):
+            _object_, length = pint.uint32_t, 3
+        x = t().a
+        if len(x) == 3:
+            raise Success
+
+    @TestCase
+    def test_array_block_alloc_2():
+        class t(parray.block):
+            _object_ = pint.uint32_t
+        x = t().alloc(length=3)
+        if len(x) == 3:
+            raise Success
+
+    @TestCase
+    def test_array_block_alloc_3():
+        class t(parray.block):
+            _object_ = pint.uint32_t
+        x = t().alloc(3 * [0])
+        if len(x) == 3:
+            raise Success
+
+    @TestCase
+    def test_array_block_alloc_4():
+        class t(parray.block):
+            _object_ = pint.uint32_t
+            def blocksize(self):
+                return 12
+
+        x = t().a
+        if len(x) == 3:
+            raise Success
+
+    @TestCase
+    def test_array_block_alloc_5():
+        class t(parray.block):
+            _object_ = pint.uint32_t
+
+        x = t().alloc(blocksize=lambda: 12)
+        if len(x) == 3:
+            raise Success
+
+    @TestCase
+    def test_array_block_alloc_6():
+        class t(parray.block):
+            _object_ = pint.uint32_t
+            def blocksize(self):
+                return 12
+
+        x = t().alloc([0] * 3)
+        if len(x) == 3:
+            raise Success
+
+    @TestCase
+    def test_array_block_alloc_7():
+        class t(parray.block):
+            _object_ = pint.uint32_t
+            def blocksize(self):
+                return 12
+
+        x = t().alloc(length=2)
+        if len(x) == 2 and x.size() == 8 and x.blocksize() == 12:
+            raise Success
+
+    @TestCase
+    def test_array_block_alloc_8():
+        class t(parray.block):
+            _object_ = pint.uint32_t
+            def blocksize(self):
+                return 12
+
+        x = t().alloc(length=4)
+        if len(x) == 4 and x.size() == 16 and x.blocksize() == 12:
+            raise Success
+
+    @TestCase
+    def test_array_block_alloc_9():
+        class t(parray.block):
+            _object_, length = pint.uint32_t, 2
+            def blocksize(self):
+                return 12
+
+        x = t().a
+        if len(x) == 2 and x.size() == 8 and x.blocksize() == 12:
+            raise Success
+
+    @TestCase
+    def test_array_block_alloc_10():
+        class t(parray.block):
+            _object_, length = pint.uint32_t, 4
+            def blocksize(self):
+                return 12
+
+        x = t().a
+        if len(x) == 4 and x.size() == 16 and x.blocksize() == 12:
+            raise Success
+
+    @TestCase
+    def test_array_block_alloc_11():
+        class t(parray.block):
+            _object_ = pint.uint32_t
+
+        x = t().a
+        if len(x) == 0 and x.size() == 0 and x.blocksize() == 0:
+            raise Success
+
+    @TestCase
+    def test_array_block_alloc_12():
+        class t(parray.block):
+            _object_ = pint.uint32_t
+
+        x = t().alloc(3 * [0])
+        if len(x) == 3 and x.size() == 12 and x.blocksize() == 12:
+            raise Success
+
+    @TestCase
+    def test_array_block_alloc_13():
+        class t(parray.block):
+            _object_ = pint.uint32_t
+            length = 2
+
+        x = t().alloc(3 * [0])
+        if len(x) == 3 and x.size() == 12 and x.blocksize() == 12:
+            raise Success
+
+    @TestCase
+    def test_array_block_alloc_14():
+        class t(parray.block):
+            _object_ = pint.uint32_t
+            def blocksize(self):
+                return 8
+
+        x = t().alloc(3 * [0])
+        if len(x) == 3 and x.size() == 12 and x.blocksize() == 8:
+            raise Success
+
+    @TestCase
+    def test_array_block_load_1():
+        class t(parray.block):
+            _object_, length = pint.uint32_t, 2
+
+        x = t(source=ptypes.prov.bytes(b'\0' * 0x100)).l
+        if len(x) == 2 and x.size() == 8 and x.blocksize() == 8:
+            raise Success
+
+    @TestCase
+    def test_array_block_load_2():
+        class t(parray.block):
+            _object_ = pint.uint32_t
+
+        x = t(source=ptypes.prov.bytes(b'\0' * 0x100), length=2).l
+        if len(x) == 2 and x.size() == 8 and x.blocksize() == 8:
+            raise Success
+
+    @TestCase
+    def test_array_block_load_3():
+        class t(parray.block):
+            _object_ = pint.uint32_t
+
+        x = t(source=ptypes.prov.bytes(b'\0' * 0x100)).load(length=2)
+        if len(x) == 2 and x.size() == 8 and x.blocksize() == 8:
+            raise Success
+
+    @TestCase
+    def test_array_block_load_4():
+        class t(parray.block):
+            _object_ = pint.uint32_t
+            def blocksize(self):
+                return 8
+
+        x = t(source=ptypes.prov.bytes(b'\0' * 0x100)).l
+        if len(x) == 2 and x.size() == 8 and x.blocksize() == 8:
+            raise Success
+
+    @TestCase
+    def test_array_block_load_4():
+        class t(parray.block):
+            _object_ = pint.uint32_t
+
+        x = t(source=ptypes.prov.bytes(b'\0' * 0x100), blocksize=lambda: 8).l
+        if len(x) == 2 and x.size() == 8 and x.blocksize() == 8:
+            raise Success
+
+    @TestCase
+    def test_array_block_load_5():
+        class t(parray.block):
+            _object_ = pint.uint32_t
+
+        x = t(source=ptypes.prov.bytes(b'\0' * 0x100)).load(blocksize=lambda: 8)
+        if len(x) == 2 and x.size() == 8 and x.blocksize() == 8:
             raise Success
 
 if __name__ == '__main__':
