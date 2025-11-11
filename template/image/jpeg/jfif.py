@@ -7,7 +7,8 @@ ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
 ### JFIF Markers
 class Marker(codestream.Marker):
-    cache, table = {}, [
+    cache, table = {}, [(name, intofdata(bytes)) for name, bytes in (
+        ('TMP', b'\xff\x01'),
         ('SOF0', b'\xff\xc0'),
         ('SOF1', b'\xff\xc1'),
         ('SOF2', b'\xff\xc2'),
@@ -56,13 +57,16 @@ class Marker(codestream.Marker):
         ('APP13', b'\xff\xed'),
         ('APP14', b'\xff\xee'),
         ('APP15', b'\xff\xef'),
-        ('JPG0', b'\xff\xf0'),
-        ('JPG1', b'\xff\xf1'),
-        ('JPG2', b'\xff\xf2'),
-        ('JPG3', b'\xff\xf3'),
-        ('JPG4', b'\xff\xf4'),
-        ('JPG5', b'\xff\xf5'),
-        ('JPG6', b'\xff\xf6'),
+
+        ('VER', b'\xff\xf0'),   # JPG0
+        ('DTI', b'\xff\xf1'),   # JPG1
+        ('DTT', b'\xff\xf2'),   # JPG2
+        ('SRF', b'\xff\xf3'),   # JPG3
+        ('SRS', b'\xff\xf4'),   # JPG4
+        ('DCR', b'\xff\xf5'),   # JPG5
+        ('DQS', b'\xff\xf6'),   # JPG6
+
+        # JPEG extensions
         ('SOF48', b'\xff\xf7'),
         ('LSE', b'\xff\xf8'),
         ('JPG9', b'\xff\xf9'),
@@ -71,7 +75,7 @@ class Marker(codestream.Marker):
         ('JPG12', b'\xff\xfc'),
         ('JPG13', b'\xff\xfd'),
         ('COM', b'\xff\xfe'),
-    ]
+    )]
 
 class MarkerType(codestream.MarkerType):
     _values_ = Marker.table
