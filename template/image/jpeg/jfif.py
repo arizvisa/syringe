@@ -1,7 +1,7 @@
 import ptypes, operator
 
 from ptypes import *
-from . import codestream, intofdata, dataofint
+from . import codestream, intofdata, dataofint, exif
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
@@ -41,6 +41,7 @@ class Marker(codestream.Marker):
         ('DRI', b'\xff\xdd'),
         ('DHP', b'\xff\xde'),
         ('EXP', b'\xff\xdf'),
+
         ('APP0', b'\xff\xe0'),
         ('APP1', b'\xff\xe1'),
         ('APP2', b'\xff\xe2'),
@@ -98,6 +99,8 @@ class StreamMarker(codestream.StreamMarker):
         t, res = self.Table.withdefault(self['Type'].li.serialize()), self['Lp'].li
         if issubclass(t, ptype.block):
             return dyn.clone(t, length=res.int() - self['Type'].size())
+        elif issubclass(t, ptype.encoded_t):
+            return dyn.clone(t, _value_=dyn.block(res.int() - self['Type'].size()))
         return dyn.clone(t, blocksize=lambda self, cb=res.int() - self['Type'].size(): cb)
 
     def __Extra(self):
@@ -327,6 +330,10 @@ class APP0(pstruct.type):
         (_Format, 'Format'),
         (ptype.undefined, 'Thumbnail'),
     ]
+
+@Marker.define
+class APP1(ptype.encoded_t):
+    _object_ = exif.File
 
 @Marker.define
 class COM(ptype.block):
