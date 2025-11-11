@@ -122,10 +122,16 @@ class Entry(pstruct.type):
     ]
 
 class Directory(pstruct.type):
+    def __next(self):
+        p = self.parent and self.getparent(File, default=None)
+        if p is None:
+            return dyn.pointer(Directory, pint.uint32_t)
+        return dyn.rpointer(Directory, p['header'], pint.uint32_t, byteorder=p['header'].Order())
+
     _fields_ = [
         (pint.uint16_t, 'count'),
         (lambda self: dyn.array(Entry, self['count'].li.int()), 'entry'),
-        (lambda _: dyn.pointer(Directory, pint.uint32_t), 'next')
+        (__next, 'next')
     ]
 
     def iterate(self):
