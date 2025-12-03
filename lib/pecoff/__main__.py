@@ -23,7 +23,7 @@ def Extract(obj, outformat, file=None):
     out = lambda string, **kwargs: print_(string, **kwargs)
     if outformat == 'print':
         res = "{!r}".format(obj)
-    elif outformat == 'hex':
+    elif outformat == 'dump':
         res = obj.hexdump()
     elif outformat == 'raw':
         out = lambda string, **kwargs: (kwargs['file'] if sys.version_info.major < 3 else kwargs['file'].buffer).write(string)
@@ -75,7 +75,7 @@ def dump_exe(t, outformat, F=None, output=None):
         print_("{!r}\n".format(result['Header']), file=output)
         print_(result['Stub'].hexdump(), file=output)
         return
-    if outformat in {'hex','raw'}:
+    if outformat in {'dump','raw'}:
         t = ptypes.dyn.block(result['Header'].size() + result['Stub'].size())
         return Extract(t(offset=0).li, outformat, file=output)
     return Extract(result, outformat, file=output)
@@ -125,7 +125,7 @@ def extract_section(t, index, outformat, F=None, output=None):
         length, Fhexify = 0x10, operator.methodcaller(*(['hex'] if hasattr(bytes, 'hex') else ['encode', 'hex']))
         iterable = ((offset, Fhexify(row)) for row, offset in zip(map(bytes, map(bytearray, zip(*[iter(data)] * length))), itertools.count(0, length)))
         return Extract(iterable, outformat, file=output)
-    return Extract(result['PointerToRawData'].d.li, outformat or 'hex', file=output)
+    return Extract(result['PointerToRawData'].d.li, outformat or 'dump', file=output)
 
 def list_entries(t, outformat, F=None, output=None):
     H = t['Next']['Header']
@@ -151,7 +151,7 @@ def extract_entry(t, index, outformat, F=None, output=None):
     T, cb = E['Address'], E['Size']
     if F:
         return Extract(F(result), outformat, file=output)
-    if outformat in {'hex', 'raw'}:
+    if outformat in {'dump', 'raw'}:
         res = ptypes.dyn.block(cb.int())(offset=T.d.getoffset())
         return Extract(res.li, outformat, file=output)
     elif outformat in {'list'}:
@@ -192,7 +192,7 @@ def extract_export(t, index, outformat, F=None, output=None):
         # rva, hint, name, ordinalname, entry, forwarded
         print_("index={:d} rva={:#x} hint={:#x} name={!s} ordinalname={!s} entry={:#x} forwarded={!s}".format(index, *ete), file=output)
         return
-    if not F and outformat in {'raw','hex'}:
+    if not F and outformat in {'raw','dump'}:
         aof, aon, no = (et[n].d.li[index] for n in ('AddressOfFunctions', 'AddressOfNames', 'AddressOfNameOrdinals'))
         data = ptypes.parray.type(length=3).set([aof, aon, no])
         return Extract(data, outformat, file=output)
@@ -326,7 +326,7 @@ def extract_resource(t, path, outformat, F=None, output=None):
     if F:
         return Extract(F(result), outformat, file=output)
 
-    if outformat in {'hex', 'raw'}:
+    if outformat in {'dump', 'raw'}:
         res = result['OffsetToData'].d.li if isinstance(result, pecoff.portable.resources.IMAGE_RESOURCE_DATA_ENTRY) else result
         return Extract(res, outformat, file=output)
     return Extract(result, outformat or 'print', file=output)
@@ -390,8 +390,8 @@ def extract_signature(t, index, outformat, F=None, output=None):
     if F:
         result = result if rt is None else result.cast(rt)
         return Extract(F(result), outformat, file=output)
-    if outformat in {'hex', 'raw'} or (outformat in {'list'} and rt is None):
-        return Extract(result, 'hex' if outformat in {'list'} else outformat, file=output)
+    if outformat in {'dump', 'raw'} or (outformat in {'list'} and rt is None):
+        return Extract(result, 'dump' if outformat in {'list'} else outformat, file=output)
     result = result if rt is None else result.cast(rt)
     return Extract(result, outformat or 'print', file=output)
 
@@ -444,7 +444,7 @@ def args():
     p = argparse.ArgumentParser(prog="pe.py", description='Display some information about a portable executable file', add_help=True)
     p.add_argument('infile', type=argparse.FileType('rb'), help='a portable executable file')
     p.add_argument('-o', '--outfile', dest='output', type=argparse.FileType('wb' if sys.version_info.major < 3 else 'w'), default='-', help='a file to write the output to')
-    p.add_argument('-O', '--format', action='store', dest='format', type=operator.methodcaller('lower'), choices=['raw', 'print', 'hex', 'list'], default='', help='specify the output format to emit the requested fields as')
+    p.add_argument('-O', '--format', action='store', dest='format', type=operator.methodcaller('lower'), choices=['raw', 'print', 'dump', 'list'], default='', help='specify the output format to emit the requested fields as')
     p.add_argument('--path', action='store', dest='location', metavar='PATH', default='', help='navigate to a specific field described by a \':\' separated path.')
 
     res = p.add_mutually_exclusive_group(required=True)
