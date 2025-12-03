@@ -81,6 +81,7 @@ if __name__ == '__main__':
             modules.append((res.str(), g.str()))
         else:
             modules.append((res.str(), None))
+        continue
 
     # collect assemblies
     L.send("Enumerating {:d} assemblies.".format(len(tables['Assembly'])))
@@ -108,7 +109,8 @@ if __name__ == '__main__':
         list(map(res.update, attributes))
 
         properties.append((assembly[mi], ma, res))
-        mn, mid = next((mn, mid) for mn, mid in modules if mn.startswith(assembly[mi]))
+        iterable = ((mn, mid) for mn, mid in modules if mn.startswith(assembly[mi]))
+        mn, mid = next(iterable, ('', ''))
         print('{:s}\t{:s}{:s}\t{:s}\t{:s}:{:s}'.format(filename, mn, mid or '', assembly[mi], ma, ','.join('{:s}={:d}'.format(k, v) for k, v in res.items())), file=sys.stdout)
 
     else:
