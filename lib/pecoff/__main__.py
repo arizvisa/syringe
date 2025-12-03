@@ -30,6 +30,12 @@ def Extract(obj, outformat, file=None):
         res = obj.serialize()
     elif outformat == 'list':
         res = '\n'.join(itertools.starmap("{}{}{}".format, ((n[:1] + (OFS,) + (n[-1:])) if isinstance(n, tuple) else (i, OFS, n.summary()) if hasattr(n, 'summary') else (i, OFS, str(n)) for i, n in enumerate(obj))))
+    elif outformat == 'int':
+        res = obj.int()
+    elif outformat == 'hex':
+        res = "{:#x}".format(obj)
+    elif outformat == 'str':
+        res = obj.str()
 
     # default
     elif not obj:
@@ -444,7 +450,7 @@ def args():
     p = argparse.ArgumentParser(prog="pe.py", description='Display some information about a portable executable file', add_help=True)
     p.add_argument('infile', type=argparse.FileType('rb'), help='a portable executable file')
     p.add_argument('-o', '--outfile', dest='output', type=argparse.FileType('wb' if sys.version_info.major < 3 else 'w'), default='-', help='a file to write the output to')
-    p.add_argument('-O', '--format', action='store', dest='format', type=operator.methodcaller('lower'), choices=['raw', 'print', 'dump', 'list'], default='', help='specify the output format to emit the requested fields as')
+    p.add_argument('-O', '--format', action='store', dest='format', type=operator.methodcaller('lower'), choices=['raw', 'print', 'dump', 'list', 'int', 'str', 'hex'], default='', help='specify the output format to emit the requested fields as')
     p.add_argument('--path', action='store', dest='location', metavar='PATH', default='', help='navigate to a specific field described by a \':\' separated path.')
 
     res = p.add_mutually_exclusive_group(required=True)
