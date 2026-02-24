@@ -527,6 +527,6 @@ if __name__ == '__main__':
             continue
 
         # fall-back to writing to already open target
-        target.write(data) if args.mode in {'extract'} else print(data, file=target)
+        getattr(target, 'buffer', target).write(data) if args.mode in {'extract'} else print(data, file=target)
 
     sys.exit(0)
