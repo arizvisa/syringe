@@ -424,6 +424,9 @@ class binary32(float_t):
 class binary64(float_t):
     components = (1, 11, 52)
 
+class binary80(float_t):
+    components = (1, 15, 64)
+
 class binary128(float_t):
     components = (1, 15, 112)
 
