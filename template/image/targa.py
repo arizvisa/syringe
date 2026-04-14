@@ -70,6 +70,9 @@ class ColorMapSpecification(pstruct.type):
 
 class ColorMapEntries(ptype.definition):
     cache = {}
+    class byte(ptype.block):
+        length = 1
+    default = byte
 
 @ColorMapEntries.define
 class ColorMapEntry4(pstruct.type):
@@ -174,7 +177,7 @@ class File(pstruct.type):
     def __ColorMapData(self):
         specification = self['ColorMapSpecification'].li
         length, element = (specification[fld].int() for fld in ['Length', 'EntrySize'])
-        entry_t = ColorMapEntries.lookup(element)
+        entry_t = ColorMapEntries.withdefault(element)
         return dyn.clone(ColorMapData, _object_=entry_t, length=0 if self['ColorMapType'].li.int() == 0 else length)
 
     _fields_ = [
