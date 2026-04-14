@@ -1,3 +1,5 @@
+# FIXME: scapy implements two algorithms for comparisons, which we can rip.
+#        https://github.com/secdev/scapy/blob/29433fc0c4a83472faf0eaa72a1ce466bf5f4966/scapy/utils.py#L402
 import array
 
 import ptypes
