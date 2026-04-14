@@ -295,6 +295,14 @@ class Component(pstruct.type):
         (__extra, 'extra'),
     ]
 
+    def properties(self):
+        res = super(Component, self).properties()
+        if hasattr(self, '_index_'):
+            res['index'] = self._index_
+        if hasattr(self, '_tag_'):
+            res['tag'] = self._tag_
+        return res
+
     def summary(self):
         res = []
         res.append("version={:#x}".format(self['version']))
@@ -312,9 +320,9 @@ class TaggedComponent(pstruct.type):
         if string.startswith('</'):
             return ptype.block
         elif not ComponentHandler.has(open.tagname()):
-            return Component
+            return dyn.clone(Component, _index_=int(self.name()), _tag_=open.tagname())
         res = ComponentHandler.lookup(open.tagname())
-        return dyn.clone(Component, _object_=res)
+        return dyn.clone(Component, _object_=res, _index_=int(self.name()), _tag_=open.tagname())
 
     def __tagClose(self):
         tag = self['tagOpen'].li.str()
@@ -327,6 +335,16 @@ class TaggedComponent(pstruct.type):
         (__component, 'component'),
         (__tagClose, 'tagClose'),
     ]
+
+    def tag(self):
+        open, close = (self[fld] for fld in ['tagOpen', 'tagClose'])
+        opentag, closetag = (tag.tagname() for tag in [open, close])
+        if closetag == opentag:
+            return closetag
+        return opentag
+
+    def summary(self):
+        return "{!r} : {:s}".format(self.tag(), self['component'].summary())
 
 # Engine/game/savegame_components.cpp:1697-1865
 
@@ -688,6 +706,16 @@ class CommonComponents(pstruct.type):
             yield item
         return
 
+    def details(self):
+        res = ["{}".format(self['tagOpen'])]
+        for tag, component in self.enumerate():
+            if isinstance(component, Component):
+                res.append("{}".format(component))
+            else:
+                res.append("{}".format(component))
+            continue
+        return "{:s}\n".format('\n'.join(res))
+
 class File(pstruct.type):
     _fields_ = [
         (Signature, 'sig'),
@@ -695,6 +723,9 @@ class File(pstruct.type):
         (UserDescription, 'user'),
         (CommonComponents, 'common'),
     ]
+
+#    std::vector<CharacterInfo> chars;
+#    std::vector<CharacterInfo2> chars2; // extended character fields
 
 if __name__ == '__main__':
     import sys
