@@ -751,3 +751,4 @@ def fragments(result, **kwds):
     _, _, _, protocol = key
     packet = packet_t(protocol=layer.lookup(protocol), source=ptypes.prov.bytes(assembled))
     result.append((key, packet.li))
+    return result
