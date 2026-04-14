@@ -2081,6 +2081,70 @@ try:
 except ImportError:
     Log.info("{:s} : Unable to import the 'ctypes' module. Failed to define the `memory` provider.".format(__name__))
 
+try:
+    python = ctypes.pythonapi
+
+    # assign some constants
+    python.PyBUF_READ = 0x100
+    python.PyBUF_WRITE = 0x200
+    python.PyBUF_SIMPLE = 0
+
+    # assign the types to the exports from the python C api.
+    python.PyObject_GetBuffer.restype = ctypes.c_int
+    python.PyObject_GetBuffer.argtypes = [ctypes.py_object, ctypes.c_voidp, ctypes.c_int]
+    python.PyBuffer_GetPointer.restype = ctypes.c_voidp
+    python.PyBuffer_GetPointer.argtypes = [ctypes.c_voidp, ctypes.c_voidp]
+    python.PyBuffer_Release.restype = None
+    python.PyBuffer_Release.argtypes = [ctypes.c_voidp]
+
+    python.PyMemoryView_FromObject.restype = ctypes.py_object
+    python.PyMemoryView_FromObject.argtypes = [ctypes.py_object]
+    python.PyMemoryView_FromMemory.restype = ctypes.py_object
+    python.PyMemoryView_FromMemory.argtypes = [ctypes.c_voidp, ctypes.c_size_t, ctypes.c_int]
+    python.PyMemoryView_GetContiguous.restype = ctypes.py_object
+    python.PyMemoryView_GetContiguous.argtypes = [ctypes.py_object, ctypes.c_int, ctypes.c_char]
+
+    if hasattr(python, 'PyObject_CheckBuffer'):
+        python.PyObject_CheckBuffer.restype = ctypes.c_int
+        python.PyObject_CheckBuffer.argtypes = [ctypes.py_object]
+
+    if hasattr(python, 'PyObject_IsContiguous'):
+        python.PyObject_IsContiguous.restype = ctypes.c_int
+        python.PyObject_IsContiguous.argtypes = [ctypes.c_voidp, ctypes.c_char]
+
+    def PyGetBufferAddressAndLength(view):
+        '''Return the address and number of bytes for the specified memoryview.'''
+        Py_buffer_count = 0x80  # XXX: this is the object size of a buffer type.
+
+        if not(isinstance(view, builtins.memoryview)):
+            raise TypeError(view)
+
+        # FIXME: we could define the correct Py_buffer structure here, but to avoid
+        #        having to maintain the structure per python version we just use a
+        #        large number of pointers. the first pointer should be the address
+        #        of the buffer type that was associated with the specified view.
+
+        buffer_t = ctypes.c_voidp * Py_buffer_count
+        buffer = buffer_t()
+
+        err = python.PyObject_GetBuffer(view, buffer, python.PyBUF_SIMPLE)
+        if err:
+            raise OSError(err)
+
+        # FIXME: we should only release this after reading or writing.
+        else:
+            python.PyBuffer_Release(buffer)
+
+        # return the Py_buffer.buf pointer and then the number of bytes. if there
+        # isn't an attribute, then calculate the number of bytes using the shape.
+        return buffer[0], getattr(view, 'nbytes', functools.reduce(operator.mul, view.shape, view.itemsize))
+
+except AttributeError:
+    Log.info("{:s} : Unable to assign the types to the exports of the python api.".format(__name__))
+
+except ImportError:
+    Log.info("{:s} : Unable to import the 'ctypes' module. Failed to define the `memory` provider.".format(__name__))
+
 default = DEFAULT[0]
 
 if __name__ == '__main__':
