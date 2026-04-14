@@ -1,3 +1,5 @@
+# https://github.com/tsuyopon/memo/tree/master/TLS/extension
+# https://github.com/wdslb/nginx-boringssl-fingerprint
 import ptypes
 from . import ber
 from ptypes import *
