@@ -23,7 +23,8 @@ class _sh_name(pint.type):
 
         table = header.stringtable()
         if isinstance(table, ELFCLASSXX.SHT_STRTAB):
-            return table.read(self.int()).str()
+            offset = self.int()
+            return table.read(offset).str()
         raise ptypes.error.TypeError(self, 'str')
 
 class SHT_(pint.enum):
